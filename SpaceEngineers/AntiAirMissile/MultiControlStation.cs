@@ -61,7 +61,6 @@ namespace SpaceEngineers.MultiControlStation
 
         Vector3D mPos = new Vector3D(0,0,0);
 
-
         public Program()
         {
             targetPosition = new Vector3D(0,0,0);
@@ -87,7 +86,6 @@ namespace SpaceEngineers.MultiControlStation
                 {
                     case "FIRE":
                         FireAll();
-
                         break;
 
                     case "FIREONCE":
@@ -96,17 +94,14 @@ namespace SpaceEngineers.MultiControlStation
 
                     case "BUILD":
                         FindMissile();
-
                         break;
 
                     case "ENABLE":
                         Enable();
-
                         break;
 
                     case "DISABLE":
                         Disable();
-
                         break;
                 }
 
@@ -144,107 +139,7 @@ namespace SpaceEngineers.MultiControlStation
             scriptEnabled = false;
         }
 
-        /// <summary>
-        /// Поиск ракет в одном гриде используется итератор в названии компонентов
-        /// </summary>
-        public void FindMissileInSameGrid()
-        {
-            missileTagFinder = Me.CustomData;
-            missileList.Clear();
-            int missileCounter = 0;
-
-            if (missileTagFinder != null)
-            {
-                Echo("Try to find with tag: " + missileTagFinder);
-
-                List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-                GridTerminalSystem.GetBlocksOfType(blocks);
-
-                foreach (var block in blocks)
-                {
-                    if (block.CustomName.Contains("Radio"))
-                    {
-                        missileCounter++;
-                    }
-
-                }
-
-                for (int i = 0; i < missileCounter; i++)
-                {
-                    ControlledMissile missile = new ControlledMissile();
-
-                    foreach (var block in blocks)
-                    {
-                        if (block.CustomName.Contains(missileTagFinder + i + remoteControlName))
-                        {
-                            if (block is IMyRemoteControl)
-                            {
-                                missile.RemotControl = block as IMyRemoteControl;
-                            }
-                        }
-
-                        if (block.CustomName.Contains(missileTagFinder + i + decouplerName))
-                        {
-                            if (block is IMyTerminalBlock)
-                            {
-                                missile.MergeBlock = block as IMyTerminalBlock;
-                            }
-                        }
-
-                        if (block.CustomName.Contains(missileTagFinder + i + missileEnginesName))
-                        {
-                            if (block is IMyThrust)
-                            {
-                                missile.Trusters.Add(block as IMyThrust);
-                            }
-                        }
-
-                        if (block.CustomName.Contains(missileTagFinder + i + missileGravityEngineName))
-                        {
-                            if (block is IMyThrust)
-                            {
-                                missile.GravityTrusters.Add(block as IMyThrust);
-                            }
-                        }
-
-                        if (block.CustomName.Contains(missileTagFinder + i + missileGyrosName))
-                        {
-                            if (block is IMyGyro)
-                            {
-                                missile.Gyros.Add(block as IMyGyro);
-                            }
-                        }
-
-                        if (block.CustomName.Contains(missileTagFinder + i + missileWarheadName))
-                        {
-                            if (block is IMyWarhead)
-                            {
-                                missile.Warheads.Add(block as IMyWarhead);
-                            }
-                        }
-
-
-                    }
-
-                    if (missile.MissileReady())
-                    {
-                        missileList.Add(missile);
-                    }
-                    else
-                    {
-                        Echo("Some misssile have problem with build");
-                        break;
-                    }
-
-                }
-                Echo("Missile detection completed! Missiles: " + missileList.Count);
-
-            }
-            else
-            {
-                Echo("No tag! Enter custom data!");
-            }
-        }
+   
 
         /// <summary>
         /// Поиск компонентов с названиями по группам, для сборки ракет в субгридах
@@ -258,43 +153,51 @@ namespace SpaceEngineers.MultiControlStation
             {
                 Echo("Try to find with tag: " + missileTagFinder);
 
+
                 List<IMyRemoteControl> blocks = new List<IMyRemoteControl>();
                 GridTerminalSystem.GetBlocksOfType(blocks, b => b.CustomName.Contains(missileTagFinder + remoteControlName));
                 Echo("Radio: " + blocks.Count);
 
-                for (int i = 0; i < blocks.Count; i++) 
+                //Получаем все группы блоков с тэгом и формируем ракеты добавляя блоки из групп
+                List<IMyBlockGroup> group = new List<IMyBlockGroup>();
+                GridTerminalSystem.GetBlockGroups(group, g => g.Name.Contains(missileTagFinder));
+                Echo("D_groups: " + group.Count);
+
+                for (int i = 0; i < group.Count; i++)
                 {
                     List<IMyTerminalBlock> groupBlocks = new List<IMyTerminalBlock>();
-                    GridTerminalSystem.GetBlocksOfType(groupBlocks, b => b.CubeGrid == blocks[i].CubeGrid);
+                    group[i].GetBlocks(groupBlocks);
 
                     ControlledMissile missile = new ControlledMissile();
 
-                    foreach(var block in groupBlocks)
+                    foreach (var block in groupBlocks)
                     {
-                        if (block.CustomName.Contains(remoteControlName)) 
+                        //блок ДУ
+                        if (block.CustomName.Contains(remoteControlName))
                         {
                             if (block is IMyRemoteControl)
                             {
                                 missile.RemotControl = block as IMyRemoteControl;
                             }
                         }
-
-                        if (block.CustomName.Contains(decouplerName)) 
+                        //рассоеденитель
+                        if (block.CustomName.Contains(decouplerName))
                         {
                             if (block is IMyTerminalBlock)
                             {
                                 missile.MergeBlock = block as IMyTerminalBlock;
                             }
                         }
-
+                        //двигатели
                         if (block.CustomName.Contains(missileEnginesName))
                         {
                             if (block is IMyThrust)
                             {
+                                (block as IMyThrust).SetValueBool("OnOff", false);
                                 missile.Trusters.Add(block as IMyThrust);
                             }
                         }
-
+                        //гаситель гравитации
                         if (block.CustomName.Contains(missileGravityEngineName))
                         {
                             if (block is IMyThrust)
@@ -302,16 +205,17 @@ namespace SpaceEngineers.MultiControlStation
                                 missile.GravityTrusters.Add(block as IMyThrust);
                             }
                         }
-
+                        //гироскопы
                         if (block.CustomName.Contains(missileGyrosName))
                         {
                             if (block is IMyGyro)
                             {
+                                (block as IMyGyro).SetValueBool("Override", true);
                                 missile.Gyros.Add(block as IMyGyro);
                             }
                         }
-
-                        if (block.CustomName.Contains(missileWarheadName)) 
+                        //боеголовки
+                        if (block.CustomName.Contains(missileWarheadName))
                         {
                             if (block is IMyWarhead)
                             {
@@ -319,19 +223,19 @@ namespace SpaceEngineers.MultiControlStation
                             }
                         }
 
-                    }
+                    }//foreach
 
-                    if (missile.MissileReady())
+                    //Проверка на то, что все блоки проварены
+                    if (missile.MissileReady()) 
                     {
                         missileList.Add(missile);
                     }
                     else
                     {
-                        Echo("Some misssile have problem with build");
-                        break;
+                        Echo("Some misssile have problem with build: " + group[i].Name);
                     }
 
-                }
+                }//for
 
                 Echo("Missile detection completed! Missiles: " + missileList.Count);
 
@@ -349,8 +253,6 @@ namespace SpaceEngineers.MultiControlStation
         {
             while (listener.HasPendingMessage)
             {
-                panel.WriteText("Rado wait for target!", false);
-
                 MyIGCMessage mess = listener.AcceptMessage();
                 if (mess.Tag == missileTagResiever)
                 {
@@ -375,72 +277,7 @@ namespace SpaceEngineers.MultiControlStation
             distanceToTargetFromBase = (Me.CubeGrid.GetPosition() - targetPosition).Length();
         }
 
-        /// <summary>
-        /// Точка перехвата для движущихся целей
-        /// </summary>
-        public Vector3D CalcInterceptPos(Vector3D missilePos, double missileSpeed, Vector3D targetPos, Vector3D targetSpeed)
-        {
-
-            Vector3D directionToTarget = Vector3D.Normalize(targetPos - missilePos);
-            Vector3D targetVelOrto = Vector3D.Dot(targetSpeed, directionToTarget) * directionToTarget;
-
-            // Vector3D targetVelTang = targetSpeed - targetVelOrto;
-            Vector3D targetVelTang = Vector3D.Reject(targetSpeed, directionToTarget);
-            Vector3D shootVelTang = targetVelTang;
-            double shootVelSpeed = shootVelTang.Length();
-
-
-            if (shootVelSpeed > missileSpeed)
-            {
-                return Vector3D.Normalize(targetSpeed) * missileSpeed;
-            }
-            else
-            {
-                double shootSpeedOrto = Math.Sqrt(missileSpeed * missileSpeed - shootVelSpeed * shootVelSpeed);
-                Vector3D shootVelOrto = directionToTarget * shootSpeedOrto;
-               // impactTime = Math.Abs(directionToTarget.Length()) / (Math.Abs(targetVelTang.Length()) - Math.Abs(shootVelOrto.Length()));
-
-                return shootVelOrto + shootVelTang;
-            }
-        }
-
-        /// <summary>
-        /// Поворот ракеты на цель с учетом гашения вектора скорости
-        /// </summary>
-        public Vector3D RottateMissileToTarget(Vector3D targetPos, IMyGyro gyro,IMyRemoteControl ctr)
-        {
-            Vector3D fwd = gyro.WorldMatrix.Forward;
-            Vector3D up = gyro.WorldMatrix.Up;
-            Vector3D left = gyro.WorldMatrix.Left;
-
-            Vector3D targetNormal = Vector3D.Normalize(targetPos);
-            Vector3D vecReject = Vector3D.Reject(Vector3D.Normalize(ctr.GetShipVelocities().LinearVelocity), targetNormal);
-            Vector3D correctVect = Vector3D.Normalize(targetNormal - vecReject * 2);
-
-            double targetPitch = Vector3D.Dot(up, Vector3D.Normalize(Vector3D.Reject(correctVect, left)));
-            targetPitch = Math.Acos(targetPitch) - Math.PI / 2;
-            double targetYaw = Vector3D.Dot(left, Vector3D.Normalize(Vector3D.Reject(correctVect, up)));
-            targetYaw = Math.Acos(targetYaw) - Math.PI / 2;
-            double targetRoll = Vector3D.Dot(left, Vector3D.Reject(Vector3D.Normalize(-ctr.GetNaturalGravity()), fwd));
-            targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
-            return new Vector3D(targetYaw, -targetPitch, targetRoll);
-
-        }
-
-        /// <summary>
-        /// Вращение гироскоров ракеты
-        /// </summary>
-        void SetGyro(IMyGyro gyro,Vector3D vec, float power)
-        {
-
-            gyro.SetValueFloat("Power", power);
-            gyro.SetValueFloat("Yaw", (float)vec.GetDim(0));
-            gyro.SetValueFloat("Pitch", (float)vec.GetDim(1));
-            gyro.SetValueFloat("Roll", (float)vec.GetDim(2));
-            
-        }
-
-
+ 
         /// <summary>
         /// Обновление всех ракет
         /// </summary>
@@ -452,19 +289,9 @@ namespace SpaceEngineers.MultiControlStation
 
             for (int i = 0; i < missileInFlightList.Count; i++) 
             {
-                if(missileInFlightList[i].RemotControl !=null)
+                if(!missileInFlightList[i].RemotControl.Closed)
                 {
-                    missileInFlightList[i].UpdateFlightTimer();
-
-                    mPos = missileInFlightList[i].RemotControl.GetPosition();
-                    double mSpeed = missileInFlightList[i].RemotControl.GetShipVelocities().LinearVelocity.Length();
-
-                    IMyGyro gyro = missileInFlightList[i].Gyros[0];
-                    IMyRemoteControl ctr = missileInFlightList[i].RemotControl;
-
-                    //расчет точки перехвата цели и поворот её гироскопа на цель
-                    Vector3D interPos = CalcInterceptPos(mPos, mSpeed, targetPosition, targetSpeed);
-                    SetGyro(gyro, RottateMissileToTarget(interPos, gyro, ctr) * 5, 1);
+                    missileInFlightList[i].UpdateMissile(targetPosition, targetSpeed);
 
                     //Время жизни ракеты, для того чтоб не забивать лист ракет в полете
                     if (missileInFlightList[i].FlightTime > maxAviableFlightTime) 
@@ -475,7 +302,7 @@ namespace SpaceEngineers.MultiControlStation
                 }
                 else
                 {
-                    missileInFlightList.RemoveAt(i);//это запускается только когда игра запускает свой GC
+                    missileInFlightList.RemoveAt(i);
                 }
             }
         }
@@ -519,7 +346,7 @@ namespace SpaceEngineers.MultiControlStation
         {
             FindMissile();
             Enable();
-            if (missileList[0] != null)
+            if (missileList.Count > 0)
             {
                 missileInFlightList.Add(missileList[0]);
                 missileList[0].MissileFire();
@@ -541,6 +368,10 @@ namespace SpaceEngineers.MultiControlStation
             public IMyRemoteControl RemotControl;//дистанционный контроль
             public IMyTerminalBlock MergeBlock;//блок соеденителя
 
+            private Vector3D linearVel = new Vector3D();
+            private Vector3D natGravity = new Vector3D();
+
+            private int minimumSafeTakeOffTimer = 150;
             public ControlledMissile()
             {
                 FlightTime = 0;
@@ -557,15 +388,80 @@ namespace SpaceEngineers.MultiControlStation
             /// </summary>
             public bool MissileReady()
             {
-                if (Gyros.Count < 1) 
+                if ((Gyros.Count == 0) || (Gyros.Where(b => !b.IsFunctional).Count() > 0)) 
                     return false;
-                if (Trusters.Count < 1)
+                if ((Trusters.Count == 0) || (Trusters.Where(b => !b.IsFunctional).Count() > 0)) 
                     return false;
-                if (RemotControl == null)
+                if ((RemotControl == null) || (!RemotControl.IsFunctional)) 
                     return false;
-                if (MergeBlock == null)
+                if ((MergeBlock == null) || (!MergeBlock.IsFunctional)) 
                     return false;
                 return true;
+            }
+
+            /// <summary>
+            /// Точка перехвата для движущихся целей
+            /// </summary>
+            public Vector3D CalcInterceptPos(Vector3D missilePos, double missileSpeed, Vector3D targetPos, Vector3D targetSpeed)
+            {
+
+                Vector3D directionToTarget = Vector3D.Normalize(targetPos - missilePos);
+                Vector3D targetVelOrto = Vector3D.Dot(targetSpeed, directionToTarget) * directionToTarget;
+
+                // Vector3D targetVelTang = targetSpeed - targetVelOrto;
+                Vector3D targetVelTang = Vector3D.Reject(targetSpeed, directionToTarget);
+                Vector3D shootVelTang = targetVelTang;
+                double shootVelSpeed = shootVelTang.Length();
+
+
+                if (shootVelSpeed > missileSpeed)
+                {
+                    return Vector3D.Normalize(targetSpeed) * missileSpeed;
+                }
+                else
+                {
+                    double shootSpeedOrto = Math.Sqrt(missileSpeed * missileSpeed - shootVelSpeed * shootVelSpeed);
+                    Vector3D shootVelOrto = directionToTarget * shootSpeedOrto;
+                    // impactTime = Math.Abs(directionToTarget.Length()) / (Math.Abs(targetVelTang.Length()) - Math.Abs(shootVelOrto.Length()));
+
+                    return shootVelOrto + shootVelTang;
+                }
+            }
+
+            public Vector3D RottateMissileToTarget(Vector3D targetPos)
+            {
+                Vector3D fwd = Gyros[0].WorldMatrix.Forward;
+                Vector3D up = Gyros[0].WorldMatrix.Up;
+                Vector3D left = Gyros[0].WorldMatrix.Left;
+
+                linearVel = RemotControl.GetShipVelocities().LinearVelocity;
+                natGravity = RemotControl.GetNaturalGravity();
+
+                Vector3D targetNormal = Vector3D.Normalize(targetPos);
+                Vector3D vecReject = Vector3D.Reject(Vector3D.Normalize(linearVel), targetNormal);
+                Vector3D correctVect = Vector3D.Normalize(targetNormal - vecReject * 2);
+
+                double targetPitch = Vector3D.Dot(up, Vector3D.Normalize(Vector3D.Reject(correctVect, left)));
+                targetPitch = Math.Acos(targetPitch) - Math.PI / 2;
+                double targetYaw = Vector3D.Dot(left, Vector3D.Normalize(Vector3D.Reject(correctVect, up)));
+                targetYaw = Math.Acos(targetYaw) - Math.PI / 2;
+                double targetRoll = Vector3D.Dot(left, Vector3D.Reject(Vector3D.Normalize(-natGravity), fwd));
+                targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
+                return new Vector3D(targetYaw, -targetPitch, targetRoll);
+
+            }
+
+            public void SetGyro(Vector3D vec, float power)
+            {
+
+                foreach (var gyro in Gyros)
+                {
+                    gyro.SetValueFloat("Power", power);
+                    gyro.SetValueFloat("Yaw", (float)vec.GetDim(0));
+                    gyro.SetValueFloat("Pitch", (float)vec.GetDim(1));
+                    gyro.SetValueFloat("Roll", (float)vec.GetDim(2));
+                }
+
             }
 
             /// <summary>
@@ -573,31 +469,44 @@ namespace SpaceEngineers.MultiControlStation
             /// </summary>
             public void MissileFire()
             {
-                foreach(var truster in Trusters)
+                if (MissileReady())
                 {
-                    truster.SetValueBool("OnOff", true);
-                    truster.ThrustOverridePercentage = 1;
-                }
 
-                foreach (var truster in GravityTrusters)
-                {
-                    truster.SetValueBool("OnOff", true);
-  
-                }
+                    foreach (var truster in Trusters)
+                    {
+                        truster.SetValueBool("OnOff", true);
+                        truster.ThrustOverridePercentage = 1;
+                    }
 
-                foreach (IMyWarhead head in Warheads)
-                {
-                    head.IsArmed = true;
-                }
+                    foreach (var truster in GravityTrusters)
+                    {
+                        truster.SetValueBool("OnOff", true);
 
-                MergeBlock.SetValueBool("OnOff", false);
+                    }
+
+                    foreach (IMyWarhead head in Warheads)
+                    {
+                        head.IsArmed = true;
+                    }
+
+                    MergeBlock.SetValueBool("OnOff", false);
+                }
             }
 
-            public void UpdateFlightTimer()
+            public void UpdateMissile(Vector3D targetPosition,Vector3D targetSpeed)
             {
                 FlightTime++;
-            }
 
+                if (FlightTime > minimumSafeTakeOffTimer)
+                {
+                    var mPos = RemotControl.GetPosition();
+                    var mSpeed = RemotControl.GetShipVelocities().LinearVelocity.Length();
+
+                    //расчет точки перехвата цели и поворот её гироскопа на цель
+                    Vector3D interPos = CalcInterceptPos(mPos, mSpeed, targetPosition, targetSpeed);
+                    SetGyro(RottateMissileToTarget(interPos) * 5, 1);
+                }
+            }
         }
 
         //////////////END OF SCRIPT/////////////////////////////

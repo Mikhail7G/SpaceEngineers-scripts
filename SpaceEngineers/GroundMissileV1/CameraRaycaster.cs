@@ -431,18 +431,22 @@ namespace SpaceEngineers.GroundMissileV1
         {
             if (!info.IsEmpty())
             {                          ///координаты цели
-
                 string sendingSignal = (calculatedTargetPos.X).ToString() +
-                                       "|" +(calculatedTargetPos.Y).ToString() +
+                                       "|" + (calculatedTargetPos.Y).ToString() +
                                        "|" + (calculatedTargetPos.Z).ToString() +
 
-                                       "|" +(targetSpeed.X).ToString() + //скорость цели
+                                       "|" + (targetSpeed.X).ToString() + //скорость цели
                                        "|" + (targetSpeed.Y).ToString() +
                                        "|" + (targetSpeed.Z).ToString();
 
                 IGC.SendBroadcastMessage(missileTagSender, sendingSignal, TransmissionDistance.TransmissionDistanceMax);
+
+
+
             }
         }
+
+        //////////////////END OF SCRIPT////////////////////////////////////////
 
     }
 }

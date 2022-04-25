@@ -40,6 +40,8 @@ namespace RotoTest
 
         float rotateModifier = 1;//модификатор скорости вращения
 
+        IMyMotorAdvancedStator testRotator;
+        float targetAngle = 180;
 
 
         public Program()
@@ -69,10 +71,13 @@ namespace RotoTest
 
 
             UpdateRotation();
+            TestRotaton();
         }
 
         public void PrepareModules()
         {
+            testRotator = GridTerminalSystem.GetBlockWithName("rotator") as IMyMotorAdvancedStator;
+
             Echo("-----RotorsScriptData----");
 
             panel = GridTerminalSystem.GetBlockWithName(panelName) as IMyTextPanel;
@@ -131,6 +136,12 @@ namespace RotoTest
         public void Save()
         {
 
+        }
+
+        public void TestRotaton()
+        {
+            float angle = testRotator.Angle;
+            testRotator.TargetVelocityRad = (float)Math.Sin(targetAngle * 3.14 / 180 - angle);
         }
 
         
