@@ -92,6 +92,8 @@ namespace Inventory
 
                 IMyInventory targetInventory = storage.GetInventory(0);
 
+                IMyCameraBlock cam;
+
                 if (inventory.CanTransferItemTo(targetInventory, MyItemType.MakeIngot("MyObjectBuilder_Ingot")))
                 {
                     inventory.TransferItemTo(targetInventory, 0, null, true);

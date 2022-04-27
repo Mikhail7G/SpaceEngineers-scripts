@@ -501,7 +501,7 @@ namespace SpaceEngineers.BaseManagers.Base
 
             if(masterAssembler==null)
             {
-                Echo("<<<<--WTF cant find master assempler->>>>>");
+                Echo("<<<<--Cant find master assempler->>>>>");
                 return;
             }
 

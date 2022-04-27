@@ -28,15 +28,35 @@ namespace SpaceEngineers.GroundMissileV1
         /// RADARLOCK - захват цели в геометрическом центре
         /// RADARLOCKHIGHT - захват конкретной точки цели
         /// </summary>
-        /// 
 
 
+        string observerCameraName = "radarCamOBS";
+        string radarCameraGroupName = "radarCams";
+        string antennaName = "Ant";
+        string lcdName = "LCD1";
+        string lcdInfoName = "LCDData";
+        string beeperName = "Beeper";
+
+        ///для управления через роторы
+        string controlGroupName = "RadarGroup";
+        string controlStationName = "Capitan";
+        string statorHorizontalName = "RadarStatorH";
+        string statorVerticalName = "RadarStatorV";
+
+        string missileTagSender = "ch1R";//Отправляем в канал ракет координаты цели
+
+        IMyCameraBlock observerCamera;//
         IMyCameraBlock camera;//активная в текущий момент камера
         IMySoundBlock beeper;//звуковое информирование о захвате цели
         IMyRadioAntenna antenna;//антенна для передачи данных ракете, правильный метод
         IMyTextPanel lcd;//дисплей инфы цели
         IMyTextPanel lcdInfo;//дисплей инфы камер
-        string missileTagSender = "ch1R";//Отправляем в канал ракет координаты цели
+
+
+        IMyBlockGroup group;
+        IMyShipController control;
+        IMyMotorAdvancedStator statorHorizontal;
+        IMyMotorAdvancedStator statorVertical;
 
         /// <summary>
         /// Параметры цели
@@ -47,12 +67,7 @@ namespace SpaceEngineers.GroundMissileV1
         Vector3D calculatedTargetPos;//расчетная точка нахождения цели
         MyDetectedEntityInfo info;
 
-        string observerCameraName = "Cam";
-        string radarCameraName = "radarCam";
-        string antennaName = "Ant";
-        string lcdName = "LCD1";
-        string lcdInfoName = "LCDData";
-        string beeperName = "Beeper";
+        bool useRotors = false;
 
 
         /// <summary>
@@ -68,19 +83,26 @@ namespace SpaceEngineers.GroundMissileV1
         float scanDistance;//дистанция сканирования
         double distanceToTarget;
 
+        float rotateModifier = 1;//модификатор скорости поворота для роторной установки
+
         List<IMyTerminalBlock> cameras;
 
 
         public Program()
         {
             camera = GridTerminalSystem.GetBlockWithName(observerCameraName) as IMyCameraBlock;
+            observerCamera = GridTerminalSystem.GetBlockWithName(observerCameraName) as IMyCameraBlock;
             antenna = GridTerminalSystem.GetBlockWithName(antennaName) as IMyRadioAntenna;
             lcd = GridTerminalSystem.GetBlockWithName(lcdName) as IMyTextPanel;
             lcdInfo = GridTerminalSystem.GetBlockWithName(lcdInfoName) as IMyTextPanel;
             beeper = GridTerminalSystem.GetBlockWithName(beeperName) as IMySoundBlock;
 
             cameras = new List<IMyTerminalBlock>();
-            GridTerminalSystem.SearchBlocksOfName(radarCameraName, cameras);
+            // GridTerminalSystem.SearchBlocksOfName(radarCameraGroupName, cameras);
+            IMyBlockGroup radarGroup;
+            radarGroup = GridTerminalSystem.GetBlockGroupWithName(radarCameraGroupName);
+            radarGroup.GetBlocks(cameras);
+
             SetCameras();
             currentCameraIndex = cameras.Count;
 
@@ -96,11 +118,11 @@ namespace SpaceEngineers.GroundMissileV1
             if (cameras.Count > 0)
             {
                 camera = cameras[0] as IMyCameraBlock;
-                Echo("Total camera in array:" + cameras.Count);
+                Echo($"Total camera in array: {cameras.Count}");
             }
             else
             {
-                Echo("No camera array with name" + radarCameraName + " not detected");
+                Echo($"No camera array with name {radarCameraGroupName} not detected");
             }
 
             if (camera != null)
@@ -109,7 +131,7 @@ namespace SpaceEngineers.GroundMissileV1
             }
             else
             {
-                Echo("No observer camera with name:" + observerCameraName);
+                Echo($"No observer camera with name: {observerCameraName}");
             }
 
             if (antenna != null)
@@ -118,7 +140,7 @@ namespace SpaceEngineers.GroundMissileV1
             }
             else
             {
-                Echo("No antenna with name:" + antennaName);
+                Echo($"No antenna with name: {antennaName}");
             }
 
             if (lcd != null)
@@ -127,7 +149,7 @@ namespace SpaceEngineers.GroundMissileV1
             }
             else
             {
-                Echo("No LCD1 name:" + lcdName);
+                Echo($"No LCD1 name: {lcdName}");
             }
 
             if (lcdInfo != null)
@@ -136,10 +158,17 @@ namespace SpaceEngineers.GroundMissileV1
             }
             else
             {
-                Echo("No LCD1 name:" + lcdInfoName);
+                Echo($"No LCD1 name: {lcdInfoName}");
             }
 
-
+            if (beeper != null)
+            {
+                Echo("Beeper Ok");
+            }
+            else
+            {
+                Echo($"No Beeper name: {beeperName}");
+            }
         }
 
         public void Main(string args, UpdateType updateSource)
@@ -192,16 +221,106 @@ namespace SpaceEngineers.GroundMissileV1
                             Echo("New radio transmitted tag setted:" + missileTagSender);
                         }
                         break;
+
+                    case "USEROTOR"://использовать роторы для вращения радара
+                        Echo("-----Rotors setup start----");
+                        SetUpRotors();
+                        if (argRes.Length > 1)
+                        {
+                            float.TryParse(argRes[1], out rotateModifier);
+                        }
+                        break;
                 }
             }
 
-
             CameraInfo();
             TryTrackTarget();
+
+            if (useRotors)
+                UpdateRotation();
         }
 
-        public void Save()
+        /// <summary>
+        /// Настройка системы для вращения радара через роторы
+        /// </summary>
+      public void SetUpRotors()
         {
+            Echo("-----Rotors setup start----");
+            group = GridTerminalSystem.GetBlockGroupWithName(controlGroupName);
+            Echo(group.Name);
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            group.GetBlocks(blocks);
+
+            if (blocks.Count > 0)
+            {
+                foreach (var block in blocks)
+                {
+                    if (block is IMyShipController)
+                    {
+                        control = block as IMyShipController;
+                        Echo($"Cocpit: {block.CustomName}");
+                    }
+
+                    if (block is IMyMotorAdvancedStator)
+                    {
+                        if (block.CustomName == statorHorizontalName)
+                        {
+                            statorHorizontal = block as IMyMotorAdvancedStator;
+                            Echo($"Horizontal: {block.CustomName}");
+                        }
+
+                        if (block.CustomName == statorVerticalName)
+                        {
+                            statorVertical = block as IMyMotorAdvancedStator;
+                            Echo($"Vertical: {block.CustomName}");
+                        }
+                    }
+                }
+            }
+            if(control == null)
+            {
+                Echo($"No Cocpit: {controlStationName}");
+                return;
+            }
+
+            if (statorHorizontal == null)
+            {
+                Echo($"No Horizontal: {statorHorizontalName}");
+                return;
+            }
+
+            if (statorVertical == null)
+            {
+                Echo($"No Vertical: {statorVerticalName}");
+                return;
+            }
+
+            Echo("-----Rotors setup completed----");
+            useRotors = true;
+        }
+
+        /// <summary>
+        /// Вращение радаром при просмотре через камеру обзора
+        /// </summary>
+        public void UpdateRotation()
+        {
+            if ((!control.Closed) || (!statorHorizontal.Closed) || (!statorVertical.Closed))
+            {
+                Echo($"RotorAzimuth: {Math.Round(statorHorizontal.Angle * 180 / 3.14,2)} \nRotorElevation: {Math.Round(statorVertical.Angle * 180 / 3.14,2)}" +
+                     $"\nRotate modifier: {Math.Round(rotateModifier,2)}");
+
+                if ((control.IsUnderControl) && (observerCamera.IsActive))
+                {
+                    var rot = control.RotationIndicator;
+                    statorHorizontal.TargetVelocityRPM = rot.Y * rotateModifier;
+                    statorVertical.TargetVelocityRPM = -rot.X * rotateModifier;
+                }
+                else
+                {
+                    statorHorizontal.TargetVelocityRPM = 0;
+                    statorVertical.TargetVelocityRPM = 0;
+                }
+            }
 
         }
 
@@ -223,7 +342,6 @@ namespace SpaceEngineers.GroundMissileV1
         /// </summary>
         bool  CameraSelect()
         {
-
           if (!camera.CanScan(scanDistance))
             {
                 currentCameraIndex++;
@@ -247,7 +365,6 @@ namespace SpaceEngineers.GroundMissileV1
                 calculatedTargetPos = info.HitPosition.Value;
                 distanceToTarget = Vector3D.Distance(camera.GetPosition(), info.HitPosition.Value);
             }
-
         }
 
         /// <summary>
@@ -395,33 +512,24 @@ namespace SpaceEngineers.GroundMissileV1
         /// </summary>
         void CameraInfo()
         {
-            if (lcdInfo != null)
-            {
-                lcdInfo.WriteText("", false);
-                lcdInfo.WriteText("MaxRange: " + Math.Round(camera.AvailableScanRange).ToString() + " m" +
-                                 "\nTick/MaxTick : " + scanTick + "/" + Math.Round(tickLimit, 2) +
-                                 "\nTarg/higAcc: " + hasTarget + "/ " + hightAccuracy +
-                                 "\nCHtrsm: " + missileTagSender +
-                                 "\nCurCam/MaxCam : " + currentCameraIndex + "/" + cameras.Count, true);
-            }
+            lcdInfo?.WriteText("", false);
+            lcdInfo?.WriteText($"MaxRange: {Math.Round(camera.AvailableScanRange).ToString()} m" +
+                               $"\nTick/MaxTick: {scanTick}/{Math.Round(tickLimit, 2)}" +
+                               $"\nTarg/higAcc: {hasTarget}/{hightAccuracy}" +
+                               $"\nRadio: {missileTagSender}" +
+                               $"\nCurCam/MaxCams: {currentCameraIndex}/{cameras.Count}", true);
 
-           if (!info.IsEmpty())
+            if (!info.IsEmpty())
             {
-                if (lcd != null)
-                {
-                    lcd.WriteText("", false);
-                    lcd.WriteText(targetVec.ToString() +
-                                                    "\nDist/Spd: " + Math.Round(distanceToTarget) + "/" + Math.Round(info.Velocity.Length()) +
-                                                    "\n" + info.Type.ToString() +
-                                                    "\n" + info.EntityId, true);
-                }
+                lcd?.WriteText("", false);
+                lcd?.WriteText($"Dist/Speed: {Math.Round(distanceToTarget)}/{Math.Round(info.Velocity.Length())}" +
+                              $"\n{info.Type.ToString()}" +
+                              $"\n{info.EntityId}", true);
             }
            else
             {
-                lcd.WriteText("        NO DATA", false);
+                lcd?.WriteText("        NO DATA", false);
             }
-
-
         }
 
         /// <summary>
@@ -440,9 +548,6 @@ namespace SpaceEngineers.GroundMissileV1
                                        "|" + (targetSpeed.Z).ToString();
 
                 IGC.SendBroadcastMessage(missileTagSender, sendingSignal, TransmissionDistance.TransmissionDistanceMax);
-
-
-
             }
         }
 
