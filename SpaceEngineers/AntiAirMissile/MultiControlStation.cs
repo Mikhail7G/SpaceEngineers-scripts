@@ -21,7 +21,12 @@ namespace SpaceEngineers.MultiControlStation
         /// <summary>
         /// Максимальное время полета ракеты, т.е. время контроля ракеты станцией
         /// </summary>
-        int maxAviableFlightTime = 2500;
+        int maxAviableFlightTime = 5500;
+
+        /// <summary>
+        /// Дистанция потрыва ракеты в метрах
+        /// </summary>
+        public int missileRadioExplosionDistance = 10;
 
         /// <summary>
         /// Назавания компонентов наземной станции
@@ -139,6 +144,11 @@ namespace SpaceEngineers.MultiControlStation
             scriptEnabled = false;
         }
 
+        public void WriteMissileStaticParams()
+        {
+            ControlledMissile.MissileExplTimer = missileRadioExplosionDistance * 2;
+        }
+
    
 
         /// <summary>
@@ -202,9 +212,21 @@ namespace SpaceEngineers.MultiControlStation
                         {
                             if (block is IMyThrust)
                             {
+                                (block as IMyThrust).SetValueBool("OnOff", false);
                                 missile.GravityTrusters.Add(block as IMyThrust);
                             }
                         }
+
+                        //маневровые
+                        if (block.CustomName.Contains(missileManevricEngineName))
+                        {
+                            if (block is IMyThrust)
+                            {
+                                (block as IMyThrust).SetValueBool("OnOff", false);
+                                missile.ManevricTrusters.Add(block as IMyThrust);
+                            }
+                        }
+
                         //гироскопы
                         if (block.CustomName.Contains(missileGyrosName))
                         {
@@ -243,6 +265,26 @@ namespace SpaceEngineers.MultiControlStation
             else
             {
                 Echo("No tag! Enter custom data!");
+            }
+            GetMissileInfo();
+        }
+
+        /// <summary>
+        /// Вывод отладочной информации в блок
+        /// </summary>
+        public void GetMissileInfo()
+        {
+            Echo("-----Missiles info------");
+
+            foreach(var missile in missileList)
+            {
+                Echo($"Name: {missileTagFinder}" +
+                    $"\n Engines: {missile.Trusters.Count}" +
+                    $"\nWarheads: {missile.Warheads.Count}" +
+                    $"\nRadio expl dist {missileRadioExplosionDistance} m" +
+                    $"\n No Sensor" +
+                    $"\nFlight time {maxAviableFlightTime}");
+
             }
         }
 
@@ -372,6 +414,13 @@ namespace SpaceEngineers.MultiControlStation
             private Vector3D natGravity = new Vector3D();
 
             private int minimumSafeTakeOffTimer = 150;
+
+            private int wanderTime = 0;
+
+            private Vector3D wander = new Vector3D();
+
+            public static int MissileExplTimer = 0;
+
             public ControlledMissile()
             {
                 FlightTime = 0;
@@ -381,6 +430,11 @@ namespace SpaceEngineers.MultiControlStation
                 GravityTrusters = new List<IMyThrust>();
                 ManevricTrusters = new List<IMyThrust>();
                 Warheads = new List<IMyWarhead>();
+
+                Random rnd;
+                rnd = new Random();
+                wanderTime = rnd.Next(0,100) - 25;
+
             }
 
             /// <summary>
@@ -388,7 +442,7 @@ namespace SpaceEngineers.MultiControlStation
             /// </summary>
             public bool MissileReady()
             {
-                if ((Gyros.Count == 0) || (Gyros.Where(b => !b.IsFunctional).Count() > 0)) 
+                if ((Gyros.Count == 0) || (Gyros.Where(b => !b.IsFunctional).Count() > 0))
                     return false;
                 if ((Trusters.Count == 0) || (Trusters.Where(b => !b.IsFunctional).Count() > 0)) 
                     return false;
@@ -447,6 +501,7 @@ namespace SpaceEngineers.MultiControlStation
                 targetYaw = Math.Acos(targetYaw) - Math.PI / 2;
                 double targetRoll = Vector3D.Dot(left, Vector3D.Reject(Vector3D.Normalize(-natGravity), fwd));
                 targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
+
                 return new Vector3D(targetYaw, -targetPitch, targetRoll);
 
             }
@@ -460,6 +515,18 @@ namespace SpaceEngineers.MultiControlStation
                     gyro.SetValueFloat("Yaw", (float)vec.GetDim(0));
                     gyro.SetValueFloat("Pitch", (float)vec.GetDim(1));
                     gyro.SetValueFloat("Roll", (float)vec.GetDim(2));
+                }
+
+            }
+
+            public void Detonate()
+            {
+                foreach(var warhead in Warheads)
+                {
+                    if(!warhead.Closed)
+                    {
+                        warhead.Detonate();
+                    }
                 }
 
             }
@@ -484,6 +551,12 @@ namespace SpaceEngineers.MultiControlStation
 
                     }
 
+                    foreach (var truster in ManevricTrusters)
+                    {
+                        truster.SetValueBool("OnOff", true);
+
+                    }
+
                     foreach (IMyWarhead head in Warheads)
                     {
                         head.IsArmed = true;
@@ -501,11 +574,61 @@ namespace SpaceEngineers.MultiControlStation
                 {
                     var mPos = RemotControl.GetPosition();
                     var mSpeed = RemotControl.GetShipVelocities().LinearVelocity.Length();
+                    var sqrDistance = Vector3D.DistanceSquared(mPos, targetPosition);
+
+                    if(sqrDistance < MissileExplTimer)
+                    {
+                        Detonate();
+                    }
 
                     //расчет точки перехвата цели и поворот её гироскопа на цель
                     Vector3D interPos = CalcInterceptPos(mPos, mSpeed, targetPosition, targetSpeed);
-                    SetGyro(RottateMissileToTarget(interPos) * 5, 1);
+                    SetGyro(RottateMissileToTarget(interPos + Wander(targetPosition)) * 5, 1);
                 }
+            }
+
+            //public Vector3D Wander(Vector3D dist)
+            //{
+
+            //    wanderTime++;
+            //    if (wanderTime > 50)
+            //    {
+            //        wanderTime = 0;
+            //        Vector3D point = RemotControl.WorldMatrix.Forward * 15;
+
+            //        double radius = 150;
+            //        Random rnd = new Random();
+            //        var angle = rnd.Next(0, 40) - 20;
+            //        point.X += radius * Math.Cos(angle);
+            //        point.Z += radius * Math.Sin(angle);
+
+            //        wander = RemotControl.WorldMatrix.Forward * 45 + RemotControl.WorldMatrix.Left * angle + RemotControl.WorldMatrix.Up * angle;
+            //        return wander;
+            //    }
+            //    else
+            //    {
+            //        return wander;
+            //    }
+            //}
+
+            public Vector3D Wander(Vector3D dist)
+            {
+
+                double radius = 10;
+                double maxWanderTime = 250;
+
+                wanderTime++;
+                if (wanderTime > maxWanderTime)
+                    wanderTime = 0;
+
+                var fwd = RemotControl.WorldMatrix.Forward * radius;
+                var up = RemotControl.WorldMatrix.Up * radius;
+                var left = RemotControl.WorldMatrix.Left * radius;
+
+                double angle = 2 * Math.PI * wanderTime / maxWanderTime;
+
+                wander = fwd + (left * Math.Cos(angle) + up * Math.Sin(angle));
+                return wander; 
             }
         }
 

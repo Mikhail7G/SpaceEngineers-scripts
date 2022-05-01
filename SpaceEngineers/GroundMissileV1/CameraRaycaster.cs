@@ -53,10 +53,12 @@ namespace SpaceEngineers.GroundMissileV1
         IMyTextPanel lcdInfo;//дисплей инфы камер
 
 
+
         IMyBlockGroup group;
         IMyShipController control;
         IMyMotorAdvancedStator statorHorizontal;
         IMyMotorAdvancedStator statorVertical;
+        IMyTextSurface radarSurface;
 
         /// <summary>
         /// Параметры цели
@@ -225,6 +227,9 @@ namespace SpaceEngineers.GroundMissileV1
                     case "USEROTOR"://использовать роторы для вращения радара
                         Echo("-----Rotors setup start----");
                         SetUpRotors();
+                        break;
+
+                    case "ROTORSPEED":
                         if (argRes.Length > 1)
                         {
                             float.TryParse(argRes[1], out rotateModifier);
@@ -258,6 +263,13 @@ namespace SpaceEngineers.GroundMissileV1
                     if (block is IMyShipController)
                     {
                         control = block as IMyShipController;
+
+                        var text = control as IMyTextSurfaceProvider;
+                        if(text!=null)
+                        {
+                            radarSurface = text.GetSurface(0);
+                        }
+
                         Echo($"Cocpit: {block.CustomName}");
                     }
 
@@ -513,7 +525,7 @@ namespace SpaceEngineers.GroundMissileV1
         void CameraInfo()
         {
             lcdInfo?.WriteText("", false);
-            lcdInfo?.WriteText($"MaxRange: {Math.Round(camera.AvailableScanRange).ToString()} m" +
+            lcdInfo?.WriteText($"MaxRange: {Math.Round(camera.AvailableScanRange)} m" +
                                $"\nTick/MaxTick: {scanTick}/{Math.Round(tickLimit, 2)}" +
                                $"\nTarg/higAcc: {hasTarget}/{hightAccuracy}" +
                                $"\nRadio: {missileTagSender}" +
@@ -524,6 +536,11 @@ namespace SpaceEngineers.GroundMissileV1
                 lcd?.WriteText("", false);
                 lcd?.WriteText($"Dist/Speed: {Math.Round(distanceToTarget)}/{Math.Round(info.Velocity.Length())}" +
                               $"\n{info.Type.ToString()}" +
+                              $"\n{info.EntityId}", true);
+
+                radarSurface?.WriteText("", false);
+                radarSurface?.WriteText($"Target:\nDist/Speed: {Math.Round(distanceToTarget)}/{Math.Round(info.Velocity.Length())}" +
+                              $"\n{info.Type}" +
                               $"\n{info.EntityId}", true);
             }
            else
