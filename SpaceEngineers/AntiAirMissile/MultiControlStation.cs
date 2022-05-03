@@ -33,6 +33,7 @@ namespace SpaceEngineers.MultiControlStation
         /// </summary>
         string antennaName = "!AntGround";
         string textMonitorName = "!MissileMonitor";
+        string textMonitorMissileName = "!MissileInfo";
 
         /// <summary>
         /// Название компонентов блоков ракет
@@ -51,6 +52,7 @@ namespace SpaceEngineers.MultiControlStation
         ///////////// Не редактировать ниже!////////////////////
         /// </summary>
 
+        int currentSelectedMissile = 0;
         double distanceToTargetFromBase = 0;
         Vector3D targetPosition;//положение цели
         Vector3D targetSpeed;//скрость цели
@@ -59,6 +61,7 @@ namespace SpaceEngineers.MultiControlStation
         string missileTagFinder = null;
         IMyRadioAntenna antenna;
         IMyTextPanel panel;
+        IMyTextPanel panelInfo;
         IMyBroadcastListener listener;//слушаем эфир на получение данных о целях по радио
 
         List<ControlledMissile> missileList;
@@ -76,6 +79,7 @@ namespace SpaceEngineers.MultiControlStation
 
             antenna =  GridTerminalSystem.GetBlockWithName(antennaName) as IMyRadioAntenna;
             panel = GridTerminalSystem.GetBlockWithName(textMonitorName) as IMyTextPanel;
+            panelInfo = GridTerminalSystem.GetBlockWithName(textMonitorMissileName) as IMyTextPanel;
 
             listener = IGC.RegisterBroadcastListener(missileTagResiever);
             listener.SetMessageCallback(missileTagResiever);
@@ -91,14 +95,17 @@ namespace SpaceEngineers.MultiControlStation
                 {
                     case "FIRE":
                         FireAll();
+                        DrawMissileInfo();
                         break;
 
                     case "FIREONCE":
                         FireOne();
+                        DrawMissileInfo();
                         break;
 
                     case "BUILD":
                         FindMissile();
+                        DrawMissileInfo();
                         break;
 
                     case "ENABLE":
@@ -107,6 +114,11 @@ namespace SpaceEngineers.MultiControlStation
 
                     case "DISABLE":
                         Disable();
+                        break;
+
+                    case "NEXTMISSILE":
+                        currentSelectedMissile++;
+                        DrawMissileInfo();
                         break;
                 }
 
@@ -158,6 +170,8 @@ namespace SpaceEngineers.MultiControlStation
         {
             missileTagFinder = Me.CustomData;//тэг для поиска ракет
             missileList.Clear();
+
+            currentSelectedMissile = 0;
 
             if (missileTagFinder != null)
             {
@@ -239,8 +253,7 @@ namespace SpaceEngineers.MultiControlStation
                     $"\nMass/Wheight: {Math.Round(missile.RemotControl.CalculateShipMass().TotalMass, 2)} kg" +
                     $"/{Math.Round(missile.RemotControl.CalculateShipMass().TotalMass * missile.RemotControl.GetNaturalGravity().Length(),2)} N" +
                     $"\nEng effective thrust: {missile.EffectiveEngineThrust} kN" +
-                    $"\n" +
-                    $"-------------------------");
+                    $"\n");
             }
         }
 
@@ -311,15 +324,62 @@ namespace SpaceEngineers.MultiControlStation
         /// </summary>
         public void DrawInfo()
         {
-            if (panel != null)
+
+            panel?.WriteText("", true);
+            panel?.WriteText("Missiles in bay/In Flight: " + missileList.Count + "/" + missileInFlightList.Count +
+                            "\nTarget speed: " + Math.Round(targetSpeed.Length()).ToString() +
+                            "\nDist from base: " + Math.Round(distanceToTargetFromBase) +
+                            "\nCalcStatus: " + scriptEnabled, false);
+        }
+
+        /// <summary>
+        /// Вывод информации по выбранной ракете на дисплей
+        /// </summary>
+        public void DrawMissileInfo()
+        {
+            if (missileList.Count == 0)
             {
-                panel.WriteText("", true);
-                panel.WriteText("Missiles in bay/In Flight: " + missileList.Count + "/" + missileInFlightList.Count +
-                                "\nTarget Pos: " + targetPosition.ToString() +
-                                "\nTarget speed: " + Math.Round(targetSpeed.Length()).ToString() +
-                                "\nDist from base: " + Math.Round(distanceToTargetFromBase) +
-                                "\nCalcStatus: " + scriptEnabled, false);
+                panelInfo?.WriteText("     NO MISSILES IN BAY     ", false);
+                return;
             }
+
+            if (currentSelectedMissile < missileList.Count)
+            {
+            }
+            else
+            {
+                currentSelectedMissile = 0;
+            }
+
+            var missile = missileList[currentSelectedMissile];
+
+            panelInfo?.WriteText("", false);
+            panelInfo?.WriteText("Missile: ", true);
+
+            for (int i = 0; i < missileList.Count; i++)
+            {
+                if (i == currentSelectedMissile)
+                {
+                    panelInfo?.WriteText($" [{i + 1}] ", true);
+                }
+                else
+                {
+                    panelInfo?.WriteText($" {i + 1} ", true);
+                }
+            }
+
+            panelInfo?.WriteText($"\nReady: {missile.MissileReady()}" +
+                $"\nSize: {missile.RemotControl.CubeGrid.GridSizeEnum}" +
+                $"\nRadio expl dist {missileRadioExplosionDistance} m" +
+                $"\n----PowerSystems-----" +
+                $"\nAcc powered: {missile.TotalBatteryPower * 100 / missile.MaxBatteryPower} % " +
+                $"\nMass/Wheight: {Math.Round(missile.RemotControl.CalculateShipMass().TotalMass, 2)} kg" +
+                $"/{Math.Round(missile.RemotControl.CalculateShipMass().TotalMass * missile.RemotControl.GetNaturalGravity().Length(), 2)} N" +
+                $"\nEng effective thrust: {missile.EffectiveEngineThrust} kN" +
+                $"\n" +
+                $"-------------------------", true);
+           
+            
         }
 
         /// <summary>
@@ -327,28 +387,44 @@ namespace SpaceEngineers.MultiControlStation
         /// </summary>
         public void FireAll()
         {
+            if(missileList.Count==0)
+            {
+                FindMissile();
+                return;
+            }
+
             Enable();
-            FindMissile();
             foreach (var missile in missileList)
             {
                 if (missile != null)
                 {
                     missileInFlightList.Add(missile);
                     missile.MissileFire();
-
                 }
             }
             missileList.Clear();
         }
       
+        /// <summary>
+        /// Выстрел по одной выбранной ракете
+        /// </summary>
         public void FireOne()
         {
-            FindMissile();
-            Enable();
             if (missileList.Count > 0)
             {
-                missileInFlightList.Add(missileList[0]);
-                missileList[0].MissileFire();
+                if (missileList[currentSelectedMissile].MissileReady())
+                {
+                    missileInFlightList.Add(missileList[currentSelectedMissile]);
+                    missileList[currentSelectedMissile].MissileFire();
+                    missileList.RemoveAt(currentSelectedMissile);
+                    currentSelectedMissile = 0;
+
+                    Enable();
+                }
+            }
+            else
+            {
+                FindMissile();
             }
         }
 
@@ -577,55 +653,53 @@ namespace SpaceEngineers.MultiControlStation
                         Detonate();
                     }
 
-                    //расчет точки перехвата цели и поворот её гироскопа на цель
+                    //расчет точки перехвата цели и поворот гироскопа на цель
                     Vector3D interPos = CalcInterceptPos(mPos, mSpeed, targetPosition, targetSpeed);
-                    SetGyro(RottateMissileToTarget(interPos + Wander(targetPosition)) * 5, 1);
+                    interPos += Wander(targetPosition);
+                    SetGyro(RottateMissileToTarget(interPos) * 5, 1);
                 }
             }
-
-            //public Vector3D Wander(Vector3D dist)
-            //{
-
-            //    wanderTime++;
-            //    if (wanderTime > 50)
-            //    {
-            //        wanderTime = 0;
-            //        Vector3D point = RemotControl.WorldMatrix.Forward * 15;
-
-            //        double radius = 150;
-            //        Random rnd = new Random();
-            //        var angle = rnd.Next(0, 40) - 20;
-            //        point.X += radius * Math.Cos(angle);
-            //        point.Z += radius * Math.Sin(angle);
-
-            //        wander = RemotControl.WorldMatrix.Forward * 45 + RemotControl.WorldMatrix.Left * angle + RemotControl.WorldMatrix.Up * angle;
-            //        return wander;
-            //    }
-            //    else
-            //    {
-            //        return wander;
-            //    }
-            //}
 
             public Vector3D Wander(Vector3D dist)
             {
 
-                double radius = 10;
-                double maxWanderTime = 250;
-
                 wanderTime++;
-                if (wanderTime > maxWanderTime)
+                if (wanderTime > 50)
+                {
                     wanderTime = 0;
 
-                var fwd = RemotControl.WorldMatrix.Forward * radius;
-                var up = RemotControl.WorldMatrix.Up * radius;
-                var left = RemotControl.WorldMatrix.Left * radius;
+                    Random rnd = new Random();
+                    var angle = rnd.Next(0, 40) - 20;
 
-                double angle = 2 * Math.PI * wanderTime / maxWanderTime;
-
-                wander = fwd + (left * Math.Cos(angle) + up * Math.Sin(angle));
-                return wander; 
+                    wander = RemotControl.WorldMatrix.Forward * 45 + RemotControl.WorldMatrix.Left * angle + RemotControl.WorldMatrix.Up * angle;
+                    return wander;
+                }
+                else
+                {
+                    return wander;
+                }
             }
+
+            //public Vector3D Sphiral(Vector3D dist)
+            //{
+
+            //    double radius = 10;
+            //    double maxWanderTime = 250;
+
+            //    wanderTime++;
+            //    if (wanderTime > maxWanderTime)
+            //        wanderTime = 0;
+
+            //    var fwd = RemotControl.WorldMatrix.Forward * radius;
+            //    var up = RemotControl.WorldMatrix.Up * radius;
+            //    var left = RemotControl.WorldMatrix.Left * radius;
+
+            //    double angle = 2 * Math.PI * wanderTime / maxWanderTime;
+
+            //    wander = fwd + (left * Math.Cos(angle) + up * Math.Sin(angle));
+            //    return wander; 
+            //}
+
         }
 
         //////////////END OF SCRIPT/////////////////////////////
