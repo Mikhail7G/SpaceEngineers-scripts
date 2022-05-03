@@ -19,9 +19,9 @@ namespace SpaceEngineers.MultiControlStation
     public sealed class Program : MyGridProgram
     {
         /// <summary>
-        /// Максимальное время полета ракеты, т.е. время контроля ракеты станцией
+        /// Максимальное время полета ракеты, т.е. время контроля ракеты станцией в секундах
         /// </summary>
-        int maxAviableFlightTime = 5500;
+        int maxAviableFlightTime = 120; //seconds
 
         /// <summary>
         /// Дистанция потрыва ракеты в метрах
@@ -163,11 +163,6 @@ namespace SpaceEngineers.MultiControlStation
             {
                 Echo("Try to find with tag: " + missileTagFinder);
 
-
-                List<IMyRemoteControl> blocks = new List<IMyRemoteControl>();
-                GridTerminalSystem.GetBlocksOfType(blocks, b => b.CustomName.Contains(missileTagFinder + remoteControlName));
-                Echo("Radio: " + blocks.Count);
-
                 //Получаем все группы блоков с тэгом и формируем ракеты добавляя блоки из групп
                 List<IMyBlockGroup> group = new List<IMyBlockGroup>();
                 GridTerminalSystem.GetBlockGroups(group, g => g.Name.Contains(missileTagFinder));
@@ -179,76 +174,9 @@ namespace SpaceEngineers.MultiControlStation
                     group[i].GetBlocks(groupBlocks);
 
                     ControlledMissile missile = new ControlledMissile();
-
-                    foreach (var block in groupBlocks)
-                    {
-                        //блок ДУ
-                        if (block.CustomName.Contains(remoteControlName))
-                        {
-                            if (block is IMyRemoteControl)
-                            {
-                                missile.RemotControl = block as IMyRemoteControl;
-                            }
-                        }
-                        //рассоеденитель
-                        if (block.CustomName.Contains(decouplerName))
-                        {
-                            if (block is IMyTerminalBlock)
-                            {
-                                missile.MergeBlock = block as IMyTerminalBlock;
-                            }
-                        }
-                        //двигатели
-                        if (block.CustomName.Contains(missileEnginesName))
-                        {
-                            if (block is IMyThrust)
-                            {
-                                (block as IMyThrust).SetValueBool("OnOff", false);
-                                missile.Trusters.Add(block as IMyThrust);
-                            }
-                        }
-                        //гаситель гравитации
-                        if (block.CustomName.Contains(missileGravityEngineName))
-                        {
-                            if (block is IMyThrust)
-                            {
-                                (block as IMyThrust).SetValueBool("OnOff", false);
-                                missile.GravityTrusters.Add(block as IMyThrust);
-                            }
-                        }
-
-                        //маневровые
-                        if (block.CustomName.Contains(missileManevricEngineName))
-                        {
-                            if (block is IMyThrust)
-                            {
-                                (block as IMyThrust).SetValueBool("OnOff", false);
-                                missile.ManevricTrusters.Add(block as IMyThrust);
-                            }
-                        }
-
-                        //гироскопы
-                        if (block.CustomName.Contains(missileGyrosName))
-                        {
-                            if (block is IMyGyro)
-                            {
-                                (block as IMyGyro).SetValueBool("Override", true);
-                                missile.Gyros.Add(block as IMyGyro);
-                            }
-                        }
-                        //боеголовки
-                        if (block.CustomName.Contains(missileWarheadName))
-                        {
-                            if (block is IMyWarhead)
-                            {
-                                missile.Warheads.Add(block as IMyWarhead);
-                            }
-                        }
-
-                    }//foreach
-
-                    //Проверка на то, что все блоки проварены
-                    if (missile.MissileReady()) 
+                  
+                    //Приск блоков ракеты и проверка на проварку всех блоков
+                    if (missile.BuildMissile(groupBlocks).MissileReady()) 
                     {
                         missileList.Add(missile);
                     }
@@ -260,12 +188,12 @@ namespace SpaceEngineers.MultiControlStation
                 }//for
 
                 Echo("Missile detection completed! Missiles: " + missileList.Count);
-
             }
             else
             {
                 Echo("No tag! Enter custom data!");
             }
+
             GetMissileInfo();
         }
 
@@ -274,17 +202,45 @@ namespace SpaceEngineers.MultiControlStation
         /// </summary>
         public void GetMissileInfo()
         {
+            Echo($"Radio target rcv channel: {missileTagResiever}");
+            Echo($"Station control time: {maxAviableFlightTime} sec");
+
+            if (antenna != null) 
+            {
+                Echo("Antenna ready");
+            }
+            else
+            {
+                Echo("No radio antenna!");
+            }
+
+            if (panel != null) 
+            {
+                Echo("Text panel OK");
+            }
+            else
+            {
+                Echo($"No text panel with name: {textMonitorName}");
+            }
+
             Echo("-----Missiles info------");
 
             foreach(var missile in missileList)
             {
-                Echo($"Name: {missileTagFinder}" +
-                    $"\n Engines: {missile.Trusters.Count}" +
+                Echo($"Size: {missile.RemotControl.CubeGrid.GridSizeEnum}" +
+                    $"\nEngines: {missile.Trusters.Count}" +
+                    $"\nManevrEngines: {missile.ManevricTrusters.Count}" +
                     $"\nWarheads: {missile.Warheads.Count}" +
                     $"\nRadio expl dist {missileRadioExplosionDistance} m" +
-                    $"\n No Sensor" +
-                    $"\nFlight time {maxAviableFlightTime}");
-
+                    $"\nNo Sensor" +
+                    $"\n----PowerSystems-----" +
+                    $"\nTotal batt: {missile.Batteries.Count}" +
+                    $"\nAcc powered: {missile.TotalBatteryPower * 100 / missile.MaxBatteryPower} % " +
+                    $"\nMass/Wheight: {Math.Round(missile.RemotControl.CalculateShipMass().TotalMass, 2)} kg" +
+                    $"/{Math.Round(missile.RemotControl.CalculateShipMass().TotalMass * missile.RemotControl.GetNaturalGravity().Length(),2)} N" +
+                    $"\nEng effective thrust: {missile.EffectiveEngineThrust} kN" +
+                    $"\n" +
+                    $"-------------------------");
             }
         }
 
@@ -336,8 +292,9 @@ namespace SpaceEngineers.MultiControlStation
                     missileInFlightList[i].UpdateMissile(targetPosition, targetSpeed);
 
                     //Время жизни ракеты, для того чтоб не забивать лист ракет в полете
-                    if (missileInFlightList[i].FlightTime > maxAviableFlightTime) 
+                    if (missileInFlightList[i].FlightTime > maxAviableFlightTime * 60) 
                     {
+                        missileInFlightList[i].Detonate();
                         missileInFlightList.RemoveAt(i);
                     }
 
@@ -406,9 +363,15 @@ namespace SpaceEngineers.MultiControlStation
             public List<IMyThrust> GravityTrusters;//двигатели для гашения гравитации
             public List<IMyThrust> ManevricTrusters;//маневровые двигаетли
             public List<IMyWarhead> Warheads;//боеголовки
+            public List<IMyBatteryBlock> Batteries;//аккумуляторы
 
             public IMyRemoteControl RemotControl;//дистанционный контроль
-            public IMyTerminalBlock MergeBlock;//блок соеденителя
+            public IMyShipMergeBlock MergeBlock;//блок соеденителя
+
+            public float TotalBatteryPower { set; get; } = 0;
+            public float MaxBatteryPower { set; get; } = 0;
+
+            public float EffectiveEngineThrust { set; get; } = 0;
 
             private Vector3D linearVel = new Vector3D();
             private Vector3D natGravity = new Vector3D();
@@ -430,11 +393,41 @@ namespace SpaceEngineers.MultiControlStation
                 GravityTrusters = new List<IMyThrust>();
                 ManevricTrusters = new List<IMyThrust>();
                 Warheads = new List<IMyWarhead>();
+                Batteries = new List<IMyBatteryBlock>();
 
                 Random rnd;
                 rnd = new Random();
                 wanderTime = rnd.Next(0,100) - 25;
 
+            }
+
+            /// <summary>
+            /// Сборка ракеты из модулей в группе
+            /// </summary>
+            public ControlledMissile BuildMissile(List<IMyTerminalBlock> groupBlocks)
+            {
+                RemotControl = groupBlocks.Where(b => b is IMyRemoteControl).FirstOrDefault() as IMyRemoteControl;
+                MergeBlock = groupBlocks.Where(b => b is IMyShipMergeBlock).FirstOrDefault() as IMyShipMergeBlock;
+
+                Trusters = (groupBlocks.Where(b => b is IMyThrust)
+                                               .Where(b => b.Orientation.Forward == Base6Directions.GetOppositeDirection(RemotControl.Orientation.Forward))
+                                               .Select(t => t as IMyThrust).ToList());
+
+                ManevricTrusters = (groupBlocks.Where(b => b is IMyThrust)
+                                              .Where(b => b.Orientation.Forward != Base6Directions.GetOppositeDirection(RemotControl.Orientation.Forward))
+                                              .Select(t => t as IMyThrust).ToList());
+
+                Gyros = groupBlocks.Where(b => b is IMyGyro).Select(g => g as IMyGyro).ToList();
+                Warheads = groupBlocks.Where(b => b is IMyWarhead).Select(w => w as IMyWarhead).ToList();
+
+                Batteries = groupBlocks.Where(b => b is IMyBatteryBlock).Select(g => g as IMyBatteryBlock).ToList();
+
+                MaxBatteryPower = Batteries.Sum(b => b.MaxStoredPower);
+                TotalBatteryPower = Batteries.Sum(b => b.CurrentStoredPower);
+
+                EffectiveEngineThrust = Trusters.Sum(b => b.MaxEffectiveThrust);
+
+                return this;
             }
 
             /// <summary>
@@ -449,6 +442,8 @@ namespace SpaceEngineers.MultiControlStation
                 if ((RemotControl == null) || (!RemotControl.IsFunctional)) 
                     return false;
                 if ((MergeBlock == null) || (!MergeBlock.IsFunctional)) 
+                    return false;
+                if ((Batteries.Count == 0) || (Batteries.Where(b => !b.IsFunctional).Count() > 0))
                     return false;
                 return true;
             }
@@ -511,6 +506,9 @@ namespace SpaceEngineers.MultiControlStation
 
                 foreach (var gyro in Gyros)
                 {
+                    if (gyro.Closed)
+                        break;
+
                     gyro.SetValueFloat("Power", power);
                     gyro.SetValueFloat("Yaw", (float)vec.GetDim(0));
                     gyro.SetValueFloat("Pitch", (float)vec.GetDim(1));
@@ -545,16 +543,14 @@ namespace SpaceEngineers.MultiControlStation
                         truster.ThrustOverridePercentage = 1;
                     }
 
-                    foreach (var truster in GravityTrusters)
+                    foreach (var gyro in Gyros)
                     {
-                        truster.SetValueBool("OnOff", true);
-
+                        gyro.SetValueBool("Override", true);
                     }
 
                     foreach (var truster in ManevricTrusters)
                     {
                         truster.SetValueBool("OnOff", true);
-
                     }
 
                     foreach (IMyWarhead head in Warheads)

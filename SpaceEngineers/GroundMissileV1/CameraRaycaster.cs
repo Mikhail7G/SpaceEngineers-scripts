@@ -22,13 +22,14 @@ namespace SpaceEngineers.GroundMissileV1
     {
         /// <summary>
         /// Комманды для захвата целей:
-        /// SCAN - одиночное сканирование без захвата цели на стандартуню дистанцию 1500 м
+        /// SCAN:<int> - одиночное сканирование без захвата цели на стандартуню дистанцию 1500 м
         /// SCAN:5000 - одиночное сканирование на дистанцию 5000 м
-        /// SCANSEND - отправка координат по каналу для наведения ракет + дистанция через ":дист"
-        /// RADARLOCK - захват цели в геометрическом центре
-        /// RADARLOCKHIGHT - захват конкретной точки цели
+        /// SCANSEND:<int> - отправка координат по каналу для наведения ракет + дистанция через ":дист"
+        /// RADARLOCK:<int> - захват цели в геометрическом центре
+        /// RADARLOCKHIGHT:<int> - захват конкретной точки цели
+        /// USEROTOR - подключить использование поворотной платформы, вращяется только при активной обсервер камеры(observerCameraName)
+        /// ROTORSPEED:<int> - регулировка скорости поворота платформы 1 - 100% скорости.
         /// </summary>
-
 
         string observerCameraName = "radarCamOBS";
         string radarCameraGroupName = "radarCams";
@@ -45,6 +46,9 @@ namespace SpaceEngineers.GroundMissileV1
 
         string missileTagSender = "ch1R";//Отправляем в канал ракет координаты цели
 
+
+        //////////DO NOT EDIT BELLOW THE LINE/////////////////////////
+        //Группа радара
         IMyCameraBlock observerCamera;//
         IMyCameraBlock camera;//активная в текущий момент камера
         IMySoundBlock beeper;//звуковое информирование о захвате цели
@@ -52,8 +56,7 @@ namespace SpaceEngineers.GroundMissileV1
         IMyTextPanel lcd;//дисплей инфы цели
         IMyTextPanel lcdInfo;//дисплей инфы камер
 
-
-
+        //группа поворотной системы для радара, необязательно
         IMyBlockGroup group;
         IMyShipController control;
         IMyMotorAdvancedStator statorHorizontal;
@@ -100,7 +103,6 @@ namespace SpaceEngineers.GroundMissileV1
             beeper = GridTerminalSystem.GetBlockWithName(beeperName) as IMySoundBlock;
 
             cameras = new List<IMyTerminalBlock>();
-            // GridTerminalSystem.SearchBlocksOfName(radarCameraGroupName, cameras);
             IMyBlockGroup radarGroup;
             radarGroup = GridTerminalSystem.GetBlockGroupWithName(radarCameraGroupName);
             radarGroup.GetBlocks(cameras);
@@ -225,11 +227,10 @@ namespace SpaceEngineers.GroundMissileV1
                         break;
 
                     case "USEROTOR"://использовать роторы для вращения радара
-                        Echo("-----Rotors setup start----");
                         SetUpRotors();
                         break;
 
-                    case "ROTORSPEED":
+                    case "ROTORSPEED"://скорость поворота платформы 1-100%
                         if (argRes.Length > 1)
                         {
                             float.TryParse(argRes[1], out rotateModifier);
@@ -253,6 +254,7 @@ namespace SpaceEngineers.GroundMissileV1
             Echo("-----Rotors setup start----");
             group = GridTerminalSystem.GetBlockGroupWithName(controlGroupName);
             Echo(group.Name);
+
             List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
             group.GetBlocks(blocks);
 
@@ -361,7 +363,6 @@ namespace SpaceEngineers.GroundMissileV1
                     currentCameraIndex = 0;
                 camera = cameras[currentCameraIndex] as IMyCameraBlock;
             }
-
             return true;
         }
 
