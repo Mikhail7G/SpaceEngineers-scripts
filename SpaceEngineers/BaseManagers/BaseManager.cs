@@ -111,7 +111,6 @@ namespace SpaceEngineers.BaseManagers.Base
         /// </summary>
         public Program()
         {
-
             Runtime.UpdateFrequency = UpdateFrequency.Update100;
 
             inventories = new List<IMyInventory>();
@@ -123,7 +122,6 @@ namespace SpaceEngineers.BaseManagers.Base
 
             partsDictionary = new Dictionary<string, int>();
             partsRequester = new Dictionary<string, int>();
-
         }
 
         /// <summary>

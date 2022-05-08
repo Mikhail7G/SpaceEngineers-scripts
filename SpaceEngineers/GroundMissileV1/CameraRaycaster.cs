@@ -435,7 +435,7 @@ namespace SpaceEngineers.GroundMissileV1
                     if (!info.IsEmpty())
                     {
                         //Сохраняем локальную точку на корабле и трансформируем ее в глобальную сетку координат
-                        hitPos = info.HitPosition.Value - info.Position + Vector3D.Normalize(info.HitPosition.Value - camera.GetPosition()) * 1.5;
+                        hitPos = info.HitPosition.Value - info.Position + Vector3D.Normalize(info.HitPosition.Value - camera.GetPosition()) * 5;
 
                         MatrixD invMatrix = MatrixD.Invert(info.Orientation);
                         hitPos = Vector3D.Transform(hitPos, invMatrix);
@@ -443,7 +443,7 @@ namespace SpaceEngineers.GroundMissileV1
 
                         targetSpeed = info.Velocity;
 
-                        distanceToTarget = Vector3D.Distance(targetVec, camera.GetPosition());
+                        distanceToTarget = Vector3D.Distance(targetVec, camera.GetPosition())+10;
                         targetId = info.EntityId;
                     }
                 }
@@ -476,7 +476,8 @@ namespace SpaceEngineers.GroundMissileV1
                 tickLimit = distanceToTarget / 2000 * 60 / cameras.Count;
                 if (hightAccuracy)
                 {
-                    calculatedTargetPos = info.Position + (info.Velocity * (int)tickLimit / 60) + Vector3D.Transform(hitPos, info.Orientation);
+                    calculatedTargetPos = targetVec * (int)tickLimit / 60;
+                   // calculatedTargetPos = info.Position + (info.Velocity * (int)(tickLimit / 60)) + Vector3D.Transform(hitPos, info.Orientation);
                 }
                 else
                 {
