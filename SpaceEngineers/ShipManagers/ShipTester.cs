@@ -48,7 +48,12 @@ namespace ShipManagers.ShipTester
         double deltaTimePid = 1;
 
         bool cruiseControl = false;
+        bool altHold = false;
         double accFwd = 0;
+
+        double radioAlt = 0;
+        double baroAlt = 0;
+        double deltaAlt = 0;
 
         PIDRegulator ForwardPid = new PIDRegulator();
         PIDRegulator LeftPid = new PIDRegulator();
@@ -238,9 +243,9 @@ namespace ShipManagers.ShipTester
             waypoints.Clear();
             remoteControl.ClearWaypoints();
 
-            waypoints.Add(remoteControl.GetPosition()+ remoteControl.WorldMatrix.Forward * 0 + remoteControl.WorldMatrix.Left * 0);
+          //  waypoints.Add(remoteControl.GetPosition()+ remoteControl.WorldMatrix.Forward * 0 + remoteControl.WorldMatrix.Left * 0);
             //GPS:PP1:-38797.81:-38669.89:-27402.11:#FF75C9F1:
-         //   waypoints.Add(new Vector3D(-38797.81, -38669.89, -27402.11));
+            waypoints.Add(new Vector3D(-38797.81, -38669.89, -27402.11));
             remoteControl.AddWaypoint(new Vector3D(-38797.81, -38669.89, -27402.11), "1");
             //  var downPos = remoteControl.GetPosition() + remoteControl.WorldMatrix.Down * 50;
             // remoteControl.AddWaypoint(downPos, "2");
@@ -297,10 +302,18 @@ namespace ShipManagers.ShipTester
             var speedLeft = cockpit.GetShipVelocities().LinearVelocity.Dot(remoteControl.WorldMatrix.Left);
             var speedFwd = cockpit.GetShipVelocities().LinearVelocity.Dot(remoteControl.WorldMatrix.Forward);
 
-
+            ////////////////////////////////////////////////БЛОК УДЕРЖАНИЯ ВЫСОТЫ/////////////////////////
+            double altHolding = 100;
             double UpThrust = 0;
 
-            UpThrust = -ShipWeight.Dot(remoteControl.WorldMatrix.Up - cockpit.GetShipVelocities().LinearVelocity);
+            double AltCorrThrust = 0;
+            PIDRegulator pid = new PIDRegulator();
+            deltaAlt = radioAlt - altHolding;
+
+            var upAcc = (2 * deltaAlt) / deltaTimePid;
+            AltCorrThrust -= pid.SetK(1, 1, 0).SetPID(upAcc, upAcc, upAcc, deltaTimePid).GetSignal() * shipMass;
+
+            UpThrust = -ShipWeight.Dot(remoteControl.WorldMatrix.Up - cockpit.GetShipVelocities().LinearVelocity) + AltCorrThrust;
             UpThrust *= Math.Max(1, cockpit.MoveIndicator.Y * 10);
 
             if (cockpit.MoveIndicator.Y < 0)
@@ -308,13 +321,13 @@ namespace ShipManagers.ShipTester
                 UpThrust = 0;
 
             }
+            ////////////////////////////////////////////////
 
-
-            double pos = 0;
             double dir = 0;
 
             double vec = 0;
     
+            ///////////////////////////////БЛОК НАВЕДЕНИЯ ДВИГАТЕЛЕЙ НА ЦЕЛЬ////////////////////////////////////////
             if (waypoints.Count > 0)
             {
                 var targetPos = waypoints[0] - remoteControl.GetPosition();
@@ -329,7 +342,9 @@ namespace ShipManagers.ShipTester
                 var acLeft = (2 * dirLeft) / deltaTimePid;
                 LeftThrust = -LeftPid.SetK(KP, KD, KI).SetPID(acLeft, acLeft, acLeft, deltaTimePid).GetSignal() * shipMass;
             }
-
+            //////////////////////////////////////////////////////////////////////////////////////////
+            ///
+            //////////////////////////БЛОК ПОИСКА ДВИГАТЕЛЕЙ ПО НАПРАВЛЕНИЮ ТЯГИ///////////////////////////
             var thrustersUp = thrusters.Where(b => b.GridThrustDirection.Y == -1).ToList();
             var accUp = thrustersUp.Sum(t => t.MaxEffectiveThrust);
 
@@ -380,9 +395,6 @@ namespace ShipManagers.ShipTester
                 tr.ThrustOverridePercentage = (float)ForwardThrust / accBack;
             }
 
-            double radioAlt = 0;
-            double baroAlt = 0;
-
             remoteControl.TryGetPlanetElevation(MyPlanetElevation.Surface, out radioAlt);
             remoteControl.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out baroAlt);
 
@@ -401,7 +413,10 @@ namespace ShipManagers.ShipTester
 
             panel3?.WriteText(
                 $"CCtr: {cruiseControl}" +
-                $"\nReqSpd: {reqShipFWDspeed} m/s", false);
+                $"\nReqSpd: {reqShipFWDspeed} m/s" +
+                $"\nRadioAlt: {radioAlt}" +
+                $"\nBaroAlt: {baroAlt}" +
+                $"\ndeltaAlt: {deltaAlt}", false);
 
         }
 
