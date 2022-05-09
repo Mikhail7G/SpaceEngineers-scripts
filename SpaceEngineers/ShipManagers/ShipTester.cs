@@ -13,13 +13,12 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-namespace SpaceEngineers.ShipManagers
+
+
+namespace ShipManagers.ShipTester
 {
     public sealed class Program : MyGridProgram
     {
-
-        /// ///////START SCRIPT//////////////////
-
         IMyRemoteControl remoteControl;
         IMyCockpit cockpit;
         List<IMyThrust> thrusters;
@@ -27,6 +26,7 @@ namespace SpaceEngineers.ShipManagers
         List<IMyGyro> gyros;
         IMyTextPanel panel1;
         IMyTextPanel panel2;
+        IMyTextPanel panel3;
 
         List<Vector3D> waypoints;
 
@@ -36,8 +36,17 @@ namespace SpaceEngineers.ShipManagers
         int updateTick = 0;
 
         double prevSpeed = 0;
+        double prevSpeedLeft = 0;
 
         double reqShipFWDspeed = 0;
+
+        double I = 0;
+
+        bool cruiseControl = false;
+        double accFwd = 0;
+
+        PIDRegulator ForwardPid = new PIDRegulator();
+        PIDRegulator LeftPid = new PIDRegulator();
 
         public Program()
         {
@@ -54,7 +63,7 @@ namespace SpaceEngineers.ShipManagers
         public void Main(string args)
         {
             string argument = args.ToUpper();
-            switch(argument)
+            switch (argument)
             {
                 case "INIT":
                     FindComponetns();
@@ -63,12 +72,21 @@ namespace SpaceEngineers.ShipManagers
                 case "WW":
                     SaveThisPos();
                     break;
+
+                case "CC":
+                    cruiseControl = !cruiseControl;
+                    reqShipFWDspeed = 0;
+                    ClearOverrideEng();
+                    break;
             }
 
             SlowUpdateFunctions();
 
             SetGyro(HoldDirections());
             FlyUp();
+
+            if (cruiseControl)
+                CruiseControl();
         }
 
         void FindComponetns()
@@ -82,6 +100,7 @@ namespace SpaceEngineers.ShipManagers
             remoteControl = blocks.Where(b => b is IMyRemoteControl).First() as IMyRemoteControl;
             panel1 = blocks.Where(b => b is IMyTextPanel).Where(t => t.CustomName == "EngLcd").FirstOrDefault() as IMyTextPanel;
             panel2 = blocks.Where(b => b is IMyTextPanel).Where(t => t.CustomName == "MassLcd").FirstOrDefault() as IMyTextPanel;
+            panel3 = blocks.Where(b => b is IMyTextPanel).Where(t => t.CustomName == "CruiseControlLCD").FirstOrDefault() as IMyTextPanel;
 
         }
 
@@ -99,7 +118,7 @@ namespace SpaceEngineers.ShipManagers
 
         void EchoInfo()
         {
-            if (remoteControl == null) 
+            if (remoteControl == null)
             {
                 Echo($"No remote control");
             }
@@ -143,12 +162,50 @@ namespace SpaceEngineers.ShipManagers
         void ShipInfo()
         {
             shipMass = cockpit.CalculateShipMass().PhysicalMass;
-   
+
+        }
+
+        void ClearOverrideEng()
+        {
+            var thrustersUp = thrusters.Where(b => b.GridThrustDirection.Y == -1).ToList();
+            foreach (var tr in thrustersUp)
+            {
+                tr.ThrustOverridePercentage = -1;
+            }
+
+            var thrustersDown = thrusters.Where(b => b.GridThrustDirection.Y == 1).ToList();
+            foreach (var tr in thrustersDown)
+            {
+                tr.ThrustOverridePercentage = -1;
+            }
+
+            var thrustersLeft = thrusters.Where(b => b.GridThrustDirection.X == -1).ToList();
+            foreach (var tr in thrustersLeft)
+            {
+                tr.ThrustOverridePercentage = -1;
+            }
+
+            var thrustersRight = thrusters.Where(b => b.GridThrustDirection.X == 1).ToList();
+            foreach (var tr in thrustersRight)
+            {
+                tr.ThrustOverridePercentage = -1;
+            }
+
+            var thrustersForward = thrusters.Where(b => b.GridThrustDirection.Z == 1).ToList();
+            foreach (var tr in thrustersForward)
+            {
+                tr.ThrustOverridePercentage = -1;
+            }
+
+            var thrustersBackward = thrusters.Where(b => b.GridThrustDirection.Z == -1).ToList();
+            foreach (var tr in thrustersBackward)
+            {
+                tr.ThrustOverridePercentage = -1;
+            }
         }
 
         public Vector3D HoldDirections()
         {
-
             var natGravity = Vector3D.Normalize(cockpit.GetNaturalGravity());
             Vector3D axis = natGravity.Cross(cockpit.WorldMatrix.Down);
             if (natGravity.Dot(cockpit.WorldMatrix.Down) < 0)
@@ -176,10 +233,47 @@ namespace SpaceEngineers.ShipManagers
             waypoints.Clear();
             remoteControl.ClearWaypoints();
 
-            waypoints.Add(remoteControl.GetPosition() + remoteControl.WorldMatrix.Up*50);
-            remoteControl.AddWaypoint(waypoints[0],"1");
-          //  var downPos = remoteControl.GetPosition() + remoteControl.WorldMatrix.Down * 50;
-           // remoteControl.AddWaypoint(downPos, "2");
+            //   waypoints.Add(remoteControl.GetPosition()+ remoteControl.WorldMatrix.Forward * 150 + remoteControl.WorldMatrix.Left * 0);
+            //GPS:PP1:-38797.81:-38669.89:-27402.11:#FF75C9F1:
+            waypoints.Add(new Vector3D(-38797.81, -38669.89, -27402.11));
+            remoteControl.AddWaypoint(new Vector3D(-38797.81, -38669.89, -27402.11), "1");
+            //  var downPos = remoteControl.GetPosition() + remoteControl.WorldMatrix.Down * 50;
+            // remoteControl.AddWaypoint(downPos, "2");
+        }
+
+        public void CruiseControl()
+        {
+            double ForwardThrust = 0;
+
+            reqShipFWDspeed += cockpit.MoveIndicator.Z * -1;
+            reqShipFWDspeed = Math.Min(Math.Max(-100, reqShipFWDspeed), 100);
+
+            shipMass = remoteControl.CalculateShipMass().PhysicalMass;
+            var grav = remoteControl.GetNaturalGravity();
+            var speedFwd = cockpit.GetShipVelocities().LinearVelocity.Dot(remoteControl.WorldMatrix.Forward);
+
+            //необходимое ускорение для достмжения заданной скорости (v-v0)/t
+            accFwd = (speedFwd - reqShipFWDspeed) / 1;
+            //тяга двигателей f=m*a
+            ForwardThrust = accFwd * shipMass;
+
+            var thrustersForward = thrusters.Where(b => b.GridThrustDirection.Z == 1).ToList();
+            var accForward = thrustersForward.Sum(t => t.MaxEffectiveThrust);
+
+            var thrustersBackward = thrusters.Where(b => b.GridThrustDirection.Z == -1).ToList();
+            var accBack = thrustersBackward.Sum(t => t.MaxEffectiveThrust);
+
+            foreach (var tr in thrustersForward)
+            {
+                tr.ThrustOverridePercentage = -(float)ForwardThrust / accForward;
+            }
+
+            foreach (var tr in thrustersBackward)
+            {
+                tr.ThrustOverridePercentage = (float)ForwardThrust / accBack;
+            }
+
+
         }
 
         public void FlyUp()
@@ -192,9 +286,6 @@ namespace SpaceEngineers.ShipManagers
             double RightThrust = 0;
             double ForwardThrust = 0;
 
-            reqShipFWDspeed += cockpit.MoveIndicator.Z * -1;
-            reqShipFWDspeed = Math.Min(Math.Max(-100, reqShipFWDspeed), 100);
-
             Vector3D ShipWeight = grav * shipMass;
 
             var speedUp = cockpit.GetShipVelocities().LinearVelocity.Dot(remoteControl.WorldMatrix.Up);
@@ -204,22 +295,18 @@ namespace SpaceEngineers.ShipManagers
 
             double UpThrust = 0;
 
-            //необходимое ускорение для достмжения заданной скорости (v-v0)/t
-            var accFwd = (speedFwd - reqShipFWDspeed) / 1;
-            //тяга двигателей f=m*a
-            ForwardThrust =accFwd * shipMass;
-
             UpThrust = -ShipWeight.Dot(remoteControl.WorldMatrix.Up - cockpit.GetShipVelocities().LinearVelocity);
-            UpThrust *= Math.Max(1, cockpit.MoveIndicator.Y*10);
+            UpThrust *= Math.Max(1, cockpit.MoveIndicator.Y * 10);
 
-            if (cockpit.MoveIndicator.Y<0)
+            if (cockpit.MoveIndicator.Y < 0)
             {
                 UpThrust = 0;
 
             }
 
 
-
+            double pos = 0;
+            double dir = 0;
 
             if (waypoints.Count > 0)
             {
@@ -231,9 +318,31 @@ namespace SpaceEngineers.ShipManagers
 
                 //ForwardThrust = waypoints[0].Dot(remoteControl.WorldMatrix.Forward);
 
+                dir = waypoints[0].Dot(remoteControl.WorldMatrix.Forward);
+                var dirLeft = waypoints[0].Dot(remoteControl.WorldMatrix.Left);
+
+                pos = Vector3D.Distance(waypoints[0], remoteControl.GetPosition());
+
+                accFwd = (2 * dir) / 1;
+
+
+                ForwardPid.SetK(0.5, 150, 0);
+                ForwardPid.SetPID(accFwd, accFwd, accFwd, 1);
+
+                //  ForwardThrust = -ForwardPid.GetPID() * shipMass;
+                ForwardThrust -= ForwardPid.SetK(0.5, 150, 0).SetPID(accFwd, accFwd, accFwd, 1).GetPID() * shipMass;
+
+
+                  var acLeft = (2 * dirLeft) / 1;
+
+                LeftPid.SetK(0.5, 150, 0);
+                LeftPid.SetPID(acLeft, acLeft, acLeft, 1);
+
+                LeftThrust = -LeftPid.GetPID() * shipMass;
+
             }
 
-            var thrustersUp = thrusters.Where(b => b.GridThrustDirection.Y==-1).ToList();
+            var thrustersUp = thrusters.Where(b => b.GridThrustDirection.Y == -1).ToList();
             var accUp = thrustersUp.Sum(t => t.MaxEffectiveThrust);
 
             var thrustersDown = thrusters.Where(b => b.GridThrustDirection.Y == 1).ToList();
@@ -252,13 +361,6 @@ namespace SpaceEngineers.ShipManagers
             var thrustersBackward = thrusters.Where(b => b.GridThrustDirection.Z == -1).ToList();
             var accBack = thrustersBackward.Sum(t => t.MaxEffectiveThrust);
 
-            var forse = accUp / shipMass;
-            var forse1ms = 1 * shipMass;
-
-
-            var delta = (speedUp - prevSpeed) * 60;
-            prevSpeed = speedUp;
-
 
             foreach (var tr in thrustersUp)
             {
@@ -267,46 +369,98 @@ namespace SpaceEngineers.ShipManagers
 
             foreach (var tr in thrustersDown)
             {
-               // tr.ThrustOverridePercentage = (float)UpThrust / accDown;
+                // tr.ThrustOverridePercentage = (float)UpThrust / accDown;
             }
 
 
             foreach (var tr in thrustersLeft)
             {
-                // tr.ThrustOverridePercentage = (float)(RightThrust)* forse1ms;
+                tr.ThrustOverridePercentage = (float)(LeftThrust) / accLeft;
             }
 
             foreach (var tr in thrustersRight)
             {
-               //  tr.ThrustOverridePercentage = (float)(LeftThrust) * forse1ms;
+                tr.ThrustOverridePercentage = -(float)(LeftThrust) / accRight;
             }
 
             foreach (var tr in thrustersForward)
             {
-                tr.ThrustOverridePercentage = - (float)ForwardThrust / accForward;
+                tr.ThrustOverridePercentage = -(float)ForwardThrust / accForward;
             }
 
             foreach (var tr in thrustersBackward)
             {
-               tr.ThrustOverridePercentage = (float)ForwardThrust  / accBack;
+                tr.ThrustOverridePercentage = (float)ForwardThrust / accBack;
             }
 
 
             panel1?.WriteText(
-                $"FWdThrust: {accForward} N" +
+                $"\nFWdThrust: {accForward} N" +
                 $"\nfwdSpd: {speedFwd} m/c" +
-                $"\nFWDAcc m/c2: {accForward/shipMass}" +
+                $"\nFWDAcc m/c2: {accForward / shipMass}" +
                 $"\nCalcAcc m/c2: {Math.Abs(accFwd)}" +
                 $"\nReqThr: {ForwardThrust}" +
-                $"\nReqSpd: {reqShipFWDspeed}", false);
+                $"\nDist: {pos}" +
+                $"\nDir: {dir}", false);
 
             panel2?.WriteText(
                 $"Mass: {shipMass} kg" +
-                $"\nMTOW: {accUp/grav.Length()}", false);
+                $"\nMTOW: {accUp / grav.Length()}", false);
+
+            panel3?.WriteText(
+                $"CCtr: {cruiseControl}" +
+                $"\nReqSpd: {reqShipFWDspeed} m/s", false);
 
         }
 
-        /////////////END OF SCRIPT//////////////////////////
+
+        public class PIDRegulator
+        {
+
+            public double P = 0;
+            public double D = 0;
+            public double I = 0;
+
+            public double Kp { get; set; } = 1;
+            public double Kd { get; set; } = 1;
+            public double Ki { get; set; } = 1;
+
+            private double prevD = 0;
+            public double DeltaTimer { get; set; } = 1;
+
+            public PIDRegulator()
+            {
+
+            }
+
+            public PIDRegulator SetK(double _Kp, double _kD, double _kI)
+            {
+                Kp = _Kp;
+                Kd = _kD;
+                Ki = _kI;
+
+                return this;
+            }
+
+            public PIDRegulator SetPID(double inputP, double inputD, double inputI, double deltaTimer)
+            {
+                DeltaTimer = deltaTimer;
+
+                P = inputP;
+
+                D = (inputD - prevD) / DeltaTimer;
+                prevD = inputD;
+
+                I = I + inputI * DeltaTimer;
+                return this;
+            }
+
+            public double GetPID()
+            {
+                double outSignal = P * Kp + D * Kd + I * Ki;
+
+                return outSignal;
+            }
+        }
     }
-       
 }
