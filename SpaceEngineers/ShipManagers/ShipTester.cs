@@ -324,21 +324,11 @@ namespace ShipManagers.ShipTester
                 pos = Vector3D.Distance(waypoints[0], remoteControl.GetPosition());
 
                 accFwd = (2 * dir) / 1;
+                ForwardThrust -= ForwardPid.SetK(0.5, 150, 0).SetPID(accFwd, accFwd, accFwd, 1).GetSignal() * shipMass;
 
 
-                ForwardPid.SetK(0.5, 150, 0);
-                ForwardPid.SetPID(accFwd, accFwd, accFwd, 1);
-
-                //  ForwardThrust = -ForwardPid.GetPID() * shipMass;
-                ForwardThrust -= ForwardPid.SetK(0.5, 150, 0).SetPID(accFwd, accFwd, accFwd, 1).GetPID() * shipMass;
-
-
-                  var acLeft = (2 * dirLeft) / 1;
-
-                LeftPid.SetK(0.5, 150, 0);
-                LeftPid.SetPID(acLeft, acLeft, acLeft, 1);
-
-                LeftThrust = -LeftPid.GetPID() * shipMass;
+                var acLeft = (2 * dirLeft) / 1;
+                LeftThrust = -LeftPid.SetK(0.5, 150, 0).SetPID(acLeft, acLeft, acLeft, 1).GetSignal() * shipMass;
 
             }
 
@@ -433,6 +423,9 @@ namespace ShipManagers.ShipTester
 
             }
 
+            /// <summary>
+            /// Установка коэффициентов
+            /// </summary>
             public PIDRegulator SetK(double _Kp, double _kD, double _kI)
             {
                 Kp = _Kp;
@@ -442,6 +435,9 @@ namespace ShipManagers.ShipTester
                 return this;
             }
 
+            /// <summary>
+            /// Установка регулирующего значения
+            /// </summary>
             public PIDRegulator SetPID(double inputP, double inputD, double inputI, double deltaTimer)
             {
                 DeltaTimer = deltaTimer;
@@ -455,7 +451,10 @@ namespace ShipManagers.ShipTester
                 return this;
             }
 
-            public double GetPID()
+            /// <summary>
+            /// Возвращяем сигнал управления
+            /// </summary>
+            public double GetSignal()
             {
                 double outSignal = P * Kp + D * Kd + I * Ki;
 
