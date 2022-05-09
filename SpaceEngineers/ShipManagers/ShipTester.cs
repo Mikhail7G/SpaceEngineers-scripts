@@ -305,20 +305,27 @@ namespace ShipManagers.ShipTester
             ////////////////////////////////////////////////БЛОК УДЕРЖАНИЯ ВЫСОТЫ/////////////////////////
             double altHolding = 100;
             double UpThrust = 0;
+            double downThrust = 0;
 
             double AltCorrThrust = 0;
             PIDRegulator pid = new PIDRegulator();
             deltaAlt = radioAlt - altHolding;
 
             var upAcc = (2 * deltaAlt) / deltaTimePid;
-            AltCorrThrust -= pid.SetK(1, 1, 0).SetPID(upAcc, upAcc, upAcc, deltaTimePid).GetSignal() * shipMass;
+           // AltCorrThrust -= pid.SetK(1, 1, 0).SetPID(upAcc, upAcc, upAcc, deltaTimePid).GetSignal() * shipMass;
 
             UpThrust = -ShipWeight.Dot(remoteControl.WorldMatrix.Up - cockpit.GetShipVelocities().LinearVelocity) + AltCorrThrust;
             UpThrust *= Math.Max(1, cockpit.MoveIndicator.Y * 10);
 
+            if(deltaAlt>1)
+            {
+                downThrust = UpThrust;
+            }
+
             if (cockpit.MoveIndicator.Y < 0)
             {
                 UpThrust = 0;
+                downThrust = UpThrust;
 
             }
             ////////////////////////////////////////////////
@@ -371,7 +378,7 @@ namespace ShipManagers.ShipTester
 
             foreach (var tr in thrustersDown)
             {
-                // tr.ThrustOverridePercentage = (float)UpThrust / accDown;
+                 tr.ThrustOverridePercentage = -(float)downThrust / accDown;
             }
 
 
@@ -414,6 +421,7 @@ namespace ShipManagers.ShipTester
             panel3?.WriteText(
                 $"CCtr: {cruiseControl}" +
                 $"\nReqSpd: {reqShipFWDspeed} m/s" +
+                $"\nReqRadioAlt: {altHolding} m" +
                 $"\nRadioAlt: {radioAlt}" +
                 $"\nBaroAlt: {baroAlt}" +
                 $"\ndeltaAlt: {deltaAlt}", false);
