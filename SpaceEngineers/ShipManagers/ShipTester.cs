@@ -54,6 +54,7 @@ namespace ShipManagers.ShipTester
         double radioAlt = 0;
         double baroAlt = 0;
         double deltaAlt = 0;
+        double altHolding = 100;
 
         PIDRegulator ForwardPid = new PIDRegulator();
         PIDRegulator LeftPid = new PIDRegulator();
@@ -303,7 +304,6 @@ namespace ShipManagers.ShipTester
             var speedFwd = cockpit.GetShipVelocities().LinearVelocity.Dot(remoteControl.WorldMatrix.Forward);
 
             ////////////////////////////////////////////////БЛОК УДЕРЖАНИЯ ВЫСОТЫ/////////////////////////
-            double altHolding = 100;
             double UpThrust = 0;
             double downThrust = 0;
 
@@ -311,8 +311,9 @@ namespace ShipManagers.ShipTester
             PIDRegulator pid = new PIDRegulator();
             deltaAlt = radioAlt - altHolding;
 
+            altHolding += cockpit.MoveIndicator.Y;
             var upAcc = (2 * deltaAlt) / deltaTimePid;
-           // AltCorrThrust -= pid.SetK(1, 1, 0).SetPID(upAcc, upAcc, upAcc, deltaTimePid).GetSignal() * shipMass;
+            AltCorrThrust -= pid.SetK(1, 1, 0).SetPID(upAcc, upAcc, upAcc, deltaTimePid).GetSignal() * shipMass;
 
             UpThrust = -ShipWeight.Dot(remoteControl.WorldMatrix.Up - cockpit.GetShipVelocities().LinearVelocity) + AltCorrThrust;
             UpThrust *= Math.Max(1, cockpit.MoveIndicator.Y * 10);

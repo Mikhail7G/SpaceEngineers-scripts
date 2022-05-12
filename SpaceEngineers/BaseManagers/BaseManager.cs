@@ -105,6 +105,8 @@ namespace SpaceEngineers.BaseManagers.Base
                                                             "MyObjectBuilder_BlueprintDefinition/HydrogenBottle",
                                                             "MyObjectBuilder_BlueprintDefinition/OxygenBottle"};
 
+        List<MyProductionItem> items;
+
 
         /// <summary>
         /// Инициализация компонентов 1 раз при создании объекта
@@ -119,6 +121,8 @@ namespace SpaceEngineers.BaseManagers.Base
             containers = new List<IMyCargoContainer>();
             batteries = new List<IMyBatteryBlock>();
             gasTanks = new List<IMyGasTank>();
+
+            items = new List<MyProductionItem>();
 
             partsDictionary = new Dictionary<string, int>();
             partsRequester = new Dictionary<string, int>();
@@ -196,30 +200,23 @@ namespace SpaceEngineers.BaseManagers.Base
            
             debugPanel.WriteText("", false);
 
-            var masterAssembler = assemblers.Where(ass => !ass.CooperativeMode).FirstOrDefault();
-
-            //  debugPanel.WriteText(masterAssembler?.IsQueueEmpty.ToString(), true);
-
-            //foreach(var req in partsRequester)
-            //{
-            //    if(partsDictionary.ContainsKey(req.Key))
-            //    {
-            //        int needComponents = req.Value - partsDictionary[req.Key];
-            //        debugPanel.WriteText(needComponents.ToString() +"\n", true);
-            //    }
+          foreach(var item in items)
+            {
+                debugPanel.WriteText(item.BlueprintId +" X "+ item.Amount + "\n", true);
+            }
             //}
 
-            var inv = containers.Where(c => c.CustomName.Contains(componentsStorageName)).FirstOrDefault().GetInventory(0);
-            List<MyInventoryItem> items = new List<MyInventoryItem>();
-            inv.GetItems(items);
-            {
-                foreach(var item in items)
-                {
-                    MyDefinitionId blueprint;
-                    MyDefinitionId.TryParse("MyObjectBuilder_BlueprintDefinition/" + item.Type.SubtypeId,out blueprint);
-                    debugPanel.WriteText(blueprint.SubtypeName + "\n", true);
-                }
-            }
+            //var inv = containers.Where(c => c.CustomName.Contains(componentsStorageName)).FirstOrDefault().GetInventory(0);
+            //List<MyInventoryItem> items = new List<MyInventoryItem>();
+            //inv.GetItems(items);
+            //{
+            //    foreach(var item in items)
+            //    {
+            //        MyDefinitionId blueprint;
+            //        MyDefinitionId.TryParse("MyObjectBuilder_BlueprintDefinition/" + item.Type.SubtypeId,out blueprint);
+            //        debugPanel.WriteText(blueprint.SubtypeName + "\n", true);
+            //    }
+            //}
         }
 
         /// <summary>
@@ -232,11 +229,12 @@ namespace SpaceEngineers.BaseManagers.Base
             inventories = blocks.Where(b => b.HasInventory)
                                 .Select(b=>b.GetInventory(b.InventoryCount-1));//берем из инвентаря готовой продукции
 
-            GridTerminalSystem.GetBlocksOfType(refinereys);
-            GridTerminalSystem.GetBlocksOfType(assemblers);
-            GridTerminalSystem.GetBlocksOfType(containers);
-            GridTerminalSystem.GetBlocksOfType(batteries);
-            GridTerminalSystem.GetBlocksOfType(gasTanks);
+
+            refinereys = blocks.Where(b => b is IMyRefinery).Where(r => r.IsFunctional).Select(t => t as IMyRefinery).ToList();
+            assemblers = blocks.Where(b => b is IMyAssembler).Where(a => a.IsFunctional).Select(t => t as IMyAssembler).ToList();
+            containers = blocks.Where(b => b is IMyCargoContainer).Where(c => c.IsFunctional).Select(t => t as IMyCargoContainer).ToList();
+            batteries = blocks.Where(b => b is IMyBatteryBlock).Where(b => b.IsFunctional).Select(t => t as IMyBatteryBlock).ToList();
+            gasTanks = blocks.Where(b => b is IMyGasTank).Where(g => g.IsFunctional).Select(t => t as IMyGasTank).ToList();
 
             emerHydGens = GridTerminalSystem.GetBlockGroupWithName(emerHydrogenGeneratorsGroupName);
 
@@ -410,7 +408,7 @@ namespace SpaceEngineers.BaseManagers.Base
             if (partsPanel != null)
             {
                 partsPanel.WriteText("", true);
-                partsPanel.WriteText("Total/max ingnot cont volume: " + freePartsStorageVolume + "/" + totalPartsStorageVolume + " T", false);
+                partsPanel.WriteText("Total/max parts cont volume: " + freePartsStorageVolume + "/" + totalPartsStorageVolume + " T", false);
 
                 foreach (var dict in partsDictionary.OrderBy(k => k.Key))
                 {
@@ -472,43 +470,13 @@ namespace SpaceEngineers.BaseManagers.Base
         public void PartsAutoBuild()
         {
             Echo("------Auto build system-------");
-
             partsRequester.Clear();
-
-            //Включаем режим совместного произваодства, путем включения его у всех заводов кроме одного, он становится основным
-            var masterAssemblersCounter = assemblers.Where(ass => !ass.CooperativeMode).Count();
-            if (masterAssemblersCounter > 1) 
-            {
-                for(int i=1;i<assemblers.Count;i++)
-                {
-                    assemblers[i].CooperativeMode = true;
-                }
-                Echo("------Assemblers in coop mode-------");
-            }
-            else if(masterAssemblersCounter==0)
-            {
-                for (int i = 0; i < assemblers.Count; i++)
-                {
-                    assemblers[i].CooperativeMode = false;
-                }
-                Echo("------Assemblers count changed-------");
-
-            }
-
-            var masterAssembler = assemblers.Where(ass => !ass.CooperativeMode).FirstOrDefault();
-
-            if(masterAssembler==null)
-            {
-                Echo("<<<<--Cant find master assempler->>>>>");
-                return;
-            }
 
             string[] lines = Me.CustomData.Split('\n');
 
-            foreach(var line in lines)
+            foreach (var line in lines)
             {
                 string[] itemName = line.Split('=');
-
 
                 if (!partsRequester.ContainsKey(itemName[0]))
                 {
@@ -519,11 +487,13 @@ namespace SpaceEngineers.BaseManagers.Base
                         partsRequester.Add(itemName[0], count);
                     }
                 }
-                
+
             }
             Echo($"Detected auto build componetns: {partsRequester.Count}");
 
-            if (masterAssembler.IsQueueEmpty)
+            var workingAssemblers = assemblers.Where(ass => !ass.IsQueueEmpty).ToList();
+
+            if (workingAssemblers.Count == 0)
             {
                 foreach (var req in partsRequester)
                 {
@@ -532,28 +502,31 @@ namespace SpaceEngineers.BaseManagers.Base
                         int needComponents = req.Value - partsDictionary[req.Key];
                         if (needComponents > 0)
                         {
-                            VRage.MyFixedPoint amount = (VRage.MyFixedPoint)needComponents;
+
                             string name = "MyObjectBuilder_BlueprintDefinition/" + req.Key;//Название компонента для строительсвта
                             var parser = blueprintDataBase.Where(n => n.Contains(req.Key)).FirstOrDefault();//Если компонент стандартный ищем его в готовом списке
 
-                            if (parser != null) 
+                            if (parser != null)
                                 name = parser;
 
-                            Echo($"Start build: {req.Key}");
+                            Echo($"Start build: {req.Key} X {needComponents}");
+                            Echo($"D_name: {name}");
+                            Echo("\n");
 
                             MyDefinitionId blueprint;
-                            if(!MyDefinitionId.TryParse(name,out blueprint))
+                            if (!MyDefinitionId.TryParse(name, out blueprint))
                                 Echo($"WARNING cant parse: {name}");
 
-                            Echo(parser);
-                            if (masterAssembler.CanUseBlueprint(blueprint))
+                            var assemblersCanBuildThis = assemblers.Where(a => a.CanUseBlueprint(blueprint)).ToList();
+                            var count = needComponents / assemblersCanBuildThis.Count;
+                            if (count < 1)
+                                count = 1;
+
+                            foreach (var asembler in assemblersCanBuildThis)
                             {
-                                masterAssembler.AddQueueItem(blueprint, amount);
+                                VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
+                                asembler.AddQueueItem(blueprint, amount);
                                 Echo($"Assemblers starts: {req.Key}");
-                            }
-                            else
-                            {
-                                Echo($"Assemblers cant build: {req.Key}");
                             }
                         }
                     }
@@ -561,12 +534,22 @@ namespace SpaceEngineers.BaseManagers.Base
             }
             else
             {
-                Echo("Assemblers ready for work");
             }
+
+            //items.Clear();
+            //var assb = assemblers.Where(q => !q.IsQueueEmpty).ToList();
+            //foreach (var a in assb)
+            //{
+            //    var list = new List<MyProductionItem>();
+            //    a.GetQueue(list);
+            //    items.AddRange(list);
+            //}
+
 
         }//PartsAutoBuild()
 
-        ///////////////SCRIPT END THERE//////////////////////////////
+
+        /////////////////////END OF SCRIPT///////////////////////////////////
     }
 
 }
