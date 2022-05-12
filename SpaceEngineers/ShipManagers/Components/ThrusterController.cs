@@ -22,6 +22,7 @@ namespace ShipManagers.Components.Thrusters
 
         /////////////////////////////////////////////////////////////
 
+        private Vector3D testTarget = new Vector3D(-38797.81, -38669.89, -27402.11);
         ThrusterController Thruster;
 
         public Program()
@@ -50,6 +51,14 @@ namespace ShipManagers.Components.Thrusters
                 case "HOR":
                     Thruster.ShitchHorizonHold();
                     break;
+
+                case "FLY":
+                    Thruster.FlyTO(testTarget);
+                    break;
+
+                case "HOLD":
+                  //  Thruster.FlyToPoint = true;
+                    break;
             }
 
             Thruster.Update();
@@ -58,11 +67,13 @@ namespace ShipManagers.Components.Thrusters
 
         public class ThrusterController
         {
-            public bool CruiseControl { get; set; }
-            public bool AltHold { get; set; }
+            public bool CruiseControl { get; private set; }
+            public bool AltHold { get; private set; }
+            public bool HorizonHold { get; private set; }
+
+            public bool FlyToPoint { get;  set; }
             public int AltHildKP { get; set; }
             public int AltHildKD { get; set; }
-            public bool HorizonHold { get; set; }
 
             private IMyRemoteControl remoteControl;
             private IMyCockpit cockpit;
@@ -112,6 +123,8 @@ namespace ShipManagers.Components.Thrusters
             private Vector3D totalWheight;
             private Vector3D naturalGravity;
             private Vector3D lineraVelocity;
+            private Vector3D currentPosition;
+            private Vector3D targetPosition;
             private Vector3D localForward;
             private Vector3D localLeft;
             private Vector3D localUp;
@@ -129,6 +142,9 @@ namespace ShipManagers.Components.Thrusters
 
             private string cruiseControlLCDName = "CCLcd";
 
+            private PIDRegulator ForwardPid = new PIDRegulator();
+            private PIDRegulator LeftPid = new PIDRegulator();
+            private PIDRegulator UpPid = new PIDRegulator();
 
             enum ControlType
             {
@@ -252,6 +268,10 @@ namespace ShipManagers.Components.Thrusters
 
                 if (AltHold)
                     AltHoldMode();
+
+                if (FlyToPoint)
+                    Fly();
+
             }
 
             public void SwitchCruiseControl()
@@ -336,10 +356,92 @@ namespace ShipManagers.Components.Thrusters
                     $"CC: {CruiseControl}" +
                     $"\nAltHold: {AltHold}" +
                     $"\nHorHold: {HorizonHold}" +
+                    $"\nFlytoPont {FlyToPoint}" +
                     $"\nReqSpeed: {requestedForwardSpeed}" +
                     $"\nReqAlt: {altHolding}", false);
             }
 
+            public void FlyTO(Vector3D point)
+            {
+                targetPosition = point;
+                FlyToPoint = true;
+            }
+            private void Fly()
+            {
+                double AltCorrThrust = 0;
+
+                ThrustForward = 0;
+                ThrustLeft = 0;
+                ThrustUp = 0;
+                double KP=0.5;
+                double KD = 150;
+                double KI = 0;
+
+                var targetPos = targetPosition - currentPosition;
+                var targetSQRdist = Vector3D.DistanceSquared(targetPosition, currentPosition);
+
+              
+
+                var fwdDir = targetPos.Dot(localForward);
+                var dirLeft = targetPos.Dot(localLeft);
+                var dirUp = targetPos.Dot(localUp);
+
+                var accFwd = (2 * fwdDir) / deltaTime;
+                ThrustForward -= ForwardPid.SetK(KP, KD, KI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;
+
+                var accLeft = (2 * dirLeft) / deltaTime;
+                ThrustLeft = -LeftPid.SetK(KP, KD, KI).SetPID(accLeft, accLeft, accLeft, deltaTime).GetSignal() * totalMass;
+
+
+                var accUp = (2 * dirUp) / deltaTime;
+                AltCorrThrust = UpPid.SetK(1, 150, KI).SetPID(accUp, accUp, accUp, deltaTime).GetSignal() * totalMass;
+
+                ThrustUp = -totalWheight.Dot(localUp) + AltCorrThrust;
+
+                if (accUp < 0)
+                {
+                    ThrustDown = ThrustUp;
+                }
+
+                if (targetSQRdist < 1) 
+                {
+                    FlyToPoint = false;
+                    ClerarOverideEngines();
+                    return;
+                }
+
+                OverrideThrsters();
+
+            }
+
+
+            public void MinerVerticalHold(Vector3D point)
+            {
+                ThrustForward = 0;
+                ThrustLeft = 0;
+                ThrustUp = 0;
+                double KP = 0.5;
+                double KD = 150;
+                double KI = 0;
+
+                var targetPos = point - currentPosition;
+                var targetSQRdist = Vector3D.DistanceSquared(point, currentPosition);
+
+
+
+                var fwdDir = targetPos.Dot(localForward);
+                var dirLeft = targetPos.Dot(localLeft);
+                var dirUp = targetPos.Dot(localUp);
+
+                var accFwd = (2 * fwdDir) / deltaTime;
+                ThrustForward -= ForwardPid.SetK(KP, KD, KI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;
+
+                var accLeft = (2 * dirLeft) / deltaTime;
+                ThrustLeft = -LeftPid.SetK(KP, KD, KI).SetPID(accLeft, accLeft, accLeft, deltaTime).GetSignal() * totalMass;
+
+                OverrideThrsters();
+
+            }
 
             private void AltHoldMode()
             {
@@ -426,6 +528,8 @@ namespace ShipManagers.Components.Thrusters
                         cockpit.TryGetPlanetElevation(MyPlanetElevation.Surface,out radioAlt);
                         cockpit.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out baroAlt);
 
+                        currentPosition = cockpit.GetPosition();
+
                         rotationY = cockpit.RotationIndicator.Y;
 
                         moveZ = cockpit.MoveIndicator.Z;
@@ -437,7 +541,10 @@ namespace ShipManagers.Components.Thrusters
                         localDown = cockpit.WorldMatrix.Down;
 
                         lineraVelocity = cockpit.GetShipVelocities().LinearVelocity;
+
                         forwadSpeedComponent = lineraVelocity.Dot(localForward);
+                        leftSpeedComponent = lineraVelocity.Dot(localLeft);
+                        upSpeedComponent = lineraVelocity.Dot(localUp);
                         break;
 
                     case ControlType.RemoteControl:
@@ -446,6 +553,7 @@ namespace ShipManagers.Components.Thrusters
                         totalWheight = totalMass * naturalGravity;
                         remoteControl.TryGetPlanetElevation(MyPlanetElevation.Surface, out radioAlt);
                         remoteControl.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out baroAlt);
+                        currentPosition = remoteControl.GetPosition();
 
                         rotationY = remoteControl.RotationIndicator.Y;
 
@@ -458,7 +566,10 @@ namespace ShipManagers.Components.Thrusters
                         localDown = remoteControl.WorldMatrix.Down;
 
                         lineraVelocity = remoteControl.GetShipVelocities().LinearVelocity;
+
                         forwadSpeedComponent = lineraVelocity.Dot(localForward);
+                        leftSpeedComponent = lineraVelocity.Dot(localLeft);
+                        upSpeedComponent = lineraVelocity.Dot(localUp);
                         break;
                 }
 
