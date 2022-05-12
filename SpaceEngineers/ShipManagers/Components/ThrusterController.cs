@@ -57,7 +57,7 @@ namespace ShipManagers.Components.Thrusters
                     break;
 
                 case "HOLD":
-                  //  Thruster.FlyToPoint = true;
+                    Thruster.HoldPos();
                     break;
             }
 
@@ -70,6 +70,7 @@ namespace ShipManagers.Components.Thrusters
             public bool CruiseControl { get; private set; }
             public bool AltHold { get; private set; }
             public bool HorizonHold { get; private set; }
+            public bool MinerHold { get; set; }
 
             public bool FlyToPoint { get;  set; }
             public int AltHildKP { get; set; }
@@ -272,6 +273,9 @@ namespace ShipManagers.Components.Thrusters
                 if (FlyToPoint)
                     Fly();
 
+                if (MinerHold)
+                    VerticalHold();
+
             }
 
             public void SwitchCruiseControl()
@@ -341,6 +345,19 @@ namespace ShipManagers.Components.Thrusters
                 }
             }
 
+            public void FlyTO(Vector3D point)
+            {
+                targetPosition = point;
+                FlyToPoint = true;
+            }
+
+            public void HoldPos()
+            {
+                targetPosition = currentPosition;
+                MinerHold = !MinerHold;
+                ClerarOverideEngines();
+            }
+
             /// Приватные методы ниже
 
 
@@ -349,8 +366,7 @@ namespace ShipManagers.Components.Thrusters
                 cruiseControlLCD?.WriteText(
                     $"Mass: {totalMass} kg" +
                     $"\nMTOW: {maxTakeOffWheight}" +
-                    $"\n{thrustersUp.Count}", false);
-
+                    $"\nPayload:{ Math.Round(totalMass / maxTakeOffWheight *100,1)} % ", false);
 
                 cruiseControlSurf?.WriteText(
                     $"CC: {CruiseControl}" +
@@ -361,11 +377,7 @@ namespace ShipManagers.Components.Thrusters
                     $"\nReqAlt: {altHolding}", false);
             }
 
-            public void FlyTO(Vector3D point)
-            {
-                targetPosition = point;
-                FlyToPoint = true;
-            }
+         
             private void Fly()
             {
                 double AltCorrThrust = 0;
@@ -415,7 +427,7 @@ namespace ShipManagers.Components.Thrusters
             }
 
 
-            public void MinerVerticalHold(Vector3D point)
+            private void VerticalHold()
             {
                 ThrustForward = 0;
                 ThrustLeft = 0;
@@ -424,8 +436,8 @@ namespace ShipManagers.Components.Thrusters
                 double KD = 150;
                 double KI = 0;
 
-                var targetPos = point - currentPosition;
-                var targetSQRdist = Vector3D.DistanceSquared(point, currentPosition);
+                var targetPos = targetPosition - currentPosition;
+                var targetSQRdist = Vector3D.DistanceSquared(targetPosition, currentPosition);
 
 
 
@@ -610,8 +622,6 @@ namespace ShipManagers.Components.Thrusters
                     gyro.Roll = (float)axis.Dot(gyro.WorldMatrix.Backward);
                 }
             }
-
-
 
         }
 
