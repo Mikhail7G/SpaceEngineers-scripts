@@ -41,4 +41,8 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="ShipManagers\Autominer\" />
+  </ItemGroup>
+
 </Project>

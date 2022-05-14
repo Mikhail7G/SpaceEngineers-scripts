@@ -14,6 +14,7 @@ using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
 
+////// Модууль управления двигателями и гироскопом
 
 namespace ShipManagers.Components.Thrusters
 {
@@ -25,7 +26,7 @@ namespace ShipManagers.Components.Thrusters
         private Vector3D testTarget = new Vector3D(-38797.81, -38669.89, -27402.11);
         private Vector3D convPosz = new Vector3D();
         private Vector3D dockPosz = new Vector3D();
-        ThrusterController Thruster;
+        private ThrusterController Thruster;
 
         public Program()
         {
@@ -37,6 +38,8 @@ namespace ShipManagers.Components.Thrusters
 
         public void Main(string args)
         {
+            /// Комманды для управления двигателями, использовать только их
+
             switch(args)
             {
                 case "INIT":
@@ -45,13 +48,24 @@ namespace ShipManagers.Components.Thrusters
                 case "CC":
                     Thruster.SwitchCruiseControl();
                     break;
+                case "CCSPEED":
+                    Thruster.SetCrusieSpeed(1);
+                    break;
 
                 case "CCALT":
                     Thruster.SwitchAltHold();
                     break;
 
                 case "HOR":
-                    Thruster.ShitchHorizonHold();
+                    Thruster.SwitchHorizonHold();
+                    break;
+
+                case "DIR":
+                    Thruster.LockOn(testTarget);
+                    break;
+
+                case "GYROS":
+                    Thruster.SwhitchGyrosHold();
                     break;
 
                 case "FLY":
@@ -92,27 +106,74 @@ namespace ShipManagers.Components.Thrusters
 
         public class ThrusterController
         {
+            /// <summary>
+            /// Включен ли круиз контроль?
+            /// </summary>
             public bool CruiseControl { get; private set; }
+            /// <summary>
+            /// Режим авто удержания высоты полета
+            /// </summary>
             public bool AltHold { get; private set; }
+            /// <summary>
+            /// Режим перехвата управления гироскопами
+            /// </summary>
+            public bool GyrosHold { get; private set; }
+            /// <summary>
+            /// Удержание горизонта
+            /// </summary>
             public bool HorizonHold { get; private set; }
-            public bool MinerHold { get; set; }
+            /// <summary>
+            /// Режим удержания точки, для автомайнера
+            /// </summary>
+            public bool VerticalAPHold { get; private set; }
 
+            public bool DirectToTarget { get; private set; }
+
+            /// <summary>
+            /// Летит ли в заданную точку?
+            /// </summary>
+            public bool FlyToPoint { get; set; }
+
+            /// <summary>
+            /// Пропорцианальный коэффициент для тяги двигателей не более 5
+            /// </summary>
             public double PidKP { get; set; }
+            /// <summary>
+            /// Дифференциальный коэф, степень торможения, чем выше тем быстрее замедляюся двигатели по мере достижения цели
+            /// </summary>
             public double PidKD { get; set; }
+            /// <summary>
+            /// Не используется всегда 0
+            /// </summary>
             public double PidKI { get; set; }
 
-            public bool FlyToPoint { get;  set; }
+            /// <summary>
+            /// Коэффициенты для авто корректировки высоты
+            /// </summary>
             public int AltHoldKP { get; set; }
+            /// <summary>
+            /// Коэффициенты для авто корректировки высоты
+            /// </summary>
             public int AltHoldKD { get; set; }
-            public double VertSpeedLimit { get; set; }
+            /// <summary>
+            /// Леимт вертикальной скорости, работает в режиме VerticalAPHold для автомайнера
+            /// </summary>
+            public double VertSpeedLimit { get; private set; }
 
-            public IMyRemoteControl remoteControl;
+            /// <summary>
+            /// Максимальное ограничение скорости сервера дефолт=100
+            /// </summary>
+            public double MaxSpeedServerLimit { get;  set; }
+
+            ///Блоки управления, пока выбор идет из двух, в дальнейшем убрать кокпит
+            public IMyRemoteControl remoteControl;//пока public
             private IMyCockpit cockpit;
 
             private IMyTextPanel cruiseControlLCD;
             private IMyTextPanel verticalControlLCD;
             private IMyTextSurface cruiseControlSurf;
 
+            //Двигатели и гироскопы
             private List<IMyThrust> thrusters;
 
             private List<IMyThrust> thrustersUp;
@@ -124,6 +185,7 @@ namespace ShipManagers.Components.Thrusters
 
             private List<IMyGyro> gyros;
 
+            // Тага по всем двигателям и сумма тяг двигателей
             private double accUp = 0;
             private double accDown = 0;
             private double accLeft = 0;
@@ -141,6 +203,7 @@ namespace ShipManagers.Components.Thrusters
             private double totalMass = 0;
             private double maxTakeOffWheight = 0;
 
+            //Параметры автопилота
             private double radioAlt = 0;
             private double baroAlt = 0;
             private double deltaAlt = 0;
@@ -148,6 +211,7 @@ namespace ShipManagers.Components.Thrusters
             private double requestedForwardSpeed = 0;
             private double distSqrToPoint = 0;
 
+            //Данные от кокпита или Радио блока о управлении вращешием и движением по осям
             private float rotationY = 0;
 
             private float moveZ = 0;
@@ -168,13 +232,17 @@ namespace ShipManagers.Components.Thrusters
             private double upSpeedComponent = 0;
             private double deltaTime = 1;
 
+            //обязательна программа, которая запускает этот скрипт
             private Program mainProgram;
 
+            //Тип управления, пока 2 так как испольую либо кокпит(для ручного использования автопилота) и Радио блока для автомайнера
             private ControlType currentControlMode;
 
+            //Названия дисплеев, потом переделать из Custom Data блока
             private string cruiseControlLCDName = "CCLcd";
             private string verticalControlLCDName = "MinerLCD";
 
+            //ПД регуляторы распределения тяги по двигателям
             private PIDRegulator ForwardPid = new PIDRegulator();
             private PIDRegulator LeftPid = new PIDRegulator();
             private PIDRegulator UpPid = new PIDRegulator();
@@ -204,13 +272,17 @@ namespace ShipManagers.Components.Thrusters
                 PidKP = 1;
                 PidKD = 400;
                 PidKI = 0;
+                MaxSpeedServerLimit = 100;
 
 
         }
 
+            /// <summary>
+            /// Инищиализация всех компонентов, ОБЯЗАТЕЛЬНО выполнить при наличии пилота в кокпите или радио блоке, распределение тяги по двигателям только так работает????
+            /// </summary>
         public void FindComponents()
             {
-                mainProgram.Echo("-----Thruster controller init start---");
+                mainProgram.Echo("-----Thruster setup init---");
 
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
                 mainProgram.GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == mainProgram.Me.CubeGrid);
@@ -219,20 +291,20 @@ namespace ShipManagers.Components.Thrusters
                 mainProgram.Echo($"Total thrusters: {thrusters.Count}");
 
                 gyros = blocks.Where(b => b is IMyGyro).Select(t => t as IMyGyro).ToList();
-                mainProgram.Echo($"Total gyros: {gyros.Count}");
+                mainProgram.Echo($"Total Gyro: {gyros.Count}");
 
                 cockpit = blocks.Where(b => b is IMyCockpit).FirstOrDefault() as IMyCockpit;
                 remoteControl = blocks.Where(b => b is IMyRemoteControl).FirstOrDefault() as IMyRemoteControl;
 
                 if ((!thrusters.Any())|| (!gyros.Any()))
                 {
-                    mainProgram.Echo("Warning no detected thrusters or gyros");
+                    mainProgram.Echo("No thrusters or gyro, init FAIL");
                     return;
                 }
 
                 if ((cockpit == null) && (remoteControl == null))
                 {
-                    mainProgram.Echo("No cocpit or remote control detected");
+                    mainProgram.Echo("No cocpit or remote ctr, init FAIL");
                     return;
                 }
 
@@ -285,6 +357,9 @@ namespace ShipManagers.Components.Thrusters
                 ClerarOverideEngines();
             }
 
+            /// <summary>
+            /// Функция обновления, вызывается каждый кадр
+            /// </summary>
             public void Update()
             {
                 var accUp = thrustersUp.Sum(t => t.MaxEffectiveThrust);
@@ -297,8 +372,8 @@ namespace ShipManagers.Components.Thrusters
                 GetLocalParams();
 
 
-                if(HorizonHold)
-                SetGyro(HoldHorizon());
+                if(GyrosHold)
+                SetGyro(HoldGyros());
 
                 PrintData();
 
@@ -311,27 +386,36 @@ namespace ShipManagers.Components.Thrusters
                 if (FlyToPoint)
                     Fly();
 
-                if (MinerHold)
+                if (VerticalAPHold)
                     VerticalHold();
 
             }
 
+            /// <summary>
+            /// Включение и выключение круиз контроля
+            /// </summary>
             public void SwitchCruiseControl()
             {
                 CruiseControl = !CruiseControl;
                 ClerarOverideEngines();
             }
 
+            /// <summary>
+            /// Вклбчение и выключение удержания высоты
+            /// </summary>
             public void SwitchAltHold()
             {
                 AltHold = !AltHold;
                 ClerarOverideEngines();
             }
 
-            public void ShitchHorizonHold()
+            /// <summary>
+            /// Режим перехвата управления гироскопами
+            /// </summary>
+            public void SwhitchGyrosHold()
             {
-                HorizonHold = !HorizonHold;
-               if(HorizonHold)
+                GyrosHold = !GyrosHold;
+               if(GyrosHold)
                 {
                     OverrideGyros();
                 }
@@ -342,6 +426,17 @@ namespace ShipManagers.Components.Thrusters
 
             }
 
+            public void SwitchHorizonHold()
+            {
+                HorizonHold = !HorizonHold;
+                if (!GyrosHold)
+                    SwhitchGyrosHold();
+
+            }
+
+            /// <summary>
+            /// Сброс переопределения тяги двигателей
+            /// </summary>
             public void ClerarOverideEngines()
             {
                 foreach (var tr in thrustersUp)
@@ -375,35 +470,93 @@ namespace ShipManagers.Components.Thrusters
                 }
             }
 
+            /// <summary>
+            /// Сброс переопределения гироскопов
+            /// </summary>
             public void ClearOverrideGyros()
             {
+                DirectToTarget = false;
+                HorizonHold = false;
+
                 foreach (var gyro in gyros)
                 {
                     gyro.SetValueBool("Override", false);
                 }
             }
 
+            /// <summary>
+            /// Отправляет в полет на указанную точку без ориентации на нее
+            /// </summary>
             public void FlyTO(Vector3D point)
             {
                 targetPosition = point;
                 FlyToPoint = true;
             }
 
+            /// <summary>
+            /// Ориентация корабля на точку
+            /// </summary>
+            public void LockOn(Vector3D point)
+            {
+                DirectToTarget = true;
+                targetPosition = point;
+                if (!GyrosHold)
+                    SwhitchGyrosHold();
+
+            }
+
+            /// <summary>
+            /// Удержание точки для автомайнера
+            /// </summary>
             public void HoldPos()
             {
                 targetPosition = currentPosition;
-                MinerHold = !MinerHold;
+                VerticalAPHold = !VerticalAPHold;
                 ClerarOverideEngines();
             }
 
+            /// <summary>
+            /// Регулировка вертикальной скорости для автомайнера '+' - вверх '-' - вниз
+            /// </summary>
             public void SetVerticalSpeed(double Vspeed)
             {
                 VertSpeedLimit = Vspeed;
             }
 
-            /// Приватные методы ниже
+            /// <summary>
+            /// Получить текущую позицию
+            /// </summary>
+            /// <returns></returns>
+            public Vector3D GetPosition()
+            {
+                switch (currentControlMode)
+                {
+                    case ControlType.Cocpit:
+                        return new Vector3D(cockpit.GetPosition());
 
 
+                    case ControlType.RemoteControl:
+                        return new Vector3D(remoteControl.GetPosition());
+           
+                }
+
+                return new Vector3D(0, 0, 0);
+            }
+
+            /// <summary>
+            /// Установить скорость для круиз контроля
+            /// </summary>
+            public void SetCrusieSpeed(double speed)
+            {
+                requestedForwardSpeed = speed;
+                requestedForwardSpeed = Math.Min(Math.Max(-MaxSpeedServerLimit, requestedForwardSpeed), MaxSpeedServerLimit);
+            }
+
+            // Приватные методы ниже
+
+            /// <summary>
+            /// Вывод информации на дисплеи, не обязательная функция
+            /// </summary>
             private void PrintData()
             {
                 cruiseControlLCD?.WriteText(
@@ -414,12 +567,11 @@ namespace ShipManagers.Components.Thrusters
                 cruiseControlSurf?.WriteText(
                     $"CC: {CruiseControl}" +
                     $"\nAltHold: {AltHold}" +
-                    $"\nHorHold: {HorizonHold}" +
+                    $"\nHorHold: {GyrosHold}" +
                     $"\nFlytoPont {FlyToPoint}" +
-                    $"\nHoldPos {MinerHold}" +
-                    $"\nReqSpeed: {requestedForwardSpeed}" +
-                    $"\nReqAlt: {altHolding}" +
-                    $"\n", false);
+                    $"\nHoldPos {VerticalAPHold}" +
+                    $"\nHGorHold: {HorizonHold}" +
+                    $"\nDirTo: {DirectToTarget}", false);
 
                 verticalControlLCD?.WriteText(
                     $"VertSpeed: {VertSpeedLimit}" +
@@ -427,6 +579,9 @@ namespace ShipManagers.Components.Thrusters
             }
 
          
+            /// <summary>
+            /// Полет на заданную точку
+            /// </summary>
             private void Fly()
             {
                 double AltCorrThrust = 0;
@@ -438,12 +593,13 @@ namespace ShipManagers.Components.Thrusters
                 var targetPos = targetPosition - currentPosition;
                 distSqrToPoint = Vector3D.DistanceSquared(targetPosition, currentPosition);
 
+                // Отколения от осей цели и локальных направлений для расчета ускорений
                 var fwdDir = targetPos.Dot(localForward);
                 var dirLeft = targetPos.Dot(localLeft);
                 var dirUp = targetPos.Dot(localUp);
 
-                var accFwd = (2 * fwdDir) / deltaTime;
-                ThrustForward = -ForwardPid.SetK(PidKP, PidKD, PidKI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;
+                var accFwd = (2 * fwdDir) / deltaTime;//Ускорение по осям
+                ThrustForward = -ForwardPid.SetK(PidKP, PidKD, PidKI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;//Тяга в Н
 
                 var accLeft = (2 * dirLeft) / deltaTime;
                 ThrustLeft = -LeftPid.SetK(PidKP, PidKD, PidKI).SetPID(accLeft, accLeft, accLeft, deltaTime).GetSignal() * totalMass;
@@ -453,6 +609,7 @@ namespace ShipManagers.Components.Thrusters
 
                 ThrustUp = -totalWheight.Dot(localUp) + AltCorrThrust;
 
+                //Нужно для включения моторов даже если игрок не отключил гасители
                 if (accUp < 0)
                 {
                     ThrustDown = ThrustUp;
@@ -468,6 +625,19 @@ namespace ShipManagers.Components.Thrusters
                 OverrideThrsters();
             }
 
+            /// <summary>
+            /// Поварачивает корабль на цель
+            /// </summary>
+            private Vector3D DirectTo()
+            {
+                var dir = Vector3D.Normalize(targetPosition - currentPosition);
+                Vector3D resultVector = Vector3D.Normalize(dir).Cross(localForward);
+                return resultVector;
+            }
+
+            /// <summary>
+            /// Вертикальный режим для автомайнера
+            /// </summary>
             private void VerticalHold()
             {
 
@@ -483,7 +653,6 @@ namespace ShipManagers.Components.Thrusters
 
                 var fwdDir = targetPos.Dot(localForward);
                 var dirLeft = targetPos.Dot(localLeft);
-                var dirUp = targetPos.Dot(localUp);
 
                 var accFwd = (2 * fwdDir) / deltaTime;
                 ThrustForward = -ForwardPid.SetK(KP, KD, KI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;
@@ -511,6 +680,9 @@ namespace ShipManagers.Components.Thrusters
                 OverrideThrsters();
             }
 
+            /// <summary>
+            /// Режим удержания высоты для круиз контроля
+            /// </summary>
             private void AltHoldMode()
             {
                 double AltCorrThrust = 0;
@@ -532,10 +704,13 @@ namespace ShipManagers.Components.Thrusters
                 OverrideThrsters();
             }
 
+            /// <summary>
+            /// Круиз контроль
+            /// </summary>
             private void CruiseControlSystem()
             {
                 requestedForwardSpeed += moveZ * -1;
-                requestedForwardSpeed = Math.Min(Math.Max(-100, requestedForwardSpeed), 100);
+                requestedForwardSpeed = Math.Min(Math.Max(-MaxSpeedServerLimit, requestedForwardSpeed), MaxSpeedServerLimit);
 
                 var reqAcc = (forwadSpeedComponent - requestedForwardSpeed) / deltaTime;
                 ThrustForward = reqAcc * totalMass;
@@ -638,22 +813,38 @@ namespace ShipManagers.Components.Thrusters
 
             }
 
-            private Vector3D HoldHorizon()
+            /// <summary>
+            /// Перехват управления гироскопами
+            /// </summary>
+            private Vector3D HoldGyros()
             {
-                var natGravNorm = Vector3D.Normalize(naturalGravity);
-                var axis = natGravNorm.Cross(localDown);
 
-                if (natGravNorm.Dot(localDown) < 0)
+                Vector3D axis = new Vector3D(0, 0, 0);
+
+                if (HorizonHold)
                 {
-                    axis = Vector3D.Normalize(axis);
+                    var natGravNorm = Vector3D.Normalize(naturalGravity);
+                    axis = natGravNorm.Cross(localDown);
+
+                    if (natGravNorm.Dot(localDown) < 0)
+                    {
+                        axis = Vector3D.Normalize(axis);
+                    }
                 }
 
                 Vector3D signal = localUp * rotationY;
+
+                if (DirectToTarget)
+                    axis += DirectTo();
+
                 axis += signal;
 
                 return axis;
             }
 
+            /// <summary>
+            /// Управление гироскопами в авто режиме
+            /// </summary>
             private void OverrideGyros()
             {
                 foreach (var gyro in gyros)
@@ -662,6 +853,9 @@ namespace ShipManagers.Components.Thrusters
                 }
             }
 
+            /// <summary>
+            /// Установка гироскопов
+            /// </summary>
             private void SetGyro(Vector3D axis)
             {
                 foreach (IMyGyro gyro in gyros)
