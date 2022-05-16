@@ -23,6 +23,7 @@ namespace SpaceEngineers.BaseManagers.Base
         //названия всех необходимых компонентов, названия дислеев точное, название контейнеров дожно содержать строку названия
         //пример Storage 1 менять только строковые названия!
 
+        string oreStorageName = "Ore";
         string ingnotStorageName = "Storage";
         string componentsStorageName = "Parts";
         string lcdInventoryIngnotsName = "LCD Inventory";
@@ -177,6 +178,7 @@ namespace SpaceEngineers.BaseManagers.Base
                 case 2:
                     PowerMangment();
                     PartsAutoBuild();
+                    GetOreFromTransport();
                     break;
             }
 
@@ -393,6 +395,50 @@ namespace SpaceEngineers.BaseManagers.Base
         }//DisplayIngnots()
 
         /// <summary>
+        /// Выгрузка руды из подключенных к базе кораблей
+        /// </summary>
+        public void GetOreFromTransport()
+        {
+            Echo("------Replase Ore from transport------");
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks);
+
+            var externalContainers = blocks.Where(b => b is IMyCargoContainer)
+                                           .Where(c => c.IsFunctional)
+                                           .Where(c=>c.CubeGrid!=Me.CubeGrid)
+                                           .Select(t => t.GetInventory(0)).ToList();
+
+            var targetInventory = containers.Where(c => c.CustomName.Contains(oreStorageName))
+                                           .Select(i => i.GetInventory(0))
+                                           .Where(i => !i.IsFull);
+
+            Echo($"Ext conts {externalContainers.Count}");
+
+            if ((!targetInventory.Any()) || (!externalContainers.Any()))
+            {
+                Echo("------No items to transfer-----");
+                return;
+            }
+
+            foreach (var cargo in externalContainers)
+            {
+                var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(cargo, MyItemType.MakeOre("MyObjectBuilder_Ore")));
+             
+                if (!availConts.Any())
+                {
+                    Echo($"No reacheable containers, check connection!");
+                    continue;
+                }
+                var item = cargo.GetItemAt(0);
+                var targInv = availConts.First().Owner as IMyCargoContainer;
+
+                Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
+                cargo.TransferItemTo(availConts.First(), 0, null, true);
+
+            }
+        }
+
+        /// <summary>
         /// Перекладка запчастей из сбощиков в контейнеры
         /// </summary>
         public void ReplaceParts()
@@ -416,16 +462,6 @@ namespace SpaceEngineers.BaseManagers.Base
 
             foreach (var ass in assInventory)
             {
-                //if (ass.CanTransferItemTo(targetInventory.ToList()[0], MyItemType.MakeComponent("MyObjectBuilder_Component")))
-                //{
-                //    var item = ass.GetItemAt(0);
-                //    var targInv = targetInventory.ToList()[0].Owner as IMyCargoContainer;
-
-                //    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
-
-                //    ass.TransferItemTo(targetInventory.ToList()[0], 0, null, true);
-                //}
-
                 var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(ass, MyItemType.MakeComponent("MyObjectBuilder_Component")));
                 if (!availConts.Any())
                 {
@@ -540,17 +576,20 @@ namespace SpaceEngineers.BaseManagers.Base
             }
             else
             {
-                foreach(var gen in workingGens)
+                if (currentStoredPowerProcentage > 90)
                 {
-                    gen.SetValueBool("OnOff", true);
+
+                    foreach (var gen in workingGens)
+                    {
+                        gen.SetValueBool("OnOff", false);
+                    }
                 }
             }
-
 
             Echo($"Emer hydrogen gens run/avail: {workingGens.Count()} / {aliveGens.Count()}");
 
             powerPanel?.WriteText("", false);
-            powerPanel?.WriteText($"BatteryStatus:\n Max/total power: {maxStoredPower} / {Math.Round(currentStoredPower, 2)}MWt"
+            powerPanel?.WriteText($"BatteryStatus:\nTotal/Max power:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {Math.Round(currentStoredPowerProcentage,1)} %"
                                  + $"\nInput/Output:{Math.Round(inputPower,2)} / {Math.Round(outputPower,2)} {(inputPower > outputPower ? "+":"-")} MWt/h "
                                  + $"\nHudrogen gens run/avail: {workingGens.Count()}/{aliveGens.Count()}", true);
         }
