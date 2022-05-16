@@ -821,22 +821,19 @@ namespace ShipManagers.Components.Thrusters
 
                 Vector3D axis = new Vector3D(0, 0, 0);
 
-                if (HorizonHold)
-                {
-                    var natGravNorm = Vector3D.Normalize(naturalGravity);
-                    axis = natGravNorm.Cross(localDown);
-
-                    if (natGravNorm.Dot(localDown) < 0)
-                    {
-                        axis = Vector3D.Normalize(axis);
-                    }
-                }
-
-                Vector3D signal = localUp * rotationY;
-
                 if (DirectToTarget)
                     axis += DirectTo();
 
+                if (HorizonHold)
+                {
+                    var natGravNorm = Vector3D.Normalize(naturalGravity);
+
+                    double targetRoll = Vector3D.Dot(localLeft, Vector3D.Reject(Vector3D.Normalize(-natGravNorm), localForward));
+                    targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
+                    axis += -1 * localForward * targetRoll;
+                }
+
+                Vector3D signal = localUp * rotationY;
                 axis += signal;
 
                 return axis;

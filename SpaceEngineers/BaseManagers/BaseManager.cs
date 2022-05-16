@@ -57,6 +57,8 @@ namespace SpaceEngineers.BaseManagers.Base
         int totalPartsStorageVolume = 0;
         int freePartsStorageVolume = 0;
 
+        int currentTick = 0;
+
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
         Dictionary<string, int> partsDictionary;
         Dictionary<string, int> partsRequester;
@@ -105,7 +107,7 @@ namespace SpaceEngineers.BaseManagers.Base
                                                             "MyObjectBuilder_BlueprintDefinition/HydrogenBottle",
                                                             "MyObjectBuilder_BlueprintDefinition/OxygenBottle"};
 
-        List<MyProductionItem> items;
+
 
 
         /// <summary>
@@ -122,8 +124,6 @@ namespace SpaceEngineers.BaseManagers.Base
             batteries = new List<IMyBatteryBlock>();
             gasTanks = new List<IMyGasTank>();
 
-            items = new List<MyProductionItem>();
-
             partsDictionary = new Dictionary<string, int>();
             partsRequester = new Dictionary<string, int>();
         }
@@ -133,19 +133,74 @@ namespace SpaceEngineers.BaseManagers.Base
         /// </summary>
         public void Main(string args)
         {
+            Commands(args);
+
+            Update();
+        }
+
+        public void Commands(string str)
+        {
+            string argument = str.ToUpper();
+
+            switch(argument)
+            {
+                case "START":
+                    Runtime.UpdateFrequency = UpdateFrequency.Update100;
+                    Echo($"Script running");
+                    break;
+                case "STOP":
+                    Runtime.UpdateFrequency = UpdateFrequency.None;
+                    Echo($"Script stopped");
+                    break;
+                case "PRINTBPS":
+                    PrintAllBluepritnsNames();
+                    break;
+            }
+        }
+
+
+        public void Update()
+        {
             FindLcds();
             FindInventories();
 
-            ReplaceIgnots();
-            DisplayIngnots();
+            switch(currentTick)
+            {
+                case 0:
+                    ReplaceIgnots();
+                    DisplayIngnots();
+                    break;
+                case 1:
+                    ReplaceParts();
+                    DisplayParts();
+                    break;
+                case 2:
+                    PowerMangment();
+                    PartsAutoBuild();
+                    break;
+            }
 
-            ReplaceParts();
-            DisplayParts();
+            currentTick++;
+            if (currentTick == 3)
+                currentTick = 0;
 
-            PowerMangment();
-            PartsAutoBuild();
+        }
 
-            WriteDebugText();
+        public void PrintAllBluepritnsNames()
+        {
+            var blueprints = new List<MyProductionItem>();
+            var ass = assemblers.Where(q => !q.IsQueueEmpty).ToList();
+            foreach (var a in ass)
+            {
+                a.GetQueue(blueprints);
+
+                foreach (var bp in blueprints)
+                {
+                    debugPanel?.WriteText($"{bp.BlueprintId}\n", true);
+                }
+            }
+
+ 
         }
 
         /// <summary>
@@ -200,10 +255,6 @@ namespace SpaceEngineers.BaseManagers.Base
            
             debugPanel.WriteText("", false);
 
-          foreach(var item in items)
-            {
-                debugPanel.WriteText(item.BlueprintId +" X "+ item.Amount + "\n", true);
-            }
             //}
 
             //var inv = containers.Where(c => c.CustomName.Contains(componentsStorageName)).FirstOrDefault().GetInventory(0);
@@ -273,15 +324,20 @@ namespace SpaceEngineers.BaseManagers.Base
 
             foreach (var refs in refsInventory)
             {
-                if(refs.CanTransferItemTo(targetInventory.ToList()[0],MyItemType.MakeIngot("MyObjectBuilder_Ingot")))
+              
+                var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(refs, MyItemType.MakeIngot("MyObjectBuilder_Ingot")));
+                if(!availConts.Any())
                 {
-                    var item = refs.GetItemAt(0);
-                    var targInv = targetInventory.ToList()[0].Owner as IMyCargoContainer;
-
-                    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
-                    refs.TransferItemTo(targetInventory.ToList()[0], 0, null, true);
+                    Echo($"No reacheable containers, check connection!");
+                    continue;
                 }
-            }  
+                var item = refs.GetItemAt(0);
+                var targInv = availConts.First().Owner as IMyCargoContainer;
+
+                Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
+                refs.TransferItemTo(availConts.First(), 0, null, true);
+
+            }
         }
 
         /// <summary>
@@ -289,6 +345,11 @@ namespace SpaceEngineers.BaseManagers.Base
         /// </summary>
         public void DisplayIngnots()
         {
+            if (ingnotPanel == null)
+            {
+                return;
+            }
+
             totalIngnotStorageVolume = 0;
             freeIngnotStorageVolume = 0;
 
@@ -321,16 +382,14 @@ namespace SpaceEngineers.BaseManagers.Base
                 }
             }
 
-            if (ingnotPanel != null) 
-            {
-                ingnotPanel.WriteText("", true);
-                ingnotPanel.WriteText("Total/max ingnot cont volume: " + freeIngnotStorageVolume +"/"+ totalIngnotStorageVolume + " T", false);
+            ingnotPanel?.WriteText("", true);
+            ingnotPanel?.WriteText($"Total/max ingnot cont volume: {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", false);
 
-                foreach(var dict in CargoDict.OrderBy(k=>k.Key))
-                {
-                    ingnotPanel.WriteText($"\n{dict.Key} : {dict.Value} ", true);
-                }
+            foreach(var dict in CargoDict.OrderBy(k=>k.Key))
+            {
+                ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
             }
+           
         }//DisplayIngnots()
 
         /// <summary>
@@ -357,15 +416,28 @@ namespace SpaceEngineers.BaseManagers.Base
 
             foreach (var ass in assInventory)
             {
-                if (ass.CanTransferItemTo(targetInventory.ToList()[0], MyItemType.MakeComponent("MyObjectBuilder_Component")))
+                //if (ass.CanTransferItemTo(targetInventory.ToList()[0], MyItemType.MakeComponent("MyObjectBuilder_Component")))
+                //{
+                //    var item = ass.GetItemAt(0);
+                //    var targInv = targetInventory.ToList()[0].Owner as IMyCargoContainer;
+
+                //    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
+
+                //    ass.TransferItemTo(targetInventory.ToList()[0], 0, null, true);
+                //}
+
+                var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(ass, MyItemType.MakeComponent("MyObjectBuilder_Component")));
+                if (!availConts.Any())
                 {
-                    var item = ass.GetItemAt(0);
-                    var targInv = targetInventory.ToList()[0].Owner as IMyCargoContainer;
-
-                    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
-
-                    ass.TransferItemTo(targetInventory.ToList()[0], 0, null, true);
+                    Echo($"No reacheable containers, check connection!");
+                    continue;
                 }
+                var item = ass.GetItemAt(0);
+                var targInv = availConts.First().Owner as IMyCargoContainer;
+
+                Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
+                ass.TransferItemTo(availConts.First(), 0, null, true);
+
             }
         }
 
@@ -374,12 +446,17 @@ namespace SpaceEngineers.BaseManagers.Base
         /// </summary>
         public void DisplayParts()
         {
+            if (partsPanel == null)
+            {
+                return;
+            }
+
             totalPartsStorageVolume = 0;
             freePartsStorageVolume = 0;
             partsDictionary.Clear();
 
             var partsInventorys = containers.Where(c => c.CustomName.Contains(componentsStorageName))
-                                             .Select(i => i.GetInventory(0));
+                                            .Select(i => i.GetInventory(0));
 
             freePartsStorageVolume = partsInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalPartsStorageVolume = partsInventorys.Sum(i => i.MaxVolume.ToIntSafe());
@@ -405,23 +482,21 @@ namespace SpaceEngineers.BaseManagers.Base
                 }
             }
 
-            if (partsPanel != null)
-            {
-                partsPanel.WriteText("", true);
-                partsPanel.WriteText("Total/max parts cont volume: " + freePartsStorageVolume + "/" + totalPartsStorageVolume + " T", false);
+            partsPanel?.WriteText("", true);
+            partsPanel?.WriteText($"Total/max parts cont volume: {freePartsStorageVolume} / {totalPartsStorageVolume} T", false);
 
-                foreach (var dict in partsDictionary.OrderBy(k => k.Key))
+            foreach (var dict in partsDictionary.OrderBy(k => k.Key))
+            {
+                if (partsRequester.ContainsKey(dict.Key))
                 {
-                    if (partsRequester.ContainsKey(dict.Key))
-                    {
-                        partsPanel.WriteText($"\n{dict.Key} : {dict.Value} / {partsRequester[dict.Key]}", true);
-                    }
-                    else
-                    {
-                        partsPanel.WriteText($"\n{dict.Key} : {dict.Value} ", true);
-                    }
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} / {partsRequester[dict.Key]}", true);
+                }
+                else
+                {
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
                 }
             }
+            
         }//DisplayParts()
 
         /// <summary>
@@ -429,7 +504,6 @@ namespace SpaceEngineers.BaseManagers.Base
         /// </summary>
         public void PowerMangment()
         {
-
             Echo("------Power managment system-------");
 
             float maxStoredPower = 0;
@@ -455,12 +529,29 @@ namespace SpaceEngineers.BaseManagers.Base
             //Генераторы выключены
             var sleepingGens = aliveGens.Where(g => !g.IsWorking);
 
-            Echo($"Emer hydrogen gens run/avail: {workingGens.Count()} / {aliveGens.Count()}");
+            float currentStoredPowerProcentage = currentStoredPower / maxStoredPower * 100;
 
+            if (currentStoredPowerProcentage < 55)
+            {
+                if (outputPower > inputPower) 
+                {
+                    sleepingGens.ToList()[0].SetValueBool("OnOff", true);
+                }
+            }
+            else
+            {
+                foreach(var gen in workingGens)
+                {
+                    gen.SetValueBool("OnOff", true);
+                }
+            }
+
+
+            Echo($"Emer hydrogen gens run/avail: {workingGens.Count()} / {aliveGens.Count()}");
 
             powerPanel?.WriteText("", false);
             powerPanel?.WriteText($"BatteryStatus:\n Max/total power: {maxStoredPower} / {Math.Round(currentStoredPower, 2)}MWt"
-                                 + $"\nInput/Output:{Math.Round(inputPower,2)} / {Math.Round(outputPower,2)} {(inputPower> outputPower ? "+":"-")} MWt/h "
+                                 + $"\nInput/Output:{Math.Round(inputPower,2)} / {Math.Round(outputPower,2)} {(inputPower > outputPower ? "+":"-")} MWt/h "
                                  + $"\nHudrogen gens run/avail: {workingGens.Count()}/{aliveGens.Count()}", true);
         }
 
@@ -532,20 +623,6 @@ namespace SpaceEngineers.BaseManagers.Base
                     }
                 }
             }
-            else
-            {
-            }
-
-            //items.Clear();
-            //var assb = assemblers.Where(q => !q.IsQueueEmpty).ToList();
-            //foreach (var a in assb)
-            //{
-            //    var list = new List<MyProductionItem>();
-            //    a.GetQueue(list);
-            //    items.AddRange(list);
-            //}
-
-
         }//PartsAutoBuild()
 
 
