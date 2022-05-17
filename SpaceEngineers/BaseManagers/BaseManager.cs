@@ -32,6 +32,8 @@ namespace SpaceEngineers.BaseManagers.Base
         string lcdInventoryDebugName = "LCD Debug";
         string emerHydrogenGeneratorsGroupName = "EmerHydGens";
 
+        int criticalPowerPrecentage = 55;
+        int normalPowerPrecentage = 95;
 
        /////////////DO NOT EDIT BELOW THE LINE//////////////////
 
@@ -567,7 +569,7 @@ namespace SpaceEngineers.BaseManagers.Base
 
             float currentStoredPowerProcentage = currentStoredPower / maxStoredPower * 100;
 
-            if (currentStoredPowerProcentage < 55)
+            if (currentStoredPowerProcentage < criticalPowerPrecentage)
             {
                 if (outputPower > inputPower) 
                 {
@@ -576,7 +578,7 @@ namespace SpaceEngineers.BaseManagers.Base
             }
             else
             {
-                if (currentStoredPowerProcentage > 90)
+                if (currentStoredPowerProcentage > normalPowerPrecentage)
                 {
 
                     foreach (var gen in workingGens)

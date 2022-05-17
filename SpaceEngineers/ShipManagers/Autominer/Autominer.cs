@@ -16,92 +16,52 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 
 ////// Модууль управления двигателями и гироскопом
 
-namespace ShipManagers.Components.Thrusters
+namespace ShipManagers.Autominer
 {
     public sealed class Program : MyGridProgram
     {
 
         /////////////////////////////////////////////////////////////
 
-        private Vector3D testTarget = new Vector3D(-38797.81, -38669.89, -27402.11);
-        private Vector3D convPosz = new Vector3D();
-        private Vector3D dockPosz = new Vector3D();
-        private ThrusterController Thruster;
+        string shipNameGroup = "Miner1";
+
+
+
+        private Vector3D connectorPos;
+        private Vector3D dockingPos;
+
+        private List<IMyCargoContainer> containers;
+        private List<IMyBatteryBlock> batteries;
+
+        private ThrusterController thruster;
 
         public Program()
         {
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            Thruster = new ThrusterController(this);
-            Thruster.FindComponents();
+
+            containers = new List<IMyCargoContainer>();
+            batteries = new List<IMyBatteryBlock>();
+
+            thruster = new ThrusterController(this);
+            thruster.FindComponents();
 
         }
 
         public void Main(string args)
         {
-            /// Комманды для управления двигателями, использовать только их
-
-            switch(args)
-            {
-                case "INIT":
-                    Thruster.FindComponents();
-                    break;
-                case "CC":
-                    Thruster.SwitchCruiseControl();
-                    break;
-                case "CCSPEED":
-                    Thruster.SetCrusieSpeed(1);
-                    break;
-
-                case "CCALT":
-                    Thruster.SwitchAltHold();
-                    break;
-
-                case "HOR":
-                    Thruster.SwitchHorizonHold();
-                    break;
-
-                case "DIR":
-                    Thruster.LockOn(testTarget);
-                    break;
-
-                case "GYROS":
-                    Thruster.SwhitchGyrosHold();
-                    break;
-
-                case "FLY":
-                    Thruster.FlyTO(testTarget);
-                    break;
-
-                case "HOLD":
-                    Thruster.HoldPos();
-                    Thruster.SetVerticalSpeed(0);
-                    break;
-
-                case "UP":
-                    Thruster.SetVerticalSpeed(1);
-                    break;
-
-                case "DOWN":
-                    Thruster.SetVerticalSpeed(-0.5);
-                    break;
-                case "STOP":
-                    Thruster.SetVerticalSpeed(0);
-                    break;
-
-                case "SAVE":
-                    convPosz = Thruster.remoteControl.GetPosition();
-                    dockPosz = Thruster.remoteControl.GetPosition() + Thruster.remoteControl.WorldMatrix.Backward * 15;
-                    break;
-                case "CONV":
-                    Thruster.FlyTO(convPosz);
-                    break;
-                case "DOCK":
-                    Thruster.FlyTO(dockPosz);
-                    break;
-            }
-
-            Thruster.Update();
+          
         }
+
+        public void SaveBasePos()
+        {
+            connectorPos = thruster.GetPosition();
+            dockingPos = thruster.GetPosition() + thruster.LocalBackward * 25;
+        }
+
+
+
+
+        //////////////////////////////
 
 
         public class ThrusterController
@@ -163,9 +123,7 @@ namespace ShipManagers.Components.Thrusters
             /// <summary>
             /// Максимальное ограничение скорости сервера дефолт=100
             /// </summary>
-            public double MaxSpeedServerLimit { get;  set; }
-
-            public Vector3D DirectionToTarget { get; set; }
+            public double MaxSpeedServerLimit { get; set; }
 
             ///Блоки управления, пока выбор идет из двух, в дальнейшем убрать кокпит
             public IMyRemoteControl remoteControl;//пока public
@@ -224,10 +182,12 @@ namespace ShipManagers.Components.Thrusters
             private Vector3D lineraVelocity;
             private Vector3D currentPosition;
             private Vector3D targetPosition;
-            private Vector3D localForward;
-            private Vector3D localLeft;
-            private Vector3D localUp;
-            private Vector3D localDown;
+
+            public Vector3D LocalForward;
+            public Vector3D LocalBackward;
+            public Vector3D LocalLeft;
+            public Vector3D LocalUp;
+            public Vector3D LocalDown;
 
             private double forwadSpeedComponent = 0;
             private double leftSpeedComponent = 0;
@@ -277,12 +237,12 @@ namespace ShipManagers.Components.Thrusters
                 MaxSpeedServerLimit = 100;
 
 
-        }
+            }
 
             /// <summary>
             /// Инищиализация всех компонентов, ОБЯЗАТЕЛЬНО выполнить при наличии пилота в кокпите или радио блоке, распределение тяги по двигателям только так работает????
             /// </summary>
-        public void FindComponents()
+            public void FindComponents()
             {
                 mainProgram.Echo("-----Thruster setup init---");
 
@@ -298,7 +258,7 @@ namespace ShipManagers.Components.Thrusters
                 cockpit = blocks.Where(b => b is IMyCockpit).FirstOrDefault() as IMyCockpit;
                 remoteControl = blocks.Where(b => b is IMyRemoteControl).FirstOrDefault() as IMyRemoteControl;
 
-                if ((!thrusters.Any())|| (!gyros.Any()))
+                if ((!thrusters.Any()) || (!gyros.Any()))
                 {
                     mainProgram.Echo("No thrusters or gyro, init FAIL");
                     return;
@@ -374,8 +334,8 @@ namespace ShipManagers.Components.Thrusters
                 GetLocalParams();
 
 
-                if(GyrosHold)
-                SetGyro(HoldGyros());
+                if (GyrosHold)
+                    SetGyro(HoldGyros());
 
                 PrintData();
 
@@ -417,11 +377,11 @@ namespace ShipManagers.Components.Thrusters
             public void SwhitchGyrosHold()
             {
                 GyrosHold = !GyrosHold;
-               if(GyrosHold)
+                if (GyrosHold)
                 {
                     OverrideGyros();
                 }
-               else
+                else
                 {
                     ClearOverrideGyros();
                 }
@@ -539,7 +499,7 @@ namespace ShipManagers.Components.Thrusters
 
                     case ControlType.RemoteControl:
                         return new Vector3D(remoteControl.GetPosition());
-           
+
                 }
 
                 return new Vector3D(0, 0, 0);
@@ -573,15 +533,14 @@ namespace ShipManagers.Components.Thrusters
                     $"\nFlytoPont {FlyToPoint}" +
                     $"\nHoldPos {VerticalAPHold}" +
                     $"\nHGorHold: {HorizonHold}" +
-                    $"\nDirTo: {DirectToTarget}" +
-                    $"\n{DirectionToTarget.Dot(localForward)}", false);
+                    $"\nDirTo: {DirectToTarget}", false);
 
                 verticalControlLCD?.WriteText(
                     $"VertSpeed: {VertSpeedLimit}" +
                     $"\nDist {Math.Sqrt(distSqrToPoint)} ", false);
             }
 
-         
+
             /// <summary>
             /// Полет на заданную точку
             /// </summary>
@@ -597,9 +556,9 @@ namespace ShipManagers.Components.Thrusters
                 distSqrToPoint = Vector3D.DistanceSquared(targetPosition, currentPosition);
 
                 // Отколения от осей цели и локальных направлений для расчета ускорений
-                var fwdDir = targetPos.Dot(localForward);
-                var dirLeft = targetPos.Dot(localLeft);
-                var dirUp = targetPos.Dot(localUp);
+                var fwdDir = targetPos.Dot(LocalForward);
+                var dirLeft = targetPos.Dot(LocalLeft);
+                var dirUp = targetPos.Dot(LocalUp);
 
                 var accFwd = (2 * fwdDir) / deltaTime;//Ускорение по осям
                 ThrustForward = -ForwardPid.SetK(PidKP, PidKD, PidKI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;//Тяга в Н
@@ -610,7 +569,7 @@ namespace ShipManagers.Components.Thrusters
                 var accUp = (2 * dirUp) / deltaTime;
                 AltCorrThrust = UpPid.SetK(PidKP, PidKD, PidKI).SetPID(accUp, accUp, accUp, deltaTime).GetSignal() * totalMass;
 
-                ThrustUp = -totalWheight.Dot(localUp) + AltCorrThrust;
+                ThrustUp = -totalWheight.Dot(LocalUp) + AltCorrThrust;
 
                 //Нужно для включения моторов даже если игрок не отключил гасители
                 if (accUp < 0)
@@ -618,7 +577,7 @@ namespace ShipManagers.Components.Thrusters
                     ThrustDown = ThrustUp;
                 }
 
-                if (distSqrToPoint < 1) 
+                if (distSqrToPoint < 1)
                 {
                     FlyToPoint = false;
                     ClerarOverideEngines();
@@ -634,8 +593,8 @@ namespace ShipManagers.Components.Thrusters
             private Vector3D DirectTo()
             {
                 var dir = Vector3D.Normalize(targetPosition - currentPosition);
-                DirectionToTarget = Vector3D.Normalize(dir).Cross(localForward);
-                return DirectionToTarget;
+                Vector3D resultVector = Vector3D.Normalize(dir).Cross(LocalForward);
+                return resultVector;
             }
 
             /// <summary>
@@ -654,8 +613,8 @@ namespace ShipManagers.Components.Thrusters
                 var targetPos = targetPosition - currentPosition;
                 distSqrToPoint = Vector3D.DistanceSquared(targetPosition, currentPosition);
 
-                var fwdDir = targetPos.Dot(localForward);
-                var dirLeft = targetPos.Dot(localLeft);
+                var fwdDir = targetPos.Dot(LocalForward);
+                var dirLeft = targetPos.Dot(LocalLeft);
 
                 var accFwd = (2 * fwdDir) / deltaTime;
                 ThrustForward = -ForwardPid.SetK(KP, KD, KI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;
@@ -673,7 +632,7 @@ namespace ShipManagers.Components.Thrusters
                 var upAcc = (2 * deltaVSpeed) / deltaTime;
                 AltCorrThrust = pid.SetK(AltHoldKP, AltHoldKD, 0).SetPID(upAcc, upAcc, upAcc, deltaTime).GetSignal() * totalMass;
 
-                ThrustUp = -totalWheight.Dot(localUp) + AltCorrThrust;
+                ThrustUp = -totalWheight.Dot(LocalUp) + AltCorrThrust;
 
                 if (vertSpeed < 0)
                 {
@@ -696,7 +655,7 @@ namespace ShipManagers.Components.Thrusters
                 var upAcc = (2 * deltaAlt) / deltaTime;
                 AltCorrThrust -= pid.SetK(AltHoldKP, AltHoldKD, 0).SetPID(upAcc, upAcc, upAcc, deltaTime).GetSignal() * totalMass;
 
-                ThrustUp = -totalWheight.Dot(localUp - lineraVelocity) + AltCorrThrust;
+                ThrustUp = -totalWheight.Dot(LocalUp - lineraVelocity) + AltCorrThrust;
                 ThrustUp *= Math.Max(1, cockpit.MoveIndicator.Y * 10);
 
                 if (deltaAlt > 1)
@@ -764,7 +723,7 @@ namespace ShipManagers.Components.Thrusters
                         totalMass = cockpit.CalculateShipMass().PhysicalMass;
                         naturalGravity = cockpit.GetNaturalGravity();
                         totalWheight = totalMass * naturalGravity;
-                        cockpit.TryGetPlanetElevation(MyPlanetElevation.Surface,out radioAlt);
+                        cockpit.TryGetPlanetElevation(MyPlanetElevation.Surface, out radioAlt);
                         cockpit.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out baroAlt);
 
                         currentPosition = cockpit.GetPosition();
@@ -774,16 +733,17 @@ namespace ShipManagers.Components.Thrusters
                         moveZ = cockpit.MoveIndicator.Z;
                         moveY = cockpit.MoveIndicator.Y;
 
-                        localForward = cockpit.WorldMatrix.Forward;
-                        localLeft = cockpit.WorldMatrix.Left;
-                        localUp = cockpit.WorldMatrix.Up;
-                        localDown = cockpit.WorldMatrix.Down;
+                        LocalForward = cockpit.WorldMatrix.Forward;
+                        LocalLeft = cockpit.WorldMatrix.Left;
+                        LocalUp = cockpit.WorldMatrix.Up;
+                        LocalDown = cockpit.WorldMatrix.Down;
+                        LocalBackward = cockpit.WorldMatrix.Backward;
 
                         lineraVelocity = cockpit.GetShipVelocities().LinearVelocity;
 
-                        forwadSpeedComponent = lineraVelocity.Dot(localForward);
-                        leftSpeedComponent = lineraVelocity.Dot(localLeft);
-                        upSpeedComponent = lineraVelocity.Dot(localUp);
+                        forwadSpeedComponent = lineraVelocity.Dot(LocalForward);
+                        leftSpeedComponent = lineraVelocity.Dot(LocalLeft);
+                        upSpeedComponent = lineraVelocity.Dot(LocalUp);
                         break;
 
                     case ControlType.RemoteControl:
@@ -799,16 +759,17 @@ namespace ShipManagers.Components.Thrusters
                         moveZ = remoteControl.MoveIndicator.Z;
                         moveY = remoteControl.MoveIndicator.Y;
 
-                        localForward = remoteControl.WorldMatrix.Forward;
-                        localLeft = remoteControl.WorldMatrix.Left;
-                        localUp = remoteControl.WorldMatrix.Up;
-                        localDown = remoteControl.WorldMatrix.Down;
+                        LocalForward = remoteControl.WorldMatrix.Forward;
+                        LocalLeft = remoteControl.WorldMatrix.Left;
+                        LocalUp = remoteControl.WorldMatrix.Up;
+                        LocalDown = remoteControl.WorldMatrix.Down;
+                        LocalBackward = remoteControl.WorldMatrix.Backward;
 
                         lineraVelocity = remoteControl.GetShipVelocities().LinearVelocity;
 
-                        forwadSpeedComponent = lineraVelocity.Dot(localForward);
-                        leftSpeedComponent = lineraVelocity.Dot(localLeft);
-                        upSpeedComponent = lineraVelocity.Dot(localUp);
+                        forwadSpeedComponent = lineraVelocity.Dot(LocalForward);
+                        leftSpeedComponent = lineraVelocity.Dot(LocalLeft);
+                        upSpeedComponent = lineraVelocity.Dot(LocalUp);
                         break;
                 }
 
@@ -831,12 +792,12 @@ namespace ShipManagers.Components.Thrusters
                 {
                     var natGravNorm = Vector3D.Normalize(naturalGravity);
 
-                    double targetRoll = Vector3D.Dot(localLeft, Vector3D.Reject(Vector3D.Normalize(-natGravNorm), localForward));
+                    double targetRoll = Vector3D.Dot(LocalLeft, Vector3D.Reject(Vector3D.Normalize(-natGravNorm), LocalForward));
                     targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
-                    axis += -1 * localForward * targetRoll;
+                    axis += -1 * LocalForward * targetRoll;
                 }
 
-                Vector3D signal = localUp * rotationY;
+                Vector3D signal = LocalUp * rotationY;
                 axis += signal;
 
                 return axis;
