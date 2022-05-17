@@ -30,7 +30,7 @@ namespace ShipManagers.Components.Radar
         IMyRadioAntenna antenna;//антенна для передачи данных ракете, правильный метод
         IMySoundBlock beeper;//звуковое информирование о захвате цели
 
-        bool beeperEnabled;
+        int radarSoundTimer = 0;
 
         public Program()
         {
@@ -64,19 +64,31 @@ namespace ShipManagers.Components.Radar
             Radar.RadarUpdate();
             SendMessageRadio();
 
+
             if (Radar.TrackTarget)
             {
-                if(beeperEnabled==false)
+                radarSoundTimer++;
+
+                if (radarSoundTimer > 120) 
                 {
-                    beeperEnabled = true;
                     beeper.Play();
+                    radarSoundTimer = 0;
+                }
+                if(Radar.LOCClosed)
+                {
+                    beeper.SelectedSound = "Тревога 1";
+                  
+                }
+                else
+                {
+                    beeper.SelectedSound = "Тревога 2";
+   
                 }
             }
             else
             {
-                beeperEnabled = false;
                 beeper.Stop();
-
+                radarSoundTimer = 120;
             }
 
         }
@@ -106,24 +118,90 @@ namespace ShipManagers.Components.Radar
             public string RadarCameraGroupName = "radarCams";
             public string LcdRadarStatus = "RadarSta";
             public string LcdTargetStatus = "RadarTarget";
+            string observerCameraName = "radarCamOBS";
 
+            /// <summary>
+            /// Проверка на перекрытие линии прицеливания
+            /// </summary>
+            public bool LOCClosed { get; private set; }
+
+            /// <summary>
+            /// Точное наведение на выбранную часть корабля
+            /// </summary>
             public bool PrecisionFollowing { get; private set; }
+
+            /// <summary>
+            /// Отслеживание цели
+            /// </summary>
             public bool TrackTarget { get; private set; }
+
+            /// <summary>
+            /// Дистацния сканирования 
+            /// </summary>
             public float ScanDistance { get; set; }
+
+            /// <summary>
+            /// Сколько времени не было цели на прямой видимости в тиках
+            /// </summary>
+            public int LOCClosedTime { get; private set; }
+
+            /// <summary>
+            /// Текущая активная камера
+            /// </summary>
             public IMyCameraBlock Camera { get; private set; }
 
+            /// <summary>
+            /// Скорость цели
+            /// </summary>
             public Vector3D TargetSpeed { get; private set; }
+
+            /// <summary>
+            /// Координаты цели
+            /// </summary>
             public Vector3D TargetPos { get; private set; }
+
+            /// <summary>
+            /// Место попадания луча
+            /// </summary>
             public Vector3D HitPos { get; private set; }
+
+            /// <summary>
+            /// Рассчитанная точка для сопровождения цели
+            /// </summary>
             public Vector3D CalculatedTargetPos { get; private set; }
-            public double TargetId { get; private set; }
-            public Vector3D DistanceToTarget { get; private set; }
+
+            /// <summary>
+            /// Вспомогательный расчет позиции
+            /// </summary>
             public Vector3D CalculatedPosition { get; private set; }
+
+            /// <summary>
+            /// ID цели
+            /// </summary>
+            public double TargetId { get; private set; }
+
+            /// <summary>
+            /// Расстояние до цели
+            /// </summary>
+            public Vector3D DistanceToTarget { get; private set; }
+
+            /// <summary>
+            /// Текущая информация о цели
+            /// </summary>
             public MyDetectedEntityInfo TargetInfo { get; private set; }
+
+            /// <summary>
+            /// Камеры, которые в текущий момент могут следить за целью
+            /// </summary>
+            public int CurrentAviableCameras { get; private set; }
+
+            double avrCamDist = 0;
 
             private IMyTextPanel lcd;
             private IMyTextPanel lcdInfo;
             private List<IMyTerminalBlock> cameras;
+
+            private IMyCameraBlock observerCamera;
 
             private int scanTick;
             private double tickLimit;
@@ -145,6 +223,7 @@ namespace ShipManagers.Components.Radar
             {
                 lcd = mainProgram.GridTerminalSystem.GetBlockWithName(LcdRadarStatus) as IMyTextPanel;
                 lcdInfo = mainProgram.GridTerminalSystem.GetBlockWithName(LcdTargetStatus) as IMyTextPanel;
+                observerCamera = mainProgram.GridTerminalSystem.GetBlockWithName(observerCameraName) as IMyCameraBlock;
 
                 IMyBlockGroup radarGroup;
                 radarGroup = mainProgram.GridTerminalSystem.GetBlockGroupWithName(RadarCameraGroupName);
@@ -167,12 +246,18 @@ namespace ShipManagers.Components.Radar
                 }
             }
 
+            /// <summary>
+            /// Однокатное сканирование
+            /// </summary>
             public void ScanOnce()
             {
                 TryScanForward();
                 TrackTarget = false;
             }
 
+            /// <summary>
+            /// Наведение на конкретный компонент корабля
+            /// </summary>
             public void TargetPrecisionFollowing()
             {
                 TryScanForward();
@@ -180,6 +265,9 @@ namespace ShipManagers.Components.Radar
                 PrecisionFollowing = true;
             }
 
+            /// <summary>
+            /// Наведение на центр корабля
+            /// </summary>
             public void TargetFollowing()
             {
                 TryScanForward();
@@ -187,22 +275,47 @@ namespace ShipManagers.Components.Radar
                 PrecisionFollowing = false;
             }
 
+            /// <summary>
+            /// Функция, выполняется каждый кадр
+            /// </summary>
             public void RadarUpdate()
             {
                 TryTrackTarget();
                 PrintData();
             }
 
+            /// <summary>
+            /// Вывод отладочной информации
+            /// </summary>
             public void PrintData()
             {
-                lcd?.WriteText($"Distance: {DistanceToTarget.Length()}" +
+                if(cameras.Any())
+                    avrCamDist = cameras.Select(c => c as IMyCameraBlock).Sum(cam => cam.AvailableScanRange) / cameras.Count;
+
+                mainProgram.Echo("----Radar vorking normally----");
+                mainProgram.Echo($"Total cameras: {cameras?.Count}" +
+                                 $"\nOBS cam dist: {observerCamera?.AvailableScanRange}" +
+                                 $"\nAvr cams range: {avrCamDist}");
+
+
+                if (!TargetInfo.IsEmpty())
+                {
+                    lcd?.WriteText($"Distance: {DistanceToTarget.Length()}" +
                                $"\nId: {TargetId}" +
                                $"\nTracked: {TrackTarget}" +
-                               $"\nPrecision: {PrecisionFollowing}", false);
+                               $"\nPrecision: {PrecisionFollowing}" +
+                               $"\nLOC closed: {LOCClosed}", false);
+                }
+                else
+                {
+                    lcd?.WriteText("   \n\n NO DATA", false);
+                }
 
                 lcdInfo?.WriteText($"Camera: {Camera.CustomName}" +
                                    $"\nAvailDist: {Camera.AvailableScanRange}" +
-                                   $"\nTotalCameras: {cameras.Count}", false);
+                                   $"\nTotalCameras: {cameras.Count}" +
+                                   $"\n/AvailCams: {CurrentAviableCameras}" +
+                                   $"\nOBScam: {observerCamera.AvailableScanRange}", false);
 
             }
 
@@ -210,9 +323,9 @@ namespace ShipManagers.Components.Radar
             {
                 if (ScanDistance > 0) 
                 {
-                    if (CameraSelect()) 
+                   // if (CameraSelect()) 
                     {
-                        TargetInfo = Camera.Raycast(ScanDistance);
+                        TargetInfo = observerCamera.Raycast(ScanDistance);
                     
                         if(!TargetInfo.IsEmpty())
                         {
@@ -228,14 +341,10 @@ namespace ShipManagers.Components.Radar
                             HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
                             CalculatedPosition = TargetPos + HitPos;
 
-                            DistanceToTarget = CalculatedPosition - Camera.GetPosition();       
+                            DistanceToTarget = TargetInfo.HitPosition.Value - Camera.GetPosition();       
                         }
                         else
                         {
-                            HitPos = Vector3D.Zero;
-                            TargetPos = Vector3D.Zero;
-                            TargetSpeed = Vector3D.Zero;
-                            TargetId = 0;
                         }
                     }
                 }
@@ -254,6 +363,8 @@ namespace ShipManagers.Components.Radar
                             if (TargetInfo.EntityId == currentTarget.EntityId)
                             {
                                 TargetInfo = currentTarget;
+                                LOCClosed = false;
+                                LOCClosedTime = 0;
 
                                 TargetPos = TargetInfo.Position;
                                 TargetSpeed = TargetInfo.Velocity;
@@ -273,6 +384,8 @@ namespace ShipManagers.Components.Radar
                             }
                             else
                             {
+                                LOCClosed = true;
+                                LOCClosedTime++;
                                //ппроверка на LOC
                             }
                         }
@@ -293,11 +406,13 @@ namespace ShipManagers.Components.Radar
                 if(TrackTarget)
                 {
                     tickLimit = (DistanceToTarget.Length()+10) / 2000 * 60 / cameras.Count;
-                    CalculatedTargetPos = CalculatedPosition + (TargetSpeed * (int)tickLimit / 60);
+                    CalculatedTargetPos = CalculatedPosition + (TargetSpeed * ((int)tickLimit + LOCClosedTime) / 60);
 
                     if (TargetInfo.IsEmpty())
                     {
                         TrackTarget = false;
+                        LOCClosed = false;
+                        LOCClosedTime = 0;
                     }
 
                     if (scanTick > tickLimit)
@@ -312,6 +427,8 @@ namespace ShipManagers.Components.Radar
 
             private void SetCameras()
             {
+                observerCamera.EnableRaycast = true;
+
                 for (int i = 0; i < cameras.Count; i++)
                 {
                     IMyCameraBlock cam = cameras[i] as IMyCameraBlock;
@@ -333,10 +450,11 @@ namespace ShipManagers.Components.Radar
             }
             private bool CameraSelect(Vector3D scanPoz)
             {
-                var availCamera = cameras.Select(c => c as IMyCameraBlock).Where(c => c.CanScan(scanPoz));
+                var availCamera = cameras.Select(c => c as IMyCameraBlock).Where(c => c.CanScan(scanPoz)); 
                 if (availCamera.Any())
                 {
                     Camera = availCamera.First();
+                    CurrentAviableCameras = availCamera.Count();
                     return true;
                 }
                                          
