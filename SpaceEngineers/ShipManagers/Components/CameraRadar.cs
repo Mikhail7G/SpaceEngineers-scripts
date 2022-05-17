@@ -316,7 +316,8 @@ namespace ShipManagers.Components.Radar
                 mainProgram.Echo("----Radar vorking normally----");
                 mainProgram.Echo($"Total cameras: {cameras?.Count}" +
                                  $"\nOBS cam dist: {observerCamera?.AvailableScanRange}" +
-                                 $"\nAvr cams range: {avrCamDist}");
+                                 $"\nAvr cams range: {avrCamDist}" +
+                                 $"\nScan distanse: {ScanDistance} m");
 
 
                 if (!TargetInfo.IsEmpty())
