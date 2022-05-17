@@ -26,6 +26,12 @@ namespace ShipManagers.Components.Radar
         string missileTagSender = "ch1R";//Отправляем в канал ракет координаты цели
         string beeperName = "Beeper";
 
+        //для радара 
+        public string RadarCameraGroupName = "radarCams";
+        public string LcdRadarStatus = "RadarSta";
+        public string LcdTargetStatus = "RadarTarget";
+        public string observerCameraName = "radarCamOBS";
+
         CameraRadar Radar;
         IMyRadioAntenna antenna;//антенна для передачи данных ракете, правильный метод
         IMySoundBlock beeper;//звуковое информирование о захвате цели
@@ -35,6 +41,11 @@ namespace ShipManagers.Components.Radar
         public Program()
         {
             Radar = new CameraRadar(this);
+            Radar.RadarCameraGroupName = RadarCameraGroupName;
+            Radar.LcdRadarStatus = LcdRadarStatus;
+            Radar.LcdTargetStatus = LcdTargetStatus;
+            Radar.observerCameraName = observerCameraName;
+
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
 
 
@@ -97,8 +108,9 @@ namespace ShipManagers.Components.Radar
         {
             if (!Radar.TargetInfo.IsEmpty())
             {
-                var pos = Radar.CalculatedPosition;
-                var speed = Radar.TargetSpeed;
+                Vector3D pos = new Vector3D();
+                Vector3D speed = new Vector3D();
+                Radar.GetPositonAndSpeed(out pos, out speed);
 
                 ///координаты цели
                 string sendingSignal = (pos.X).ToString() +
@@ -118,7 +130,7 @@ namespace ShipManagers.Components.Radar
             public string RadarCameraGroupName = "radarCams";
             public string LcdRadarStatus = "RadarSta";
             public string LcdTargetStatus = "RadarTarget";
-            string observerCameraName = "radarCamOBS";
+            public string observerCameraName = "radarCamOBS";
 
             /// <summary>
             /// Проверка на перекрытие линии прицеливания
@@ -171,7 +183,7 @@ namespace ShipManagers.Components.Radar
             public Vector3D CalculatedTargetPos { get; private set; }
 
             /// <summary>
-            /// Вспомогательный расчет позиции
+            /// Выходной параметр для дальнейшего взаимодействия с целью
             /// </summary>
             public Vector3D CalculatedPosition { get; private set; }
 
@@ -285,6 +297,15 @@ namespace ShipManagers.Components.Radar
             }
 
             /// <summary>
+            /// Получить параметры цели
+            /// </summary>
+            public void GetPositonAndSpeed(out Vector3D pos, out Vector3D speed)
+            {
+                pos = CalculatedPosition;
+                speed = TargetSpeed;
+            }
+
+            /// <summary>
             /// Вывод отладочной информации
             /// </summary>
             public void PrintData()
@@ -304,7 +325,8 @@ namespace ShipManagers.Components.Radar
                                $"\nId: {TargetId}" +
                                $"\nTracked: {TrackTarget}" +
                                $"\nPrecision: {PrecisionFollowing}" +
-                               $"\nLOC closed: {LOCClosed}", false);
+                               $"\nLOC closed: {LOCClosed}" +
+                               $"\nLOC time: {LOCClosedTime}", false);
                 }
                 else
                 {
@@ -339,7 +361,7 @@ namespace ShipManagers.Components.Radar
                             HitInvert = Vector3D.Transform(HitPos, invMatrix);
 
                             HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
-                            CalculatedPosition = TargetPos + HitPos;
+                            CalculatedPosition = TargetInfo.HitPosition.Value;
 
                             DistanceToTarget = TargetInfo.HitPosition.Value - Camera.GetPosition();       
                         }
