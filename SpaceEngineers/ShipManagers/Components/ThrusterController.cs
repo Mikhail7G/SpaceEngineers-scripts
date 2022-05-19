@@ -390,7 +390,6 @@ namespace ShipManagers.Components.Thrusters
 
                 if (VerticalAPHold)
                     VerticalHold();
-
             }
 
             /// <summary>
@@ -516,6 +515,7 @@ namespace ShipManagers.Components.Thrusters
                 VerticalAPHold = !VerticalAPHold;
                 ClerarOverideEngines();
             }
+
 
             /// <summary>
             /// Регулировка вертикальной скорости для автомайнера '+' - вверх '-' - вниз
@@ -682,6 +682,7 @@ namespace ShipManagers.Components.Thrusters
 
                 OverrideThrsters();
             }
+
 
             /// <summary>
             /// Режим удержания высоты для круиз контроля

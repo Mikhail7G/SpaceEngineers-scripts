@@ -12,11 +12,12 @@ using VRage.Collections;
 using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using VRage.Game.ModAPI.Ingame.Utilities;
+
 
 namespace SpaceEngineers.ShipManagers.Components.RotorTurret
 
 {
-
     public sealed class Program : MyGridProgram
     {
         public RotorBase Base;
@@ -32,7 +33,9 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
         private Vector3D targetPosition;
         private Vector3D targetSpeed;
 
-        
+       // private Func<IMyTerminalBlock, int, MyDetectedEntityInfo> _getWeaponTarget;
+
+
 
         public Program()
         {
@@ -46,7 +49,12 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
             listener = IGC.RegisterBroadcastListener(missileTagResiever);
             listener.SetMessageCallback(missileTagResiever);
 
+ 
+
         }
+
+        //public MyDetectedEntityInfo? GetWeaponTarget(IMyTerminalBlock weapon, int weaponId = 0) =>
+        //       _getWeaponTarget?.Invoke(weapon, weaponId) ?? null;
 
         public void Main(string args, UpdateType updateSource)
         {
@@ -61,13 +69,13 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
             // GetTargetByRadio();
 
 
-            if(designator==null)
+            if (designator == null)
             {
                 return;
             }
             if (designator.HasTarget)
             {
-               var taget =  designator.GetTargetedEntity();
+                var taget = designator.GetTargetedEntity();
                 Base.SetTarget(taget);
             }
             else
@@ -384,7 +392,7 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
             }
 
         }
-    
+
         //////////////////END OF SCRIPT////////////////////////////////////////
 
     }
