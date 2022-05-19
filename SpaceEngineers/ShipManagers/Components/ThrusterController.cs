@@ -831,6 +831,15 @@ namespace ShipManagers.Components.Thrusters
                 {
                     var natGravNorm = Vector3D.Normalize(naturalGravity);
 
+                    if (!DirectToTarget)
+                    {
+                        axis = natGravNorm.Cross(cockpit.WorldMatrix.Down);
+                        if (natGravNorm.Dot(cockpit.WorldMatrix.Down) < 0)
+                        {
+                            axis = Vector3D.Normalize(axis);
+                        }
+                    }
+
                     double targetRoll = Vector3D.Dot(localLeft, Vector3D.Reject(Vector3D.Normalize(-natGravNorm), localForward));
                     targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
                     axis += -1 * localForward * targetRoll;

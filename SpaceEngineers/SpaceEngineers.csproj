@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ShipManagers\Autominer\Autominer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="Sandbox.Common">
       <HintPath>..\..\..\..\Program Files (x86)\Steam\steamapps\common\SpaceEngineers\Bin64\Sandbox.Common.dll</HintPath>
       <CopyLocal>False</CopyLocal>
@@ -39,6 +43,10 @@
       <HintPath>..\..\..\..\Program Files (x86)\Steam\steamapps\common\SpaceEngineers\Bin64\VRage.Math.dll</HintPath>
       <CopyLocal>False</CopyLocal>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="ShipManagers\Autominer\" />
   </ItemGroup>
 
 </Project>
