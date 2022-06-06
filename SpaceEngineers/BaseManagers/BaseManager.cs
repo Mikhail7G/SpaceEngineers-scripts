@@ -80,6 +80,8 @@ namespace SpaceEngineers.BaseManagers
         int maxInstructions = 0;
         double updateTime = 0;
 
+        int reactorMinFuel = 100;
+
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
         Dictionary<string, int> partsDictionary;
         Dictionary<string, int> partsRequester;
@@ -693,15 +695,25 @@ namespace SpaceEngineers.BaseManagers
 
             detailedPowerPanel?.WriteText("", false);
 
+            List<MyInventoryItem> items = new List<MyInventoryItem>();
+
             var reactorInventory = generators.Where(g => g.HasInventory).Select(g => g.GetInventory(0)).ToList();
+            int reactorsCount = generators.Where(g => g is IMyReactor).Count();
+            int windCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_WindTurbine").Count();
+            int gasCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_HydrogenEngine").Count();
+
+
+            detailedPowerPanel?.WriteText($"Wind: {windCount} React: {reactorsCount} Gas: {gasCount}", true);
 
             foreach (var react in reactorInventory)
             {
-                //detailedPowerPanel?.WriteText($"\nR: {react.Owner}", true);
-                detailedPowerPanel?.WriteText($"\nR: {react.ItemCount}", true);
+                items.Clear();
+                react.GetItems(items);
+
+                string lowCount = items[0].Amount < reactorMinFuel ? "TO LOW" : "";
+                detailedPowerPanel?.WriteText($"\nR: {items[0].Type.SubtypeId} / {items[0].Amount} {lowCount}", true);
 
             }
-
         }
 
         public void PrintPowerStatus()
