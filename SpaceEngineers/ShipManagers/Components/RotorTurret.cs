@@ -278,10 +278,10 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
                 {
                    if ((control.IsUnderControl) && (camera.IsActive))
                     {
-                        //UnderControl = true;
-                        //var rotIndicator = control.RotationIndicator;
-                        //statorHorizontal.TargetVelocityRPM = rotIndicator.Y * RotateModifier;
-                        //statorVertical.TargetVelocityRPM = -rotIndicator.X * RotateModifier;
+                        UnderControl = true;
+                        var rotIndicator = control.RotationIndicator;
+                        statorHorizontal.TargetVelocityRPM = rotIndicator.Y * RotateModifier;
+                        statorVertical.TargetVelocityRPM = -rotIndicator.X * RotateModifier;
                     }
                     else
                     {
