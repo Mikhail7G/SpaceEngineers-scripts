@@ -295,7 +295,7 @@ namespace SpaceEngineers.MultiControlStation
 
             for (int i = 0; i < missileInFlightList.Count; i++) 
             {
-                if(!missileInFlightList[i].RemotControl.Closed)
+                if(missileInFlightList[i].MissileAlive())
                 {
                     missileInFlightList[i].UpdateMissile(targetPosition, targetSpeed);
 
@@ -425,6 +425,7 @@ namespace SpaceEngineers.MultiControlStation
         {
             public int FlightTime { private set; get; }
             public string MissileName { set; get; }
+            public bool UseHirozonCorrector { set; get; }
 
             public List<IMyGyro> Gyros;
             public List<IMyThrust> Trusters;//двигатели вперед
@@ -461,6 +462,7 @@ namespace SpaceEngineers.MultiControlStation
             public ControlledMissile()
             {
                 FlightTime = 0;
+                UseHirozonCorrector = false;
 
                 Gyros = new List<IMyGyro>();
                 Trusters = new List<IMyThrust>();
@@ -633,6 +635,7 @@ namespace SpaceEngineers.MultiControlStation
 
             public Vector3D RottateMissileToTargetNew(Vector3D targetPos)
             {
+                double targetRoll = 0;
                 linearVel = RemotControl.GetShipVelocities().LinearVelocity;
                 natGravity = RemotControl.GetNaturalGravity();
 
@@ -640,11 +643,17 @@ namespace SpaceEngineers.MultiControlStation
                 Vector3D vecReject = Vector3D.Reject(Vector3D.Normalize(linearVel), targetNormal);
                 Vector3D correctVect = Vector3D.Normalize(targetNormal - vecReject * 2);
 
-                double targetRoll = Vector3D.Dot(RemotControl.WorldMatrix.Left, Vector3D.Reject(Vector3D.Normalize(-natGravity), RemotControl.WorldMatrix.Forward));
-                targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
+
+                if (UseHirozonCorrector)
+                {
+                    targetRoll = Vector3D.Dot(RemotControl.WorldMatrix.Left, Vector3D.Reject(Vector3D.Normalize(-natGravity), RemotControl.WorldMatrix.Forward));
+                    targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
+                }
 
                 Vector3D resultVector = Vector3D.Normalize(correctVect).Cross(RemotControl.WorldMatrix.Forward);
-                resultVector += RemotControl.WorldMatrix.Backward * targetRoll;
+
+                if ((UseHirozonCorrector) && (natGravity.Length() > 0))
+                    resultVector += RemotControl.WorldMatrix.Backward * targetRoll;
 
                 return resultVector;
             }
@@ -670,7 +679,7 @@ namespace SpaceEngineers.MultiControlStation
                 }
             }
 
-            public void SensorDetecrion()
+            public void SensorDetection()
             {
                 if (SensorBlock != null)
                 {
@@ -731,7 +740,7 @@ namespace SpaceEngineers.MultiControlStation
                     var mSpeed = RemotControl.GetShipVelocities().LinearVelocity.Length();
                     sqrDistance = Vector3D.DistanceSquared(mPos, targetPosition);
 
-                    SensorDetecrion();
+                    SensorDetection();
                     //if(sqrDistance < MissileExplTimer)
                     //{
                     //    Detonate();
