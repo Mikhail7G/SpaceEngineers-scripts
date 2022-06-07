@@ -688,6 +688,9 @@ namespace SpaceEngineers.BaseManagers
             AddInstructions();
         }
 
+        /// <summary>
+        /// Детальная информация о электросистемах
+        /// </summary>
         public void PowerSystemDetailed()
         {
             if (!useDetailedPowerMonitoring)
@@ -716,6 +719,9 @@ namespace SpaceEngineers.BaseManagers
             }
         }
 
+        /// <summary>
+        /// Вывод информации о состоянии энергии
+        /// </summary>
         public void PrintPowerStatus()
         {
             powerPanel?.WriteText("", false);

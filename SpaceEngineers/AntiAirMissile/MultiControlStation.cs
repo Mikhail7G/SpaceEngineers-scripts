@@ -506,8 +506,39 @@ namespace SpaceEngineers.MultiControlStation
                     batt.ChargeMode = ChargeMode.Recharge;
                 }
 
+                foreach (var truster in Trusters)
+                {
+                    truster.SetValueBool("OnOff", false);
+                    truster.ThrustOverridePercentage = -1;
+                }
+
+                foreach (var truster in ManevricTrusters)
+                {
+                    truster.SetValueBool("OnOff", false);
+                }
+
+
                 if (SensorBlock != null)
+                {
                     SensorBlock.Enabled = false;
+                    SensorBlock.FrontExtend = MissileRadioExpDistance;
+                    SensorBlock.BackExtend = MissileRadioExpDistance;
+                    SensorBlock.LeftExtend = MissileRadioExpDistance;
+                    SensorBlock.RightExtend = MissileRadioExpDistance;
+                    SensorBlock.BackExtend = MissileRadioExpDistance;
+                    SensorBlock.TopExtend = MissileRadioExpDistance;
+                    SensorBlock.BottomExtend = MissileRadioExpDistance;
+
+                    SensorBlock.DetectStations = true;
+                    SensorBlock.DetectNeutral = true;
+                    SensorBlock.DetectEnemy = true;
+                    SensorBlock.DetectFriendly = false;
+                    SensorBlock.DetectFloatingObjects = true;
+                    SensorBlock.DetectLargeShips = true;
+                    SensorBlock.DetectSmallShips = true;
+                    SensorBlock.DetectPlayers = true;
+                    SensorBlock.DetectOwner = false;
+                }
 
 
                 return this;
@@ -521,6 +552,7 @@ namespace SpaceEngineers.MultiControlStation
                 EchoMonitor.Echo("------------------");
                 EchoMonitor.Echo($"Size: {RemotControl.CubeGrid.GridSizeEnum}" +
                    $"\nEngines: {Trusters.Count}" +
+                   $"\nGyros: {Gyros.Count}" +
                    $"\nManevrEngines: {ManevricTrusters.Count}" +
                    $"\nWarheads: {Warheads.Count}" +
                    $"\nRadio expl dist {MissileRadioExpDistance} m");
@@ -542,15 +574,15 @@ namespace SpaceEngineers.MultiControlStation
             /// </summary>
             public bool MissileReady()
             {
-                if ((Gyros.Count == 0) || (Gyros.Any(b => !b.IsFunctional)))
+                if ((Gyros.Count == 0) || Gyros.Any(b => !b.IsFunctional))
                     return false;
-                if ((Trusters.Count == 0) || (Trusters.Any(b => !b.IsFunctional))) 
+                if ((Trusters.Count == 0) || Trusters.Any(b => !b.IsFunctional)) 
                     return false;
                 if ((RemotControl == null) || (!RemotControl.IsFunctional)) 
                     return false;
                 if ((MergeBlock == null) || (!MergeBlock.IsFunctional)) 
                     return false;
-                if ((Batteries.Count == 0) || (Batteries.Any(b => !b.IsFunctional)))
+                if ((Batteries.Count == 0) || Batteries.Any(b => !b.IsFunctional))
                     return false;
 
                 MaxBatteryPower = Batteries.Sum(b => b.MaxStoredPower);
@@ -558,27 +590,17 @@ namespace SpaceEngineers.MultiControlStation
                 EffectiveEngineThrust = Trusters.Sum(b => b.MaxEffectiveThrust);
                 missileMass = RemotControl.CalculateShipMass().PhysicalMass;
 
+                return true;
+            }
 
-                if (SensorBlock != null)
-                {
-                    SensorBlock.FrontExtend = MissileRadioExpDistance;
-                    SensorBlock.BackExtend = MissileRadioExpDistance;
-                    SensorBlock.LeftExtend = MissileRadioExpDistance;
-                    SensorBlock.RightExtend = MissileRadioExpDistance;
-                    SensorBlock.BackExtend = MissileRadioExpDistance;
-                    SensorBlock.TopExtend = MissileRadioExpDistance;
-                    SensorBlock.BottomExtend = MissileRadioExpDistance;
-
-                    SensorBlock.DetectStations = true;
-                    SensorBlock.DetectNeutral = true;
-                    SensorBlock.DetectEnemy = true;
-                    SensorBlock.DetectFriendly = false;
-                    SensorBlock.DetectFloatingObjects = true;
-                    SensorBlock.DetectLargeShips = true;
-                    SensorBlock.DetectSmallShips = true;
-                    SensorBlock.DetectPlayers = true;
-                    SensorBlock.DetectOwner = false;
-                }
+            public bool MissileAlive()
+            {
+                if (Gyros.Any(g => g.Closed))
+                    return false;
+                if (Trusters.Any(t => t.Closed))
+                    return false;
+                if (RemotControl.Closed)
+                    return false;
 
                 return true;
             }
