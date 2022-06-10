@@ -652,7 +652,7 @@ namespace SpaceEngineers.MultiControlStation
 
                 Vector3D resultVector = Vector3D.Normalize(correctVect).Cross(RemotControl.WorldMatrix.Forward);
 
-                if ((UseHirozonCorrector) && (natGravity.Length() > 0))
+                if ((UseHirozonCorrector) && (!natGravity.IsZero())) 
                     resultVector += RemotControl.WorldMatrix.Backward * targetRoll;
 
                 return resultVector;
