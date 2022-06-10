@@ -188,7 +188,11 @@ namespace SpaceEngineers.BaseManagers
                     Echo("Try prunt pbs names");
                     PrintAllBluepritnsNames();
                     break;
+                case "BB":
+                    ProjectorAutoQueueOperations();
+                    break;
             }
+
         }
 
 
@@ -378,8 +382,25 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void WriteDebugText()
         {
-            debugPanel.WriteText("", false);
+            var detPan = GridTerminalSystem.GetBlockWithName("projLCD") as IMyTextPanel;
+            IMyProjector proj = GridTerminalSystem.GetBlockWithName("proj") as IMyProjector;
+
+            detPan?.WriteText("", false);
+
+            if (proj != null) 
+            {
+                var block = proj.RemainingBlocksPerType;
+
+                detPan?.WriteText($"\n{block.Count}", true);
+
+                foreach (var bl in block)
+                {
+                    string nn = bl.Key.ToString().Remove(0,16);
+                    detPan?.WriteText($"\n{nn} X {bl.Value}", true);
+                }
+            }
         }
+
 
         /// <summary>
         /// Поиск всех обьектов, печек, сборщиков, ящиков
@@ -732,7 +753,7 @@ namespace SpaceEngineers.BaseManagers
         }
 
         /// <summary>
-        /// Сислема заказа производства недостающих компонентов
+        /// Сислема заказа производства недостающих компонентов INOP
         /// </summary>
         public void PartsAutoBuild()
         {
@@ -803,6 +824,56 @@ namespace SpaceEngineers.BaseManagers
             }
             AddInstructions();
         }//PartsAutoBuild()
+
+
+        public void ProjectorAutoQueueOperations()
+        {
+
+            var detPan = GridTerminalSystem.GetBlockWithName("projLCD") as IMyTextPanel;
+            IMyProjector proj = GridTerminalSystem.GetBlockWithName("proj") as IMyProjector;
+
+            detPan?.WriteText("", false);
+
+            if (proj != null)
+            {
+                var block = proj.RemainingBlocksPerType;
+
+                var workingAssemblers = assemblers.Where(ass => ass.CustomName.Contains("[sp]")).ToList();
+                //if (workingAssemblers.Count > 0)
+                //    return;
+
+
+                detPan?.WriteText($"\n{block.Count}", true);
+
+                foreach (var bl in block)
+                {
+                    string nn = bl.Key.ToString().Remove(0, 16);
+                    detPan?.WriteText($"\n{nn} X {bl.Value}", true);
+
+                    string name = "MyObjectBuilder_BlueprintDefinition/" + nn;
+                    var count = bl.Value;
+
+                    foreach (var wass in workingAssemblers)
+                    {
+
+                        MyDefinitionId blueprint;
+                        if (!MyDefinitionId.TryParse(name, out blueprint))
+                            Echo($"WARNING cant parse: {name}");
+
+                        var assemblersCanBuildThis = workingAssemblers.Where(a => a.CanUseBlueprint(blueprint)).ToList();
+
+                        foreach (var asembler in assemblersCanBuildThis)
+                        {
+                            VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
+                            asembler.AddQueueItem(blueprint, amount);
+                        }
+                    }
+
+
+                }
+            }
+
+        }
 
         ///END OF SCRIPT///////////////
     }
