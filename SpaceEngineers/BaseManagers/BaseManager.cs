@@ -18,7 +18,6 @@ namespace SpaceEngineers.BaseManagers
 {
     public sealed class Program : MyGridProgram
     {
-
         string oreStorageName = "Ore";
         string ingnotStorageName = "Ingnot";
         string componentsStorageName = "Parts";
@@ -28,6 +27,9 @@ namespace SpaceEngineers.BaseManagers
         string lcdPartsName = "LCD Parts";
         string lcdInventoryDebugName = "LCD Debug";
         string lcdPowerDetailedName = "LCD power full";
+        string lcdNanobotName = "LCD nano";
+
+        string assemblersSpecialOperationsName = "[sp]";
 
 
         /////////////DO NOT EDIT BELOW THE LINE//////////////////
@@ -39,7 +41,10 @@ namespace SpaceEngineers.BaseManagers
         IMyTextPanel powerPanel;
         IMyTextPanel detailedPowerPanel;
         IMyTextPanel partsPanel;
+        IMyTextPanel nanobotDisplay;
+
         IMyTextSurface mainDisplay;
+
 
         //все объекты, содержащие инвентарь
         IEnumerable<IMyInventory> inventories;
@@ -52,12 +57,17 @@ namespace SpaceEngineers.BaseManagers
         List<IMyGasTank> gasTanks;
         List<IMyPowerProducer> generators;
 
+        List<IMyAssembler> specialAssemblers;
+
+        IMyTerminalBlock nanobotBuildModule;
+
         bool needReplaceIngnots = false;
         bool needReplaceParts = false;
         bool usePowerManagmentSystem = false;
         bool useDetailedPowerMonitoring = false;
         bool useAutoBuildSystem = false;
         bool getOreFromTransports = false;
+        bool useNanobotAutoBuild = false;
 
         int totalIngnotStorageVolume = 0;
         int freeIngnotStorageVolume = 0;
@@ -85,6 +95,8 @@ namespace SpaceEngineers.BaseManagers
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
         Dictionary<string, int> partsDictionary;
         Dictionary<string, int> partsRequester;
+
+        Dictionary<MyDefinitionId, int> nanobotBuildQueue;
 
         //Список стандартных названий чертежей
         List<string> blueprintDataBase = new List<string>{ "MyObjectBuilder_BlueprintDefinition/BulletproofGlass",
@@ -149,9 +161,11 @@ namespace SpaceEngineers.BaseManagers
             containers = new List<IMyCargoContainer>();
             batteries = new List<IMyBatteryBlock>();
             gasTanks = new List<IMyGasTank>();
+            specialAssemblers = new List<IMyAssembler>();
 
             partsDictionary = new Dictionary<string, int>();
             partsRequester = new Dictionary<string, int>();
+            nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
 
             dataSystem = new MyIni();
             GetIniData();
@@ -188,8 +202,20 @@ namespace SpaceEngineers.BaseManagers
                     Echo("Try prunt pbs names");
                     PrintAllBluepritnsNames();
                     break;
-                case "BB":
-                    ProjectorAutoQueueOperations();
+                case "NANO":
+                    SwitchNanobotMode();
+                    break;
+                case "INGNOT":
+                    SwitchIngnotMode();
+                    break;
+                case "PART":
+                    SwitchPartsMode();
+                    break;
+                case "ORE":
+                    SwitchOreMode();
+                    break;
+                case "POWER":
+                    SwitchPowerMode();
                     break;
             }
 
@@ -216,9 +242,9 @@ namespace SpaceEngineers.BaseManagers
                     PrintPowerStatus();
                     break;
                 case 3:
-                    // PartsAutoBuild();
                     GetOreFromTransport();
-                    AddInstructions();
+                    NanobotOperations();
+                    PrintNanobotQueue();
                     break;
             }
 
@@ -255,6 +281,7 @@ namespace SpaceEngineers.BaseManagers
                 useDetailedPowerMonitoring = dataSystem.Get("Operations", "DetailedPowerMonitoring").ToBoolean();
                 useAutoBuildSystem = dataSystem.Get("Operations", "AutoBuildSystem").ToBoolean();
                 getOreFromTransports = dataSystem.Get("Operations", "TransferOreFromTransports").ToBoolean();
+                useNanobotAutoBuild = dataSystem.Get("Operations", "UseNanobotAutoBuild").ToBoolean();
 
                 oreStorageName = dataSystem.Get("Names", "oreStorageName").ToString();
                 ingnotStorageName = dataSystem.Get("Names", "ingnotStorageName").ToString();
@@ -265,6 +292,8 @@ namespace SpaceEngineers.BaseManagers
                 lcdPartsName = dataSystem.Get("Names", "lcdPartsName").ToString();
                 lcdInventoryDebugName = dataSystem.Get("Names", "lcdInventoryDebugName").ToString();
                 lcdPowerDetailedName = dataSystem.Get("Names", "lcdPowerDetailedName").ToString();
+                assemblersSpecialOperationsName = dataSystem.Get("Names", "assemblersSpecialOperationsTagName").ToString();
+                lcdNanobotName = dataSystem.Get("Names", "NanobotDisplayName").ToString();
             }
 
             Echo("Script ready to run");
@@ -286,6 +315,7 @@ namespace SpaceEngineers.BaseManagers
                 dataSystem.Set("Operations", "DetailedPowerMonitoring", false);
                 dataSystem.Set("Operations", "AutoBuildSystem", false);
                 dataSystem.Set("Operations", "TransferOreFromTransports", false);
+                dataSystem.Set("Operations", "UseNanobotAutoBuild", false);
 
                 dataSystem.AddSection("Names");
                 dataSystem.Set("Names", "oreStorageName", "Ore");
@@ -295,7 +325,9 @@ namespace SpaceEngineers.BaseManagers
                 dataSystem.Set("Names", "lcdPowerSystemName", "LCD Power");
                 dataSystem.Set("Names", "lcdPowerDetailedName", "LCD power full");
                 dataSystem.Set("Names", "lcdPartsName", "LCD Parts");
-                dataSystem.Set("Names", "lcdInventoryDebugName", "LCD Debug");
+                dataSystem.Set("Names", "lcdInventoryDebugName", "LCD Debug"); 
+                dataSystem.Set("Names", "assemblersSpecialOperationsTagName", "[sp]");
+                dataSystem.Set("Names", "NanobotDisplayName", "LCD nano");
 
 
 
@@ -374,6 +406,15 @@ namespace SpaceEngineers.BaseManagers
                 Echo($"Parts LCDs found:{lcdPartsName}");
             }
 
+            if ((nanobotDisplay == null) || (nanobotDisplay.Closed))
+            {
+                nanobotDisplay = GridTerminalSystem.GetBlockWithName(lcdNanobotName) as IMyTextPanel;
+            }
+            else
+            {
+                Echo($"NANOBOT LCDs found:{lcdNanobotName}");
+            }
+
             AddInstructions();
         }
 
@@ -421,9 +462,14 @@ namespace SpaceEngineers.BaseManagers
 
             generators = blocks.Where(b => b is IMyPowerProducer).Where(r => r.IsFunctional).Select(t => t as IMyPowerProducer).ToList();
 
+            nanobotBuildModule = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == "SELtdLargeNanobotBuildAndRepairSystem").FirstOrDefault();
+
+            specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
+
             Echo(">>>-------------------------------<<<");
             Echo($"Refinereys found:{refinereys.Count}");
             Echo($"Assemblers found:{assemblers.Count}");
+            Echo($"Special assemblers found:{specialAssemblers.Count}");
             Echo($"Containers found my/conn: {containers.Where(c => c.CubeGrid == Me.CubeGrid).Count()}/" +
                                    $"{containers.Where(c => c.CubeGrid != Me.CubeGrid).Count()}");
 
@@ -433,8 +479,25 @@ namespace SpaceEngineers.BaseManagers
             Echo($"Generators found my/conn: {generators.Where(b => b.CubeGrid == Me.CubeGrid).Count()}/" +
                                          $"{generators.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
 
+            string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
+            Echo($"Nanobot:{nanoFinded}:{nanobotBuildModule.CustomName}");
+
             Echo(">>>-------------------------------<<<");
+
+            Echo($"Nanobot system: {useNanobotAutoBuild}");
+            Echo($"Ingnot replace system: {needReplaceIngnots}");
+            Echo($"Parts replace system: {needReplaceParts}");
+            Echo($"Power mng system: {usePowerManagmentSystem}");
+            Echo($"Get ore frm outer: {getOreFromTransports}");
+
+            Echo(">>>-------------------------------<<<");
+
             AddInstructions();
+        }
+
+        public void SwitchIngnotMode()
+        {
+            needReplaceIngnots = !needReplaceIngnots;
         }
 
         /// <summary>
@@ -534,6 +597,11 @@ namespace SpaceEngineers.BaseManagers
 
         }//DisplayIngnots()
 
+        public void SwitchOreMode()
+        {
+            getOreFromTransports = !getOreFromTransports;
+        }
+
         /// <summary>
         /// Выгрузка руды из подключенных к базе кораблей
         /// </summary>
@@ -580,6 +648,11 @@ namespace SpaceEngineers.BaseManagers
 
             }
             AddInstructions();
+        }
+
+        public void SwitchPartsMode()
+        {
+            needReplaceParts = !needReplaceParts;
         }
 
         /// <summary>
@@ -685,6 +758,11 @@ namespace SpaceEngineers.BaseManagers
 
         }//DisplayParts()
 
+        public void SwitchPowerMode()
+        {
+            usePowerManagmentSystem = !usePowerManagmentSystem;
+        }
+
         /// <summary>
         /// Система управления питанием базы
         /// </summary>
@@ -726,7 +804,6 @@ namespace SpaceEngineers.BaseManagers
             int windCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_WindTurbine").Count();
             int gasCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_HydrogenEngine").Count();
 
-
             detailedPowerPanel?.WriteText($"Wind: {windCount} React: {reactorsCount} Gas: {gasCount}", true);
 
             foreach (var react in reactorInventory)
@@ -734,8 +811,16 @@ namespace SpaceEngineers.BaseManagers
                 items.Clear();
                 react.GetItems(items);
 
-                string lowCount = items[0].Amount < reactorMinFuel ? "TO LOW" : "";
-                detailedPowerPanel?.WriteText($"\nR: {items[0].Type.SubtypeId} / {items[0].Amount} {lowCount}", true);
+                if (items.Any())
+                {
+                    string lowCount = items[0].Amount < reactorMinFuel ? "TO LOW" : "";
+                    detailedPowerPanel?.WriteText($"\nR: {items[0].Type.SubtypeId} / {items[0].Amount} {lowCount}", true);
+                }
+                else
+                {
+                    var targInv = react.Owner as IMyTerminalBlock;
+                    detailedPowerPanel?.WriteText($"\nR:{targInv?.CustomName} EMPTY!!", true);
+                }
 
             }
         }
@@ -825,54 +910,98 @@ namespace SpaceEngineers.BaseManagers
             AddInstructions();
         }//PartsAutoBuild()
 
+        public void SwitchNanobotMode()
+        {
+            useNanobotAutoBuild = !useNanobotAutoBuild;
 
-        public void ProjectorAutoQueueOperations()
+            if (useNanobotAutoBuild)
+            {
+                Echo("------Nanobot system Running-------");
+            }
+            else
+            {
+                Echo("------Nanobot system Stopped-------");
+            }
+        }
+
+        public void NanobotOperations()
+        {
+            if (useNanobotAutoBuild == false)
+                return;
+            if (nanobotBuildModule == null)
+                return;
+
+            Echo("------Nanobot system working-------");
+
+            nanobotBuildQueue.Clear();
+
+            List<ITerminalProperty> prop = new List<ITerminalProperty>();
+            nanobotBuildModule.GetProperties(prop);
+
+            nanobotBuildQueue = nanobotBuildModule.GetValue<Dictionary<MyDefinitionId, int>>("BuildAndRepair.MissingComponents");
+            Echo($"Nanobot total components:{nanobotBuildQueue.Count}");
+
+
+            AddInstructions();
+          //  AddNanobotPartsToProduct();
+        }
+
+        public void AddNanobotPartsToProduct()
         {
 
-            var detPan = GridTerminalSystem.GetBlockWithName("projLCD") as IMyTextPanel;
-            IMyProjector proj = GridTerminalSystem.GetBlockWithName("proj") as IMyProjector;
-
-            detPan?.WriteText("", false);
-
-            if (proj != null)
+            foreach(var ass in specialAssemblers)
             {
-                var block = proj.RemainingBlocksPerType;
+                ass.ClearQueue();
+            }
 
-                var workingAssemblers = assemblers.Where(ass => ass.CustomName.Contains("[sp]")).ToList();
-                //if (workingAssemblers.Count > 0)
-                //    return;
+            var freeAssemblers = specialAssemblers.Where(ass => ass.IsQueueEmpty).FirstOrDefault();
+            if (freeAssemblers == null)
+                return;
 
+            foreach (var bps in nanobotBuildQueue)
+            {
+                string pbsName = bps.Key.ToString().Remove(0, 26);
+                string name = "MyObjectBuilder_BlueprintDefinition/" + pbsName;
+                var parser = blueprintDataBase.Where(n => n.Contains(pbsName)).FirstOrDefault();//Если компонент стандартный ищем его в готовом списке
 
-                detPan?.WriteText($"\n{block.Count}", true);
+                if (parser != null)
+                    name = parser;
 
-                foreach (var bl in block)
+                VRage.MyFixedPoint amount = (VRage.MyFixedPoint)bps.Value;
+                MyDefinitionId blueprint;
+
+                if (!MyDefinitionId.TryParse(name, out blueprint))
                 {
-                    string nn = bl.Key.ToString().Remove(0, 16);
-                    detPan?.WriteText($"\n{nn} X {bl.Value}", true);
+                    Echo($"WARNING cant parse: {name}");
+                    continue;
+                }
 
-                    string name = "MyObjectBuilder_BlueprintDefinition/" + nn;
-                    var count = bl.Value;
-
-                    foreach (var wass in workingAssemblers)
-                    {
-
-                        MyDefinitionId blueprint;
-                        if (!MyDefinitionId.TryParse(name, out blueprint))
-                            Echo($"WARNING cant parse: {name}");
-
-                        var assemblersCanBuildThis = workingAssemblers.Where(a => a.CanUseBlueprint(blueprint)).ToList();
-
-                        foreach (var asembler in assemblersCanBuildThis)
-                        {
-                            VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
-                            asembler.AddQueueItem(blueprint, amount);
-                        }
-                    }
-
-
+                if (freeAssemblers.CanUseBlueprint(blueprint))
+                {
+                    freeAssemblers.AddQueueItem(blueprint, amount);
                 }
             }
 
+            AddInstructions();
+        }
+
+        public void PrintNanobotQueue()
+        {
+            if ((nanobotBuildModule == null) || (nanobotBuildModule.Closed) || (nanobotDisplay == null) || (nanobotDisplay.Closed)) 
+            {
+                return;
+            }
+
+            nanobotDisplay.WriteText("", false);
+            nanobotDisplay?.WriteText($"Block:{nanobotBuildModule.CustomName} wait for:", true);
+
+            foreach (var comp in nanobotBuildQueue.OrderBy(c=>c.Key.ToString()))
+            {
+                string name = comp.Key.ToString().Remove(0, 26);
+                nanobotDisplay?.WriteText($"\n{name} X {comp.Value}", true);
+            }
+
+            AddInstructions();
         }
 
         ///END OF SCRIPT///////////////
