@@ -495,10 +495,31 @@ namespace SpaceEngineers.BaseManagers
             AddInstructions();
         }
 
+        public void SwitchNanobotMode()
+        {
+            useNanobotAutoBuild = !useNanobotAutoBuild;
+        }
+
         public void SwitchIngnotMode()
         {
             needReplaceIngnots = !needReplaceIngnots;
         }
+
+        public void SwitchOreMode()
+        {
+            getOreFromTransports = !getOreFromTransports;
+        }
+
+        public void SwitchPartsMode()
+        {
+            needReplaceParts = !needReplaceParts;
+        }
+
+        public void SwitchPowerMode()
+        {
+            usePowerManagmentSystem = !usePowerManagmentSystem;
+        }
+
 
         /// <summary>
         /// Перекладываем слитки из печек по контейнерам
@@ -597,10 +618,6 @@ namespace SpaceEngineers.BaseManagers
 
         }//DisplayIngnots()
 
-        public void SwitchOreMode()
-        {
-            getOreFromTransports = !getOreFromTransports;
-        }
 
         /// <summary>
         /// Выгрузка руды из подключенных к базе кораблей
@@ -650,10 +667,6 @@ namespace SpaceEngineers.BaseManagers
             AddInstructions();
         }
 
-        public void SwitchPartsMode()
-        {
-            needReplaceParts = !needReplaceParts;
-        }
 
         /// <summary>
         /// Перекладка запчастей из сбощиков в контейнеры
@@ -757,11 +770,6 @@ namespace SpaceEngineers.BaseManagers
             AddInstructions();
 
         }//DisplayParts()
-
-        public void SwitchPowerMode()
-        {
-            usePowerManagmentSystem = !usePowerManagmentSystem;
-        }
 
         /// <summary>
         /// Система управления питанием базы
@@ -910,24 +918,9 @@ namespace SpaceEngineers.BaseManagers
             AddInstructions();
         }//PartsAutoBuild()
 
-        public void SwitchNanobotMode()
-        {
-            useNanobotAutoBuild = !useNanobotAutoBuild;
-
-            if (useNanobotAutoBuild)
-            {
-                Echo("------Nanobot system Running-------");
-            }
-            else
-            {
-                Echo("------Nanobot system Stopped-------");
-            }
-        }
-
+ 
         public void NanobotOperations()
         {
-            if (useNanobotAutoBuild == false)
-                return;
             if (nanobotBuildModule == null)
                 return;
 
@@ -943,13 +936,15 @@ namespace SpaceEngineers.BaseManagers
 
 
             AddInstructions();
-          //  AddNanobotPartsToProduct();
+            AddNanobotPartsToProduct();
         }
 
         public void AddNanobotPartsToProduct()
         {
+            if (useNanobotAutoBuild == false)
+                return;
 
-            foreach(var ass in specialAssemblers)
+            foreach (var ass in specialAssemblers)
             {
                 ass.ClearQueue();
             }
@@ -993,7 +988,7 @@ namespace SpaceEngineers.BaseManagers
             }
 
             nanobotDisplay.WriteText("", false);
-            nanobotDisplay?.WriteText($"Block:{nanobotBuildModule.CustomName} wait for:", true);
+            nanobotDisplay?.WriteText($"Block:{nanobotBuildModule.CustomName} auto mode: {useNanobotAutoBuild}", true);
 
             foreach (var comp in nanobotBuildQueue.OrderBy(c=>c.Key.ToString()))
             {
