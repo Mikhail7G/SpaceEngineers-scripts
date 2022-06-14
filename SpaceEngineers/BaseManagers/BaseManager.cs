@@ -923,6 +923,8 @@ namespace SpaceEngineers.BaseManagers
         {
             if (nanobotBuildModule == null)
                 return;
+            if (useNanobotAutoBuild == false)
+                return;
 
             Echo("------Nanobot system working-------");
 

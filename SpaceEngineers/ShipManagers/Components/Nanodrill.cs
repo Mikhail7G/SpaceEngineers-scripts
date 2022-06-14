@@ -22,19 +22,13 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
 {
     public sealed class Program : MyGridProgram
     {
-
         NanodrillSystem DrillsSys;
-
 
         public Program()
         {
             DrillsSys = new NanodrillSystem(this);
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-
-
         }
-
-
 
         public void Main(string args, UpdateType updateSource)
         {
@@ -44,31 +38,34 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
           
             switch(arg)
             {
-                case "SCAN":
+                case "NANO.SCAN":
                     DrillsSys.GetNearlestOres();
                     break;
 
-                case "CL":
+                case "NANO.CL":
                     DrillsSys.ClearMiningTargets();
                     break;
 
-                case "START":
+                case "NANO.START":
                     DrillsSys.Start();
                     break;
-                case "STOP":
+                case "NANO.STOP":
                     DrillsSys.Stop();
                     break;
 
-                case "PWRON":
+                case "NANO.PWRON":
                     DrillsSys.PowerOn();
                     break;
-                case "PWROFF":
+                case "NANO.PWROFF":
                     DrillsSys.PowerOff();
                     break;
             }
 
         }
 
+        /// <summary>
+        /// Класс управления системами автобурения
+        /// </summary>
         public class NanodrillSystem
         {
             public string LargeNanoName = "SELtdLargeNanobotDrillSystem";
@@ -76,10 +73,26 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
 
             public string NanoInfoDisplayName = "LCD Nano";
 
+            public int DisplayUpdateInterval { get; set; }
+
+            /// <summary>
+            /// Скрывать лед при выводе на экран
+            /// </summary>
             public bool HideIce = true;
+
+            /// <summary>
+            /// Начать бурение
+            /// </summary>
             public bool StartMining { get; private set; }
+
+            /// <summary>
+            /// Включение питания модулей бурения
+            /// </summary>
             public bool Powered { get; private set; }
 
+            /// <summary>
+            /// Лист всех установленных модулей на корабле
+            /// </summary>
             public List<NanoDrill> Drills;
 
             private Program mainProg;
@@ -98,6 +111,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 Drills = new List<NanoDrill>();
                 StartMining = false;
                 Powered = false;
+                DisplayUpdateInterval = 20;
                 Init();
             }
 
@@ -107,6 +121,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
                 mainProg.GridTerminalSystem.GetBlocks(blocks);
 
+                //Малая и большая сетки имеют разные названия
                 if(mainProg.Me.CubeGrid.GridSizeEnum == MyCubeSize.Large)
                 {
                     nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == LargeNanoName).ToList();
@@ -137,27 +152,38 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
 
             }
 
+            /// <summary>
+            /// Запуск скрипта
+            /// </summary>
             public void Start()
             {
                 StartMining = true;
             }
 
+            /// <summary>
+            /// Остановка скрипта
+            /// </summary>
             public void Stop()
             {
                 StartMining = false;
                 ClearMiningTargets();
             }
 
+            /// <summary>
+            /// Включение модулей бурения
+            /// </summary>
             public void PowerOn()
             {
                 Powered = true;
                 foreach (var drill in Drills)
                 {
                     drill.PowerOn();
-                    drill.TakeControl();
                 }
             }
 
+            /// <summary>
+            /// Выключение модулей бурения
+            /// </summary>
             public void PowerOff()
             {
                 Powered = false;
@@ -169,6 +195,9 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 nanoStatus?.WriteText($"Nanodrill system powered: {Powered}", false);
             }
 
+            /// <summary>
+            /// Обновление модулей выполняется каждый тик
+            /// </summary>
             public void Update()
             {
                 if (!Powered)
@@ -177,7 +206,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 currentTick++;
                 MiningUpdate();
 
-                if (currentTick == 20) 
+                if (currentTick == DisplayUpdateInterval) 
                 {
                     GetNearlestOres();
                     PrintData();
@@ -185,6 +214,9 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 }
             }
 
+            /// <summary>
+            /// Поиск ближайших доступных руд
+            /// </summary>
             public void GetNearlestOres()
             {
                 foreach (var drill in Drills) 
@@ -193,6 +225,9 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 }
             }
 
+            /// <summary>
+            /// Сброс целей для буров
+            /// </summary>
             public void ClearMiningTargets()
             {
                 foreach (var drill in Drills)
@@ -212,7 +247,9 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 }
             }
 
-
+            /// <summary>
+            /// Вывод информации на дисплеи, интервал обновления == DisplayUpdateInterval
+            /// </summary>
             public void PrintData()
             {
                 nanoStatus?.WriteText("", false);
@@ -267,22 +304,45 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
 
         }
 
+        /// <summary>
+        /// Модуль бурения
+        /// </summary>
         public class NanoDrill
         {
+            /// <summary>
+            /// Сам блок
+            /// </summary>
             public IMyTerminalBlock Drill;
 
+            /// <summary>
+            /// Ближайшие воксели с рудой
+            /// </summary>
             private List<List<object>> miningFields;
 
-            private MyIni dataSystem;
-
+            /// <summary>
+            /// Словарь руд для копки
+            /// </summary>
             public Dictionary<string, bool> TargetOres = new Dictionary<string, bool>()
                                                                                     {   {"Silicon",true},
                                                                                         {"Marble",true},
                                                                                         {"Copper",true},
                                                                                         {"Cobalt",true },
                                                                                         {"Iron",true },
-                                                                                        {"Silver",true }
+                                                                                        {"Silver",true },
+                                                                                        {"Ammonium_Hydroxide",true },
+                                                                                        {"Uraninite",true },
+                                                                                        {"Magnesium",true },
+                                                                                        {"Calcium",true },
+                                                                                        {"Nickel",true },
+                                                                                        {"Lead",true },
+                                                                                        {"Gold",true },
+                                                                                        {"Platinum",true },
+                                                                                        {"Tylium",true },
+                                                                                        {"Methane_Hydrate",true },
+                                                                                        {"CHON",true }
                                                                                     };
+
+            private MyIni dataSystem;
 
             public NanoDrill(IMyTerminalBlock _drill)
             {
@@ -295,6 +355,9 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 InitCustomData();
             }
 
+            /// <summary>
+            /// У каждого блока персональные настройки в Custom Data
+            /// </summary>
             public void InitCustomData()
             {
                 var data = Drill.CustomData;
@@ -308,20 +371,32 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     dataSystem.Set("Ores", "Cobalt", true);
                     dataSystem.Set("Ores", "Iron", true);
                     dataSystem.Set("Ores", "Silver", true);
-                    dataSystem.Set("Ores", "4", true);
+                    dataSystem.Set("Ores", "Ammonium_Hydroxide", true);
+                    dataSystem.Set("Ores", "Uraninite", true);
+                    dataSystem.Set("Ores", "Magnesium", true);
+                    dataSystem.Set("Ores", "Calcium", true);
+                    dataSystem.Set("Ores", "Nickel", true);
+                    dataSystem.Set("Ores", "Lead", true);
+                    dataSystem.Set("Ores", "Gold", true);
+                    dataSystem.Set("Ores", "Platinum", true);
+                    dataSystem.Set("Ores", "Tylium", true);
+                    dataSystem.Set("Ores", "Methane_Hydrate", true);
+                    dataSystem.Set("Ores", "CHON", true);
 
                     Drill.CustomData = dataSystem.ToString();
                 }
             }
 
+            /// <summary>
+            /// Считывание при подаче питания на модуль
+            /// </summary>
             public void GetIniData()
             {
-                // TargetOres["Silicon"] = 
 
                 MyIniParseResult dataResult;
                 if (!dataSystem.TryParse(Drill.CustomData, out dataResult))
                 {
-
+                    
                 }
                 else
                 {
@@ -331,10 +406,23 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     TargetOres["Cobalt"] = dataSystem.Get("Ores", "Cobalt").ToBoolean();
                     TargetOres["Iron"] = dataSystem.Get("Ores", "Iron").ToBoolean();
                     TargetOres["Silver"] = dataSystem.Get("Ores", "Silver").ToBoolean();
+                    TargetOres["Ammonium_Hydroxide"] = dataSystem.Get("Ores", "Ammonium_Hydroxide").ToBoolean();
+                    TargetOres["Uraninite"] = dataSystem.Get("Ores", "Uraninite").ToBoolean();
+                    TargetOres["Magnesium"] = dataSystem.Get("Ores", "Magnesium").ToBoolean();
+                    TargetOres["Calcium"] = dataSystem.Get("Ores", "Calcium").ToBoolean();
+                    TargetOres["Nickel"] = dataSystem.Get("Ores", "Nickel").ToBoolean();
+                    TargetOres["Lead"] = dataSystem.Get("Ores", "Lead").ToBoolean();
+                    TargetOres["Gold"] = dataSystem.Get("Ores", "Gold").ToBoolean();
+                    TargetOres["Platinum"] = dataSystem.Get("Ores", "Platinum").ToBoolean();
+                    TargetOres["Tylium"] = dataSystem.Get("Ores", "Tylium").ToBoolean();
+                    TargetOres["Methane_Hydrate"] = dataSystem.Get("Ores", "Methane_Hydrate").ToBoolean();
+                    TargetOres["CHON"] = dataSystem.Get("Ores", "CHON").ToBoolean();
                 }
             }
 
-
+            /// <summary>
+            /// Поиск вокселей
+            /// </summary>
             public void FindOres()
             {
                 if (Drill == null)
@@ -343,14 +431,14 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 miningFields = Drill.GetValue<List<List<object>>>("Drill.PossibleDrillTargets");
             }
 
-
-
+            /// <summary>
+            /// Процесс копки
+            /// </summary>
             public void Mining()
             {
                 FindOres();
                 if (miningFields.Any())
                 {
-
                     foreach (var ore in miningFields)
                     {
                         bool trg = false;
@@ -369,32 +457,53 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 }
             }
 
+            /// <summary>
+            /// Сброс цели
+            /// </summary>
             public void ClearMiningTarget()
             {
                 Drill?.SetValue<object>("Drill.CurrentPickedDrillTarget", null);
             }
 
+            /// <summary>
+            /// Возвращяет лист с вокселями для копки
+            /// </summary>
+            /// <returns></returns>
             public List<List<object>> GetOreList()
             {
                 return miningFields;
             }
 
+            /// <summary>
+            /// Текущая цель копки
+            /// </summary>
+            /// <returns></returns>
             public object GetCurrentMiningTarget()
             {
                 return Drill.GetValue<object>("Drill.CurrentPickedDrillTarget");
             }
 
+            /// <summary>
+            /// Подать питание
+            /// </summary>
             public void PowerOn()
             {
                 Drill.ApplyAction("OnOff_On");
+                TakeControl();
                 GetIniData();
             }
 
+            /// <summary>
+            /// Отключение
+            /// </summary>
             public void PowerOff()
             {
                 Drill.ApplyAction("OnOff_Off");
             }
 
+            /// <summary>
+            /// Установка флага "управляется скриптом"
+            /// </summary>
             public void TakeControl()
             {
                 Drill.ApplyAction("ScriptControlled_On");
@@ -402,9 +511,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
 
         }
 
-       
-       
-
+ 
         //////////////////END OF SCRIPT////////////////////////////////////////
 
     }
