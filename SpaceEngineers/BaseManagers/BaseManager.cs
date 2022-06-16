@@ -471,13 +471,13 @@ namespace SpaceEngineers.BaseManagers
             Echo($"Assemblers found:{assemblers.Count}");
             Echo($"Special assemblers found:{specialAssemblers.Count}");
             Echo($"Containers found my/conn: {containers.Where(c => c.CubeGrid == Me.CubeGrid).Count()}/" +
-                                   $"{containers.Where(c => c.CubeGrid != Me.CubeGrid).Count()}");
+                                           $"{containers.Where(c => c.CubeGrid != Me.CubeGrid).Count()}");
 
             Echo($"Battery found my/conn: {batteries.Where(b => b.CubeGrid == Me.CubeGrid).Count()}/" +
                                         $"{batteries.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
 
             Echo($"Generators found my/conn: {generators.Where(b => b.CubeGrid == Me.CubeGrid).Count()}/" +
-                                         $"{generators.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
+                                           $"{generators.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
 
             string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
             Echo($"Nanobot:{nanoFinded}:{nanobotBuildModule.CustomName}");
@@ -548,8 +548,9 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var refs in refsInventory)
             {
+                //var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(refs, MyItemType.MakeIngot("MyObjectBuilder_Ingot")));
+                var availConts = targetInventory.Where(inv => inv.IsConnectedTo(refs));
 
-                var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(refs, MyItemType.MakeIngot("MyObjectBuilder_Ingot")));
                 if (!availConts.Any())
                 {
                     Echo($"No reacheable containers, check connection!");
@@ -558,8 +559,15 @@ namespace SpaceEngineers.BaseManagers
                 var item = refs.GetItemAt(0);
                 var targInv = availConts.First().Owner as IMyCargoContainer;
 
-                Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
-                refs.TransferItemTo(availConts.First(), 0, null, true);
+              
+                if(refs.TransferItemTo(availConts.First(), 0, null, true))
+                {
+                    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                }
+                else
+                {
+                    Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                }
 
             }
             AddInstructions();
@@ -650,7 +658,8 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var cargo in externalContainers)
             {
-                var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(cargo, MyItemType.MakeOre("MyObjectBuilder_Ore")));
+                // var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(cargo, MyItemType.MakeOre("MyObjectBuilder_Ore")));
+                var availConts = targetInventory.Where(inv => inv.IsConnectedTo(cargo));
 
                 if (!availConts.Any())
                 {
@@ -660,8 +669,15 @@ namespace SpaceEngineers.BaseManagers
                 var item = cargo.GetItemAt(0);
                 var targInv = availConts.First().Owner as IMyCargoContainer;
 
-                Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
-                cargo.TransferItemTo(availConts.First(), 0, null, true);
+              
+                if(cargo.TransferItemTo(availConts.First(), 0, null, true))
+                {
+                    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                }
+                else
+                {
+                    Echo($"Transer FAILED: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                }
 
             }
             AddInstructions();
@@ -695,7 +711,9 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var ass in assInventory)
             {
-                var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(ass, MyItemType.MakeComponent("MyObjectBuilder_Component")));
+                // var availConts = targetInventory.Where(inv => inv.CanTransferItemTo(ass, MyItemType.MakeComponent("MyObjectBuilder_Component")));
+                var availConts = targetInventory.Where(inv => inv.IsConnectedTo(ass));
+
                 if (!availConts.Any())
                 {
                     Echo($"No reacheable containers, check connection!");
@@ -704,8 +722,15 @@ namespace SpaceEngineers.BaseManagers
                 var item = ass.GetItemAt(0);
                 var targInv = availConts.First().Owner as IMyCargoContainer;
 
-                Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName} ");
-                ass.TransferItemTo(availConts.First(), 0, null, true);
+            
+                if(ass.TransferItemTo(availConts.First(), 0, null, true))
+                {
+                    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                }
+                else
+                {
+                    Echo($"Transer FAILED: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                }
 
             }
             AddInstructions();
@@ -850,72 +875,72 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void PartsAutoBuild()
         {
-            if (!useAutoBuildSystem)
-                return;
+            //if (!useAutoBuildSystem)
+            //    return;
 
-            Echo("------Auto build system-------");
-            partsRequester.Clear();
+            //Echo("------Auto build system-------");
+            //partsRequester.Clear();
 
-            string[] lines = Me.CustomData.Split('\n');
+            //string[] lines = Me.CustomData.Split('\n');
 
-            foreach (var line in lines)
-            {
-                string[] itemName = line.Split('=');
+            //foreach (var line in lines)
+            //{
+            //    string[] itemName = line.Split('=');
 
-                if (!partsRequester.ContainsKey(itemName[0]))
-                {
-                    int count = 0;
+            //    if (!partsRequester.ContainsKey(itemName[0]))
+            //    {
+            //        int count = 0;
 
-                    if (int.TryParse(itemName[1], out count))
-                    {
-                        partsRequester.Add(itemName[0], count);
-                    }
-                }
+            //        if (int.TryParse(itemName[1], out count))
+            //        {
+            //            partsRequester.Add(itemName[0], count);
+            //        }
+            //    }
 
-            }
-            Echo($"Detected auto build componetns: {partsRequester.Count}");
+            //}
+            //Echo($"Detected auto build componetns: {partsRequester.Count}");
 
-            var workingAssemblers = assemblers.Where(ass => !ass.IsQueueEmpty).ToList();
+            //var workingAssemblers = assemblers.Where(ass => !ass.IsQueueEmpty).ToList();
 
-            if (workingAssemblers.Count == 0)
-            {
-                foreach (var req in partsRequester)
-                {
-                    if (partsDictionary.ContainsKey(req.Key))
-                    {
-                        int needComponents = req.Value - partsDictionary[req.Key];
-                        if (needComponents > 0)
-                        {
-                            string name = "MyObjectBuilder_BlueprintDefinition/" + req.Key;//Название компонента для строительсвта
-                            var parser = blueprintDataBase.Where(n => n.Contains(req.Key)).FirstOrDefault();//Если компонент стандартный ищем его в готовом списке
+            //if (workingAssemblers.Count == 0)
+            //{
+            //    foreach (var req in partsRequester)
+            //    {
+            //        if (partsDictionary.ContainsKey(req.Key))
+            //        {
+            //            int needComponents = req.Value - partsDictionary[req.Key];
+            //            if (needComponents > 0)
+            //            {
+            //                string name = "MyObjectBuilder_BlueprintDefinition/" + req.Key;//Название компонента для строительсвта
+            //                var parser = blueprintDataBase.Where(n => n.Contains(req.Key)).FirstOrDefault();//Если компонент стандартный ищем его в готовом списке
 
-                            if (parser != null)
-                                name = parser;
+            //                if (parser != null)
+            //                    name = parser;
 
-                            Echo($"Start build: {req.Key} X {needComponents}");
-                            Echo($"D_name: {name}");
-                            Echo("\n");
+            //                Echo($"Start build: {req.Key} X {needComponents}");
+            //                Echo($"D_name: {name}");
+            //                Echo("\n");
 
-                            MyDefinitionId blueprint;
-                            if (!MyDefinitionId.TryParse(name, out blueprint))
-                                Echo($"WARNING cant parse: {name}");
+            //                MyDefinitionId blueprint;
+            //                if (!MyDefinitionId.TryParse(name, out blueprint))
+            //                    Echo($"WARNING cant parse: {name}");
 
-                            var assemblersCanBuildThis = assemblers.Where(a => a.CanUseBlueprint(blueprint)).ToList();
-                            var count = needComponents / assemblersCanBuildThis.Count;
-                            if (count < 1)
-                                count = 1;
+            //                var assemblersCanBuildThis = assemblers.Where(a => a.CanUseBlueprint(blueprint)).ToList();
+            //                var count = needComponents / assemblersCanBuildThis.Count;
+            //                if (count < 1)
+            //                    count = 1;
 
-                            foreach (var asembler in assemblersCanBuildThis)
-                            {
-                                VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
-                                asembler.AddQueueItem(blueprint, amount);
-                                Echo($"Assemblers starts: {req.Key}");
-                            }
-                        }
-                    }
-                }
-            }
-            AddInstructions();
+            //                foreach (var asembler in assemblersCanBuildThis)
+            //                {
+            //                    VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
+            //                    asembler.AddQueueItem(blueprint, amount);
+            //                    Echo($"Assemblers starts: {req.Key}");
+            //                }
+            //            }
+            //        }
+            //    }
+            //}
+            //AddInstructions();
         }//PartsAutoBuild()
 
  
@@ -929,13 +954,11 @@ namespace SpaceEngineers.BaseManagers
             Echo("------Nanobot system working-------");
 
             nanobotBuildQueue.Clear();
-
-            List<ITerminalProperty> prop = new List<ITerminalProperty>();
-            nanobotBuildModule.GetProperties(prop);
+            //List<ITerminalProperty> prop = new List<ITerminalProperty>();
+            //nanobotBuildModule.GetProperties(prop);
 
             nanobotBuildQueue = nanobotBuildModule.GetValue<Dictionary<MyDefinitionId, int>>("BuildAndRepair.MissingComponents");
             Echo($"Nanobot total components:{nanobotBuildQueue.Count}");
-
 
             AddInstructions();
             AddNanobotPartsToProduct();

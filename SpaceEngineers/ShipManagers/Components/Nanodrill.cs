@@ -32,34 +32,10 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
 
         public void Main(string args, UpdateType updateSource)
         {
+            if ((updateSource & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
+                DrillsSys.Arguments(args);
+
             DrillsSys.Update();
-
-            string arg = args.ToUpper();
-          
-            switch(arg)
-            {
-                case "NANO.SCAN":
-                    DrillsSys.GetNearlestOres();
-                    break;
-
-                case "NANO.CL":
-                    DrillsSys.ClearMiningTargets();
-                    break;
-
-                case "NANO.START":
-                    DrillsSys.Start();
-                    break;
-                case "NANO.STOP":
-                    DrillsSys.Stop();
-                    break;
-
-                case "NANO.PWRON":
-                    DrillsSys.PowerOn();
-                    break;
-                case "NANO.PWROFF":
-                    DrillsSys.PowerOff();
-                    break;
-            }
 
         }
 
@@ -102,8 +78,9 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
             private List<List<object>> miningFields;
 
             private int currentTick = 0;
+            private MyIni dataSystem;
 
-   
+
             public NanodrillSystem(Program main)
             {
                 mainProg = main;
@@ -112,12 +89,49 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 StartMining = false;
                 Powered = false;
                 DisplayUpdateInterval = 20;
+                dataSystem = new MyIni();
+
                 Init();
+            }
+
+            public void InitCustomData()
+            {
+                var data = mainProg.Me.CustomData;
+
+                if (data.Length == 0)
+                {
+                    dataSystem.AddSection("Settings");
+                    dataSystem.Set("Settings", "DisplayUpdateRate", 20);
+
+                    mainProg.Me.CustomData = dataSystem.ToString();
+                }
+            }
+
+            /// <summary>
+            /// Считывание при подаче питания на модуль
+            /// </summary>
+            public void GetIniData()
+            {
+
+                MyIniParseResult dataResult;
+                if (!dataSystem.TryParse(mainProg.Me.CustomData, out dataResult))
+                {
+
+                }
+                else
+                {
+                    DisplayUpdateInterval = dataSystem.Get("Settings", "DisplayUpdateRate").ToInt32();
+                    if (DisplayUpdateInterval == 0)
+                        DisplayUpdateInterval = 20;
+                }
             }
 
             public void Init()
             {
                 Drills.Clear();
+                InitCustomData();
+                GetIniData();
+
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
                 mainProg.GridTerminalSystem.GetBlocks(blocks);
 
@@ -144,11 +158,38 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     Drills.Add(new NanoDrill(dr));
                 }
 
-                PowerOff();
-
                 mainProg.Echo($"Total drills: {nanoDrill.Count}");
                 nanoStatus?.WriteText($"Nanodrill system powered: {Powered}", false);
+            }
 
+            public void Arguments(string args)
+            {
+                string arg = args.ToUpper();
+
+                switch (arg)
+                {
+                    case "NANO.SCAN":
+                        GetNearlestOres();
+                        break;
+
+                    case "NANO.CL":
+                        ClearMiningTargets();
+                        break;
+
+                    case "NANO.START":
+                        Start();
+                        break;
+                    case "NANO.STOP":
+                        Stop();
+                        break;
+
+                    case "NANO.PWRON":
+                        PowerOn();
+                        break;
+                    case "NANO.PWROFF":
+                        PowerOff();
+                        break;
+                }
 
             }
 
@@ -462,7 +503,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
             /// </summary>
             public void ClearMiningTarget()
             {
-                Drill?.SetValue<object>("Drill.CurrentPickedDrillTarget", null);
+                Drill.SetValue<object>("Drill.CurrentPickedDrillTarget", null);
             }
 
             /// <summary>
@@ -508,10 +549,8 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
             {
                 Drill.ApplyAction("ScriptControlled_On");
             }
-
         }
 
- 
         //////////////////END OF SCRIPT////////////////////////////////////////
 
     }
