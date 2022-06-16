@@ -380,7 +380,10 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                                                                                         {"Platinum",true },
                                                                                         {"Tylium",true },
                                                                                         {"Methane_Hydrate",true },
-                                                                                        {"CHON",true }
+                                                                                        {"CHON",true },
+                                                                                        {"Zinc",true },
+                                                                                        {"Nadrit",true },
+                                                                                        {"CarbonTetrachloride_AminoAcids",true }
                                                                                     };
 
             private MyIni dataSystem;
@@ -406,13 +409,14 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 if (data.Length == 0)
                 {   
                     dataSystem.AddSection("Ores");
+                    dataSystem.AddSection("Ice");
+                    //ORE
                     dataSystem.Set("Ores", "Silicon", true);
                     dataSystem.Set("Ores", "Marble", true);
                     dataSystem.Set("Ores", "Copper", true);
                     dataSystem.Set("Ores", "Cobalt", true);
                     dataSystem.Set("Ores", "Iron", true);
-                    dataSystem.Set("Ores", "Silver", true);
-                    dataSystem.Set("Ores", "Ammonium_Hydroxide", true);
+                    dataSystem.Set("Ores", "Silver", true); 
                     dataSystem.Set("Ores", "Uraninite", true);
                     dataSystem.Set("Ores", "Magnesium", true);
                     dataSystem.Set("Ores", "Calcium", true);
@@ -420,9 +424,14 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     dataSystem.Set("Ores", "Lead", true);
                     dataSystem.Set("Ores", "Gold", true);
                     dataSystem.Set("Ores", "Platinum", true);
-                    dataSystem.Set("Ores", "Tylium", true);
-                    dataSystem.Set("Ores", "Methane_Hydrate", true);
-                    dataSystem.Set("Ores", "CHON", true);
+                    dataSystem.Set("Ores", "Nadrit", true);
+                    //ICE
+                    dataSystem.Set("Ice", "Ammonium_Hydroxide", true);
+                    dataSystem.Set("Ice", "Tylium", true);
+                    dataSystem.Set("Ice", "Methane_Hydrate", true);
+                    dataSystem.Set("Ice", "CHON", true);
+                    dataSystem.Set("Ice", "CarbonTetrachloride_AminoAcids", true);
+
 
                     Drill.CustomData = dataSystem.ToString();
                 }
@@ -447,7 +456,6 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     TargetOres["Cobalt"] = dataSystem.Get("Ores", "Cobalt").ToBoolean();
                     TargetOres["Iron"] = dataSystem.Get("Ores", "Iron").ToBoolean();
                     TargetOres["Silver"] = dataSystem.Get("Ores", "Silver").ToBoolean();
-                    TargetOres["Ammonium_Hydroxide"] = dataSystem.Get("Ores", "Ammonium_Hydroxide").ToBoolean();
                     TargetOres["Uraninite"] = dataSystem.Get("Ores", "Uraninite").ToBoolean();
                     TargetOres["Magnesium"] = dataSystem.Get("Ores", "Magnesium").ToBoolean();
                     TargetOres["Calcium"] = dataSystem.Get("Ores", "Calcium").ToBoolean();
@@ -455,9 +463,13 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     TargetOres["Lead"] = dataSystem.Get("Ores", "Lead").ToBoolean();
                     TargetOres["Gold"] = dataSystem.Get("Ores", "Gold").ToBoolean();
                     TargetOres["Platinum"] = dataSystem.Get("Ores", "Platinum").ToBoolean();
-                    TargetOres["Tylium"] = dataSystem.Get("Ores", "Tylium").ToBoolean();
-                    TargetOres["Methane_Hydrate"] = dataSystem.Get("Ores", "Methane_Hydrate").ToBoolean();
-                    TargetOres["CHON"] = dataSystem.Get("Ores", "CHON").ToBoolean();
+                    TargetOres["Nadrit"] = dataSystem.Get("Ores", "Nadrit").ToBoolean();
+
+                    TargetOres["Ammonium_Hydroxide"] = dataSystem.Get("Ice", "Ammonium_Hydroxide").ToBoolean();
+                    TargetOres["Tylium"] = dataSystem.Get("Ice", "Tylium").ToBoolean();
+                    TargetOres["Methane_Hydrate"] = dataSystem.Get("Ice", "Methane_Hydrate").ToBoolean();
+                    TargetOres["CHON"] = dataSystem.Get("Ice", "CHON").ToBoolean();
+                    TargetOres["CarbonTetrachloride_AminoAcids"] = dataSystem.Get("Ice", "CarbonTetrachloride_AminoAcids").ToBoolean();
                 }
             }
 
@@ -496,6 +508,16 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                         }
                     }
                 }
+            }
+
+            public void ShowMiningArea()
+            {
+                Drill.ApplyAction("ShowArea_On");
+            }
+
+            public void HideMiningArea()
+            {
+                Drill.ApplyAction("ShowArea_Off");
             }
 
             /// <summary>
