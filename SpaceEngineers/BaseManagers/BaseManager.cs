@@ -143,8 +143,6 @@ namespace SpaceEngineers.BaseManagers
                                                             "MyObjectBuilder_BlueprintDefinition/OxygenBottle"};
 
 
-
-
         /// <summary>
         /// Инициализация компонентов 1 раз при создании объекта
         /// </summary>
@@ -352,7 +350,6 @@ namespace SpaceEngineers.BaseManagers
                     debugPanel?.WriteText($"{bp.BlueprintId}\n", true);
                 }
             }
-
         }
 
         /// <summary>
@@ -424,22 +421,23 @@ namespace SpaceEngineers.BaseManagers
         public void WriteDebugText()
         {
             var detPan = GridTerminalSystem.GetBlockWithName("projLCD") as IMyTextPanel;
-            IMyProjector proj = GridTerminalSystem.GetBlockWithName("proj") as IMyProjector;
+            //IMyProjector proj = GridTerminalSystem.GetBlockWithName("proj") as IMyProjector;
 
-            detPan?.WriteText("", false);
+            //detPan?.WriteText("", false);
 
-            if (proj != null) 
-            {
-                var block = proj.RemainingBlocksPerType;
+            //if (proj != null) 
+            //{
+            //    var block = proj.RemainingBlocksPerType;
 
-                detPan?.WriteText($"\n{block.Count}", true);
+            //    detPan?.WriteText($"\n{block.Count}", true);
 
-                foreach (var bl in block)
-                {
-                    string nn = bl.Key.ToString().Remove(0,16);
-                    detPan?.WriteText($"\n{nn} X {bl.Value}", true);
-                }
-            }
+            //    foreach (var bl in block)
+            //    {
+            //        string nn = bl.Key.ToString().Remove(0,16);
+            //        detPan?.WriteText($"\n{nn} X {bl.Value}", true);
+            //    }
+            //}
+
         }
 
 

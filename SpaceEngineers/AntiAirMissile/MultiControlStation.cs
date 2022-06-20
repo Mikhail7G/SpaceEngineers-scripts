@@ -12,6 +12,7 @@ using VRage.Collections;
 using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using VRage.Game.ModAPI.Ingame.Utilities;
 
 
 namespace SpaceEngineers.MultiControlStation
@@ -69,6 +70,8 @@ namespace SpaceEngineers.MultiControlStation
         //Ракеты на базе и в полете
         List<ControlledMissile> missileList;
         List<ControlledMissile> missileInFlightList;
+
+        MyIni dataSystem;
 
         public Program()
         {
@@ -204,13 +207,13 @@ namespace SpaceEngineers.MultiControlStation
                 Echo("No tag! Enter custom data!");
             }
 
-            GetMissileInfo();
+            GetStationInfo();
         }
 
         /// <summary>
         /// Вывод отладочной информации в блок
         /// </summary>
-        public void GetMissileInfo()
+        public void GetStationInfo()
         {
             Echo($"Radio target rcv channel: {missileTagResiever}");
             Echo($"Station control time: {maxAviableFlightTime} sec");
@@ -321,10 +324,10 @@ namespace SpaceEngineers.MultiControlStation
         {
 
             panel?.WriteText("", true);
-            panel?.WriteText("Missiles in bay/In Flight: " + missileList.Count + "/" + missileInFlightList.Count +
-                            "\nTarget speed: " + Math.Round(targetSpeed.Length()).ToString() +
-                            "\nDist from base: " + Math.Round(distanceToTargetFromBase) +
-                            "\nCalcStatus: " + scriptEnabled, false);
+            panel?.WriteText($"Missiles in bay/In Flight: {missileList.Count} / {missileInFlightList.Count}" +
+                             $"\nTarget speed: {Math.Round(targetSpeed.Length())}" +
+                             $"\nDist from base: {Math.Round(distanceToTargetFromBase)}" +
+                             $"\nCalcStatus: {scriptEnabled}", false);
         }
 
         /// <summary>
@@ -367,11 +370,11 @@ namespace SpaceEngineers.MultiControlStation
             }
 
             panelInfo?.WriteText($"\nReady: {missile.MissileReady()}" +
-                $"\nSize: {missile.RemotControl.CubeGrid.GridSizeEnum}" +
-                $"\nRadio expl dist {missileRadioExplosionDistance} m" +
-                $"\n----PowerSystems-----" +
-                $"\nAcc powered: {missile.TotalBatteryPower * 100 / missile.MaxBatteryPower} % " +
-                $"\n-------------------------", true);  
+                                $"\nSize: {missile.RemotControl.CubeGrid.GridSizeEnum}" +
+                                $"\nRadio expl dist {missileRadioExplosionDistance} m" +
+                                $"\n----PowerSystems-----" +
+                                $"\nAcc powered: {missile.TotalBatteryPower * 100 / missile.MaxBatteryPower} % " +
+                                $"\n-------------------------", true);  
         }
 
         /// <summary>
@@ -643,17 +646,15 @@ namespace SpaceEngineers.MultiControlStation
                 Vector3D vecReject = Vector3D.Reject(Vector3D.Normalize(linearVel), targetNormal);
                 Vector3D correctVect = Vector3D.Normalize(targetNormal - vecReject * 2);
 
+                Vector3D resultVector = Vector3D.Normalize(correctVect).Cross(RemotControl.WorldMatrix.Forward);
 
-                if (UseHirozonCorrector)
+                if ((UseHirozonCorrector) && (!natGravity.IsZero()))
                 {
                     targetRoll = Vector3D.Dot(RemotControl.WorldMatrix.Left, Vector3D.Reject(Vector3D.Normalize(-natGravity), RemotControl.WorldMatrix.Forward));
                     targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
-                }
 
-                Vector3D resultVector = Vector3D.Normalize(correctVect).Cross(RemotControl.WorldMatrix.Forward);
-
-                if ((UseHirozonCorrector) && (!natGravity.IsZero())) 
                     resultVector += RemotControl.WorldMatrix.Backward * targetRoll;
+                }
 
                 return resultVector;
             }
@@ -741,11 +742,7 @@ namespace SpaceEngineers.MultiControlStation
                     sqrDistance = Vector3D.DistanceSquared(mPos, targetPosition);
 
                     SensorDetection();
-                    //if(sqrDistance < MissileExplTimer)
-                    //{
-                    //    Detonate();
-                    //}
-
+                  
                     //расчет точки перехвата цели и поворот гироскопа на цель
                     Vector3D interPos = CalcInterceptPos(mPos, mSpeed, targetPosition, targetSpeed);
 

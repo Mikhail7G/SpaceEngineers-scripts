@@ -17,13 +17,15 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 
 
+//Garbage script IONP
+
 namespace SpaceEngineers.ShipManagers.Components.Nanodrill
 
 {
     public sealed class Program : MyGridProgram
     {
         NanodrillSystem DrillsSys;
-
+      
         public Program()
         {
             DrillsSys = new NanodrillSystem(this);
@@ -102,6 +104,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 {
                     dataSystem.AddSection("Settings");
                     dataSystem.Set("Settings", "DisplayUpdateRate", 20);
+                    dataSystem.Set("Settings", "HideIce", true);
 
                     mainProg.Me.CustomData = dataSystem.ToString();
                 }
@@ -120,6 +123,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 }
                 else
                 {
+                    HideIce = dataSystem.Get("Settings", "HideIce").ToBoolean();
                     DisplayUpdateInterval = dataSystem.Get("Settings", "DisplayUpdateRate").ToInt32();
                     if (DisplayUpdateInterval == 0)
                         DisplayUpdateInterval = 20;
@@ -159,7 +163,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 }
 
                 mainProg.Echo($"Total drills: {nanoDrill.Count}");
-                nanoStatus?.WriteText($"Nanodrill system powered: {Powered}", false);
+                nanoStatus?.WriteText("Nanodrill system offline", false);
             }
 
             public void Arguments(string args)
@@ -233,26 +237,22 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 {
                     drill.PowerOff();
                 }
-                nanoStatus?.WriteText($"Nanodrill system powered: {Powered}", false);
+                nanoStatus?.WriteText("Nanodrill system offline", false);
             }
 
             /// <summary>
-            /// Обновление модулей выполняется каждый тик
+            /// Обновление модулей выполняется каждые 100 тиков
             /// </summary>
             public void Update()
             {
                 if (!Powered)
                     return;
 
-                currentTick++;
                 MiningUpdate();
 
-                if (currentTick == DisplayUpdateInterval) 
-                {
-                    GetNearlestOres();
-                    PrintData();
-                    currentTick = 0;
-                }
+                GetNearlestOres();
+                PrintData();
+                
             }
 
             /// <summary>
@@ -360,6 +360,10 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
             /// </summary>
             private List<List<object>> miningFields;
 
+            private List<List<object>> fillFields;
+
+            private List<IMyEntity> pickFields;
+
             /// <summary>
             /// Словарь руд для копки
             /// </summary>
@@ -383,7 +387,16 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                                                                                         {"CHON",true },
                                                                                         {"Zinc",true },
                                                                                         {"Nadrit",true },
-                                                                                        {"CarbonTetrachloride_AminoAcids",true }
+                                                                                        {"CarbonTetrachloride_AminoAcids",true },
+                                                                                        {"Neutronium",true },
+                                                                                        {"RhodiumOre",true },
+                                                                                        {"Potassium",true },
+                                                                                        {"Aluminium",true },
+                                                                                        {"Sulfur",true },
+                                                                                        {"Lithium",true },
+                                                                                        {"Tungsten",true },
+                                                                                        {"Snow",false },
+                                                                                        {"Ice",false }
                                                                                     };
 
             private MyIni dataSystem;
@@ -395,6 +408,9 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     return;
 
                 miningFields = new List<List<object>>();
+                fillFields = new List<List<object>>();
+                pickFields = new List<IMyEntity>();
+
                 dataSystem = new MyIni();
                 InitCustomData();
             }
@@ -425,7 +441,16 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     dataSystem.Set("Ores", "Gold", true);
                     dataSystem.Set("Ores", "Platinum", true);
                     dataSystem.Set("Ores", "Nadrit", true);
+                    dataSystem.Set("Ores", "Neutronium", true);
+                    dataSystem.Set("Ores", "RhodiumOre", true);
+                    dataSystem.Set("Ores", "Potassium", true);
+                    dataSystem.Set("Ores", "Aluminium", true);
+                    dataSystem.Set("Ores", "Sulfur", true);
+                    dataSystem.Set("Ores", "Lithium", true);
+                    dataSystem.Set("Ores", "Tungsten", true);
                     //ICE
+                    dataSystem.Set("Ice", "Snow", false);
+                    dataSystem.Set("Ice", "Ice", false);
                     dataSystem.Set("Ice", "Ammonium_Hydroxide", true);
                     dataSystem.Set("Ice", "Tylium", true);
                     dataSystem.Set("Ice", "Methane_Hydrate", true);
@@ -450,26 +475,45 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 }
                 else
                 {
-                    TargetOres["Silicon"] = dataSystem.Get("Ores", "Silicon").ToBoolean();
-                    TargetOres["Marble"] = dataSystem.Get("Ores", "Marble").ToBoolean();
-                    TargetOres["Copper"] = dataSystem.Get("Ores", "Copper").ToBoolean();
-                    TargetOres["Cobalt"] = dataSystem.Get("Ores", "Cobalt").ToBoolean();
-                    TargetOres["Iron"] = dataSystem.Get("Ores", "Iron").ToBoolean();
-                    TargetOres["Silver"] = dataSystem.Get("Ores", "Silver").ToBoolean();
-                    TargetOres["Uraninite"] = dataSystem.Get("Ores", "Uraninite").ToBoolean();
-                    TargetOres["Magnesium"] = dataSystem.Get("Ores", "Magnesium").ToBoolean();
-                    TargetOres["Calcium"] = dataSystem.Get("Ores", "Calcium").ToBoolean();
-                    TargetOres["Nickel"] = dataSystem.Get("Ores", "Nickel").ToBoolean();
-                    TargetOres["Lead"] = dataSystem.Get("Ores", "Lead").ToBoolean();
-                    TargetOres["Gold"] = dataSystem.Get("Ores", "Gold").ToBoolean();
-                    TargetOres["Platinum"] = dataSystem.Get("Ores", "Platinum").ToBoolean();
-                    TargetOres["Nadrit"] = dataSystem.Get("Ores", "Nadrit").ToBoolean();
+                    try
+                    {
+                        TargetOres["Silicon"] = dataSystem.Get("Ores", "Silicon").ToBoolean();
+                        TargetOres["Marble"] = dataSystem.Get("Ores", "Marble").ToBoolean();
+                        TargetOres["Copper"] = dataSystem.Get("Ores", "Copper").ToBoolean();
+                        TargetOres["Cobalt"] = dataSystem.Get("Ores", "Cobalt").ToBoolean();
+                        TargetOres["Iron"] = dataSystem.Get("Ores", "Iron").ToBoolean();
+                        TargetOres["Silver"] = dataSystem.Get("Ores", "Silver").ToBoolean();
+                        TargetOres["Uraninite"] = dataSystem.Get("Ores", "Uraninite").ToBoolean();
+                        TargetOres["Magnesium"] = dataSystem.Get("Ores", "Magnesium").ToBoolean();
+                        TargetOres["Calcium"] = dataSystem.Get("Ores", "Calcium").ToBoolean();
+                        TargetOres["Nickel"] = dataSystem.Get("Ores", "Nickel").ToBoolean();
+                        TargetOres["Lead"] = dataSystem.Get("Ores", "Lead").ToBoolean();
+                        TargetOres["Gold"] = dataSystem.Get("Ores", "Gold").ToBoolean();
+                        TargetOres["Platinum"] = dataSystem.Get("Ores", "Platinum").ToBoolean();
+                        TargetOres["Nadrit"] = dataSystem.Get("Ores", "Nadrit").ToBoolean();
+                        TargetOres["Neutronium"] = dataSystem.Get("Ores", "Neutronium").ToBoolean();
+                        TargetOres["RhodiumOre"] = dataSystem.Get("Ores", "RhodiumOre").ToBoolean();
+                        TargetOres["Potassium"] = dataSystem.Get("Ores", "Potassium").ToBoolean();
+                        TargetOres["Aluminium"] = dataSystem.Get("Ores", "Aluminium").ToBoolean();
+                        TargetOres["Sulfur"] = dataSystem.Get("Ores", "Sulfur").ToBoolean();
+                        TargetOres["Lithium"] = dataSystem.Get("Ores", "Lithium").ToBoolean();
+                        TargetOres["Tungsten"] = dataSystem.Get("Ores", "Tungsten").ToBoolean();
 
-                    TargetOres["Ammonium_Hydroxide"] = dataSystem.Get("Ice", "Ammonium_Hydroxide").ToBoolean();
-                    TargetOres["Tylium"] = dataSystem.Get("Ice", "Tylium").ToBoolean();
-                    TargetOres["Methane_Hydrate"] = dataSystem.Get("Ice", "Methane_Hydrate").ToBoolean();
-                    TargetOres["CHON"] = dataSystem.Get("Ice", "CHON").ToBoolean();
-                    TargetOres["CarbonTetrachloride_AminoAcids"] = dataSystem.Get("Ice", "CarbonTetrachloride_AminoAcids").ToBoolean();
+                        TargetOres["Snow"] = dataSystem.Get("Ice", "Snow").ToBoolean();
+                        TargetOres["Ice"] = dataSystem.Get("Ice", "Ice").ToBoolean();
+                        TargetOres["Ammonium_Hydroxide"] = dataSystem.Get("Ice", "Ammonium_Hydroxide").ToBoolean();
+                        TargetOres["Tylium"] = dataSystem.Get("Ice", "Tylium").ToBoolean();
+                        TargetOres["Methane_Hydrate"] = dataSystem.Get("Ice", "Methane_Hydrate").ToBoolean();
+                        TargetOres["CHON"] = dataSystem.Get("Ice", "CHON").ToBoolean();
+                        TargetOres["CarbonTetrachloride_AminoAcids"] = dataSystem.Get("Ice", "CarbonTetrachloride_AminoAcids").ToBoolean();
+
+                    }
+                    catch
+                    {
+                       
+                        throw;
+                    }
+
                 }
             }
 
@@ -482,6 +526,8 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     return;
 
                 miningFields = Drill.GetValue<List<List<object>>>("Drill.PossibleDrillTargets");
+               //fillFields = Drill.GetValue<List<List<object>>>("Drill.PossibleFillTargets");
+               //pickFields = Drill.GetValue<List<IMyEntity>>("Drill.PossibleCollectTargets");
             }
 
             /// <summary>
@@ -489,24 +535,36 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
             /// </summary>
             public void Mining()
             {
+                ClearMiningTarget();
                 FindOres();
+
+
                 if (miningFields.Any())
                 {
-                    foreach (var ore in miningFields)
-                    {
-                        bool trg = false;
-                        foreach (var trgore in TargetOres)
-                        {
-                            if (trgore.Value == true)
-                                trg = ore[3].ToString().Contains(trgore.Key);
 
-                            if (trg)
-                            {
-                                Drill.SetValue<object>("Drill.CurrentPickedDrillTarget", ore[0]);
-                                return;
-                            }
-                        }
-                    }
+                    var ore = miningFields.Where(o => o[3].ToString().Remove(0, 40).Contains("Copper")).FirstOrDefault();
+
+                    if (ore!=null)
+                        Drill.SetValue<object>("Drill.CurrentPickedDrillTarget", ore[0]);
+                    //foreach (var ore in miningFields)
+                    //{
+                    //    bool trg = false;
+                    //    foreach (var trgore in TargetOres)
+                    //    {
+                    //        if (trgore.Value == true)
+                    //            trg = ore[3].ToString().Contains(trgore.Key);
+
+                    //        if (trg)
+                    //        {
+                    //            Drill.SetValue<object>("Drill.CurrentPickedDrillTarget", ore[0]);
+                    //            return;
+                    //        }
+                    //    }
+                    //}
+                }
+                else
+                {
+                    ClearMiningTarget();
                 }
             }
 
@@ -526,6 +584,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
             public void ClearMiningTarget()
             {
                 Drill.SetValue<object>("Drill.CurrentPickedDrillTarget", null);
+                Drill.SetValue<object>("Drill.CurrentPickedFillTarget", null);
             }
 
             /// <summary>
@@ -537,14 +596,25 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 return miningFields;
             }
 
+            public List<List<object>> GetFillList()
+            {
+                return fillFields;
+            }
+
+            public List<IMyEntity> GetPickList()
+            {
+                return pickFields;
+            }
+
             /// <summary>
             /// Текущая цель копки
             /// </summary>
             /// <returns></returns>
             public object GetCurrentMiningTarget()
             {
-                return Drill.GetValue<object>("Drill.CurrentPickedDrillTarget");
+                return Drill.GetValue<object>("Drill.CurrentDrillTarget");
             }
+
 
             /// <summary>
             /// Подать питание
@@ -552,6 +622,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
             public void PowerOn()
             {
                 Drill.ApplyAction("OnOff_On");
+                Drill.ApplyAction("CollectIfIdle_Off");
                 TakeControl();
                 GetIniData();
             }

@@ -234,15 +234,17 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
                         targetPosition = target.HitPosition.Value;
                         targetSpeed = target.Velocity;
 
-
-                            //   mainPrgoram.Echo($"BB: {}");
-
+                        AutoRotation();
 
 
-                            AutoRotation();
+                        var trg = (targetPosition - (statorHorizontal.GetPosition() - statorHorizontal.WorldMatrix.Up * ElevationModifier));
+                        var cam = camera.WorldMatrix.Forward;
 
-                        var dev = Math.Abs(azimuthDelta) + Math.Abs(elevationDelta);
-                        if (dev<2)
+                        var dev = Math.Acos(Vector3D.Normalize(trg).Dot(cam)) *180/3.14;
+
+
+                        mainPrgoram.Echo($"DEV: {dev}");
+                        if (Math.Abs(dev) < 5) 
                         {
                             //shootTime++;
                             //if (shootTime > 60) 
@@ -311,7 +313,7 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
                 gravity = control.GetNaturalGravity();
                 var myPos = statorHorizontal.GetPosition() - statorHorizontal.WorldMatrix.Up * ElevationModifier;
 
-                var calcTargetPos = CalcInterceptPos(myPos, 300, targetPosition, targetSpeed) + Spiral(myPos) + GravityCompensation(myPos, targetPosition);
+                var calcTargetPos = CalcInterceptPos(myPos, 5000, targetPosition, targetSpeed) + Spiral(myPos);// + GravityCompensation(myPos, targetPosition);
 
                 calcTargetPos = VectorTransform(calcTargetPos, statorHorizontal.WorldMatrix.GetOrientation());
                 float azimuth = (float)Math.Atan2(-calcTargetPos.X, calcTargetPos.Z);
@@ -326,6 +328,7 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
 
             private Vector3D CalcInterceptPos(Vector3D basePos, double buletSpeed, Vector3D targetPos, Vector3D targetSpeed)
             {
+
                 Vector3D directionToTarget = Vector3D.Normalize(targetPos - basePos);
 
                 Vector3D targetVelTang = Vector3D.Reject(targetSpeed, directionToTarget);
