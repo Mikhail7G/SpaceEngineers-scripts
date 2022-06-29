@@ -93,6 +93,7 @@ namespace SpaceEngineers.BaseManagers
         int reactorMinFuel = 100;
 
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
+        Dictionary<string, int> ingnotsDict;
         Dictionary<string, int> partsDictionary;
         Dictionary<string, int> partsRequester;
 
@@ -161,6 +162,7 @@ namespace SpaceEngineers.BaseManagers
             gasTanks = new List<IMyGasTank>();
             specialAssemblers = new List<IMyAssembler>();
 
+            ingnotsDict = new Dictionary<string, int>();
             partsDictionary = new Dictionary<string, int>();
             partsRequester = new Dictionary<string, int>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
@@ -224,6 +226,7 @@ namespace SpaceEngineers.BaseManagers
         {
             FindLcds();
             FindInventories();
+            WriteDebugText();
 
             switch (currentTick)
             {
@@ -259,6 +262,8 @@ namespace SpaceEngineers.BaseManagers
             maxInstructions = Runtime.MaxInstructionCount;
             mainDisplay.WriteText($"Calls/Max: {totalInstructions} / {maxInstructions}" +
                                   $"\nTime: {updateTime}", false);
+
+            //var currMethodName = System.Reflection.MethodBase.GetCurrentMethod().Name;
         }
 
         public void GetIniData()
@@ -281,17 +286,21 @@ namespace SpaceEngineers.BaseManagers
                 getOreFromTransports = dataSystem.Get("Operations", "TransferOreFromTransports").ToBoolean();
                 useNanobotAutoBuild = dataSystem.Get("Operations", "UseNanobotAutoBuild").ToBoolean();
 
-                oreStorageName = dataSystem.Get("Names", "oreStorageName").ToString();
-                ingnotStorageName = dataSystem.Get("Names", "ingnotStorageName").ToString();
-                componentsStorageName = dataSystem.Get("Names", "componentsStorageName").ToString();
+                //Containers
+                oreStorageName = dataSystem.Get("ContainerNames", "oreStorageName").ToString();
+                ingnotStorageName = dataSystem.Get("ContainerNames", "ingnotStorageName").ToString();
+                componentsStorageName = dataSystem.Get("ContainerNames", "componentsStorageName").ToString();
 
-                lcdInventoryIngnotsName = dataSystem.Get("Names", "lcdInventoryIngnotsName").ToString();
-                lcdPowerSystemName = dataSystem.Get("Names", "lcdPowerSystemName").ToString();
-                lcdPartsName = dataSystem.Get("Names", "lcdPartsName").ToString();
-                lcdInventoryDebugName = dataSystem.Get("Names", "lcdInventoryDebugName").ToString();
-                lcdPowerDetailedName = dataSystem.Get("Names", "lcdPowerDetailedName").ToString();
-                assemblersSpecialOperationsName = dataSystem.Get("Names", "assemblersSpecialOperationsTagName").ToString();
-                lcdNanobotName = dataSystem.Get("Names", "NanobotDisplayName").ToString();
+                //Displays
+                lcdInventoryIngnotsName = dataSystem.Get("DisplaysNames", "lcdInventoryIngnotsName").ToString();
+                lcdPowerSystemName = dataSystem.Get("DisplaysNames", "lcdPowerSystemName").ToString();
+                lcdPartsName = dataSystem.Get("DisplaysNames", "lcdPartsName").ToString();
+                lcdInventoryDebugName = dataSystem.Get("DisplaysNames", "lcdInventoryDebugName").ToString();
+                lcdPowerDetailedName = dataSystem.Get("DisplaysNames", "lcdPowerDetailedName").ToString();
+                lcdNanobotName = dataSystem.Get("DisplaysNames", "NanobotDisplayName").ToString();
+
+                //Tags
+                assemblersSpecialOperationsName = dataSystem.Get("TagsNames", "assemblersSpecialOperationsTagName").ToString();
             }
 
             Echo("Script ready to run");
@@ -315,17 +324,21 @@ namespace SpaceEngineers.BaseManagers
                 dataSystem.Set("Operations", "TransferOreFromTransports", false);
                 dataSystem.Set("Operations", "UseNanobotAutoBuild", false);
 
-                dataSystem.AddSection("Names");
-                dataSystem.Set("Names", "oreStorageName", "Ore");
-                dataSystem.Set("Names", "ingnotStorageName", "Ingnot");
-                dataSystem.Set("Names", "componentsStorageName", "Parts");
-                dataSystem.Set("Names", "lcdInventoryIngnotsName", "LCD Inventory");
-                dataSystem.Set("Names", "lcdPowerSystemName", "LCD Power");
-                dataSystem.Set("Names", "lcdPowerDetailedName", "LCD power full");
-                dataSystem.Set("Names", "lcdPartsName", "LCD Parts");
-                dataSystem.Set("Names", "lcdInventoryDebugName", "LCD Debug"); 
-                dataSystem.Set("Names", "assemblersSpecialOperationsTagName", "[sp]");
-                dataSystem.Set("Names", "NanobotDisplayName", "LCD nano");
+                dataSystem.AddSection("DisplaysNames");
+                dataSystem.Set("DisplaysNames", "lcdInventoryIngnotsName", "LCD Inventory");
+                dataSystem.Set("DisplaysNames", "lcdPowerSystemName", "LCD Power");
+                dataSystem.Set("DisplaysNames", "lcdPowerDetailedName", "LCD power full");
+                dataSystem.Set("DisplaysNames", "lcdPartsName", "LCD Parts");
+                dataSystem.Set("DisplaysNames", "NanobotDisplayName", "LCD nano");
+                dataSystem.Set("DisplaysNames", "lcdInventoryDebugName", "LCD Debug");
+
+                dataSystem.AddSection("ContainerNames");
+                dataSystem.Set("ContainerNames", "oreStorageName", "Ore");
+                dataSystem.Set("ContainerNames", "ingnotStorageName", "Ingnot");
+                dataSystem.Set("ContainerNames", "componentsStorageName", "Parts");
+
+                dataSystem.AddSection("TagsNames");
+                dataSystem.Set("TagsNames", "assemblersSpecialOperationsTagName", "[sp]");
 
 
 
@@ -420,23 +433,15 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void WriteDebugText()
         {
-            var detPan = GridTerminalSystem.GetBlockWithName("projLCD") as IMyTextPanel;
-            //IMyProjector proj = GridTerminalSystem.GetBlockWithName("proj") as IMyProjector;
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks);
 
-            //detPan?.WriteText("", false);
+            debugPanel.WriteText("", false);
 
-            //if (proj != null) 
-            //{
-            //    var block = proj.RemainingBlocksPerType;
-
-            //    detPan?.WriteText($"\n{block.Count}", true);
-
-            //    foreach (var bl in block)
-            //    {
-            //        string nn = bl.Key.ToString().Remove(0,16);
-            //        detPan?.WriteText($"\n{nn} X {bl.Value}", true);
-            //    }
-            //}
+            foreach (var b in blocks)
+            {
+                debugPanel.WriteText($"\n{b.BlockDefinition}",true);
+            }
 
         }
 
@@ -583,11 +588,10 @@ namespace SpaceEngineers.BaseManagers
 
             totalIngnotStorageVolume = 0;
             freeIngnotStorageVolume = 0;
+            ingnotsDict.Clear();
 
             var ingnotInventorys = containers.Where(c => c.CustomName.Contains(ingnotStorageName))
                                              .Select(i => i.GetInventory(0));
-
-            Dictionary<string, int> CargoDict = new Dictionary<string, int>();
 
             freeIngnotStorageVolume = ingnotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalIngnotStorageVolume = ingnotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
@@ -601,13 +605,13 @@ namespace SpaceEngineers.BaseManagers
                 {
                     if (item.Type.TypeId == "MyObjectBuilder_Ingot")//слитки
                     {
-                        if (CargoDict.ContainsKey(item.Type.SubtypeId))
+                        if (ingnotsDict.ContainsKey(item.Type.SubtypeId))
                         {
-                            CargoDict[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                            ingnotsDict[item.Type.SubtypeId] += item.Amount.ToIntSafe();
                         }
                         else
                         {
-                            CargoDict.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                            ingnotsDict.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
                         }
                     }
                 }
@@ -616,7 +620,7 @@ namespace SpaceEngineers.BaseManagers
             ingnotPanel?.WriteText("", true);
             ingnotPanel?.WriteText($"Total/max ingnot cont volume: {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", false);
 
-            foreach (var dict in CargoDict.OrderBy(k => k.Key))
+            foreach (var dict in ingnotsDict.OrderBy(k => k.Key))
             {
                 ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
             }
@@ -804,6 +808,8 @@ namespace SpaceEngineers.BaseManagers
 
 
             Echo("------Power managment system-------");
+            Echo($"Batt:{batteries.Count}");
+            Echo($"Gens:{generators.Count}");
 
             maxStoredPower = batteries.Sum(b => b.MaxStoredPower);
             currentStoredPower = batteries.Sum(b => b.CurrentStoredPower);

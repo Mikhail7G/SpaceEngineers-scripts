@@ -19,13 +19,13 @@ using VRage.Game.ModAPI.Ingame.Utilities;
 
 //Garbage script IONP
 
-namespace SpaceEngineers.ShipManagers.Components.Nanodrill
+namespace SpaceEngineers.ShipManagers.INOP.DRIL
 
 {
     public sealed class Program : MyGridProgram
     {
         NanodrillSystem DrillsSys;
-      
+
         public Program()
         {
             DrillsSys = new NanodrillSystem(this);
@@ -140,24 +140,24 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 mainProg.GridTerminalSystem.GetBlocks(blocks);
 
                 //Малая и большая сетки имеют разные названия
-                if(mainProg.Me.CubeGrid.GridSizeEnum == MyCubeSize.Large)
+                if (mainProg.Me.CubeGrid.GridSizeEnum == MyCubeSize.Large)
                 {
                     nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == LargeNanoName).ToList();
                 }
-                else if(mainProg.Me.CubeGrid.GridSizeEnum == MyCubeSize.Small)
+                else if (mainProg.Me.CubeGrid.GridSizeEnum == MyCubeSize.Small)
                 {
                     nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == SmallNanoName).ToList();
                 }
 
                 nanoStatus = blocks.Where(b => b.CustomName == NanoInfoDisplayName).FirstOrDefault() as IMyTextPanel;
 
-                if (nanoDrill.Count == 0) 
+                if (nanoDrill.Count == 0)
                 {
                     mainProg.Echo("Can't find drill system");
                     return;
                 }
 
-                foreach(var dr in nanoDrill)
+                foreach (var dr in nanoDrill)
                 {
                     Drills.Add(new NanoDrill(dr));
                 }
@@ -252,7 +252,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
 
                 GetNearlestOres();
                 PrintData();
-                
+
             }
 
             /// <summary>
@@ -260,7 +260,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
             /// </summary>
             public void GetNearlestOres()
             {
-                foreach (var drill in Drills) 
+                foreach (var drill in Drills)
                 {
                     drill.FindOres();
                 }
@@ -404,7 +404,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
             public NanoDrill(IMyTerminalBlock _drill)
             {
                 Drill = _drill;
-                if (Drill == null) 
+                if (Drill == null)
                     return;
 
                 miningFields = new List<List<object>>();
@@ -423,7 +423,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 var data = Drill.CustomData;
 
                 if (data.Length == 0)
-                {   
+                {
                     dataSystem.AddSection("Ores");
                     dataSystem.AddSection("Ice");
                     //ORE
@@ -432,7 +432,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     dataSystem.Set("Ores", "Copper", true);
                     dataSystem.Set("Ores", "Cobalt", true);
                     dataSystem.Set("Ores", "Iron", true);
-                    dataSystem.Set("Ores", "Silver", true); 
+                    dataSystem.Set("Ores", "Silver", true);
                     dataSystem.Set("Ores", "Uraninite", true);
                     dataSystem.Set("Ores", "Magnesium", true);
                     dataSystem.Set("Ores", "Calcium", true);
@@ -471,7 +471,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                 MyIniParseResult dataResult;
                 if (!dataSystem.TryParse(Drill.CustomData, out dataResult))
                 {
-                    
+
                 }
                 else
                 {
@@ -510,7 +510,7 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     }
                     catch
                     {
-                       
+
                         throw;
                     }
 
@@ -526,8 +526,8 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
                     return;
 
                 miningFields = Drill.GetValue<List<List<object>>>("Drill.PossibleDrillTargets");
-               //fillFields = Drill.GetValue<List<List<object>>>("Drill.PossibleFillTargets");
-               //pickFields = Drill.GetValue<List<IMyEntity>>("Drill.PossibleCollectTargets");
+                //fillFields = Drill.GetValue<List<List<object>>>("Drill.PossibleFillTargets");
+                //pickFields = Drill.GetValue<List<IMyEntity>>("Drill.PossibleCollectTargets");
             }
 
             /// <summary>
@@ -544,8 +544,8 @@ namespace SpaceEngineers.ShipManagers.Components.Nanodrill
 
                     var ore = miningFields.Where(o => o[3].ToString().Remove(0, 40).Contains("Copper")).FirstOrDefault();
 
-                    if (ore!=null)
-                        Drill.SetValue<object>("Drill.CurrentPickedDrillTarget", ore[0]);
+                    if (ore != null)
+                        Drill.SetValue("Drill.CurrentPickedDrillTarget", ore[0]);
                     //foreach (var ore in miningFields)
                     //{
                     //    bool trg = false;

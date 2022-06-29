@@ -16,7 +16,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 
 ////// Модууль управления двигателями и гироскопом
 
-namespace ShipManagers.Components.Thrusters
+namespace SpaceEngineers.ShipManagers.INOP.THR
 {
     public sealed class Program : MyGridProgram
     {
@@ -40,7 +40,7 @@ namespace ShipManagers.Components.Thrusters
         {
             /// Комманды для управления двигателями, использовать только их
 
-            switch(args)
+            switch (args)
             {
                 case "INIT":
                     Thruster.FindComponents();
@@ -89,8 +89,9 @@ namespace ShipManagers.Components.Thrusters
                     break;
 
                 case "SAVE":
-                    convPosz = Thruster.remoteControl.GetPosition();
-                    dockPosz = Thruster.remoteControl.GetPosition() + Thruster.remoteControl.WorldMatrix.Backward * 15;
+                    Thruster.SaveConnector();
+                    convPosz = Thruster.GetConectorPos();
+                    dockPosz = Thruster.GetConectorPos();
                     break;
                 case "CONV":
                     Thruster.FlyTO(convPosz);
@@ -98,6 +99,13 @@ namespace ShipManagers.Components.Thrusters
                 case "DOCK":
                     Thruster.FlyTO(dockPosz);
                     break;
+                case "PON":
+                    Thruster.EnableConnector();
+                    break;
+                case "POFF":
+                    Thruster.DisableConnector();
+                    break;
+
             }
 
             Thruster.Update();
@@ -163,13 +171,14 @@ namespace ShipManagers.Components.Thrusters
             /// <summary>
             /// Максимальное ограничение скорости сервера дефолт=100
             /// </summary>
-            public double MaxSpeedServerLimit { get;  set; }
+            public double MaxSpeedServerLimit { get; set; }
 
             public Vector3D DirectionToTarget { get; set; }
 
             ///Блоки управления, пока выбор идет из двух, в дальнейшем убрать кокпит
             public IMyRemoteControl remoteControl;//пока public
             private IMyCockpit cockpit;
+            private IMyShipConnector targetConnector;
 
             private IMyTextPanel cruiseControlLCD;
             private IMyTextPanel verticalControlLCD;
@@ -185,6 +194,8 @@ namespace ShipManagers.Components.Thrusters
             private List<IMyThrust> thrustersForward;
             private List<IMyThrust> thrustersBackward;
 
+            private List<IMyShipConnector> connectors;
+
             private List<IMyGyro> gyros;
 
             // Тага по всем двигателям и сумма тяг двигателей
@@ -194,6 +205,13 @@ namespace ShipManagers.Components.Thrusters
             private double accRight = 0;
             private double accForward = 0;
             private double accBack = 0;
+
+            private double calcAccUp = 0;
+            private double calcAccDown = 0;
+            private double calcAccLeft = 0;
+            private double calcAccRight = 0;
+            private double calcAccForward = 0;
+            private double calcAccBack = 0;
 
             private double ThrustUp = 0;
             private double ThrustDown = 0;
@@ -266,30 +284,32 @@ namespace ShipManagers.Components.Thrusters
                 thrustersForward = new List<IMyThrust>();
                 thrustersBackward = new List<IMyThrust>();
 
+                connectors = new List<IMyShipConnector>();
+
                 gyros = new List<IMyGyro>();
 
                 AltHoldKP = 1;
                 AltHoldKD = 1;
 
                 PidKP = 1;
-                PidKD = 400;
+                PidKD = 65;
                 PidKI = 0;
-                MaxSpeedServerLimit = 100;
+                MaxSpeedServerLimit = 200;
 
 
-        }
+            }
 
             /// <summary>
             /// Инищиализация всех компонентов, ОБЯЗАТЕЛЬНО выполнить при наличии пилота в кокпите или радио блоке, распределение тяги по двигателям только так работает????
             /// </summary>
-        public void FindComponents()
+            public void FindComponents()
             {
                 mainProgram.Echo("-----Thruster setup init---");
 
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
                 mainProgram.GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == mainProgram.Me.CubeGrid);
 
-                thrusters = blocks.Where(b => b is IMyThrust).Select(t => t as IMyThrust).ToList();
+                thrusters = blocks.Where(b => b is IMyThrust).Where(t => !t.CustomName.Contains("Brake")).Select(t => t as IMyThrust).ToList();
                 mainProgram.Echo($"Total thrusters: {thrusters.Count}");
 
                 gyros = blocks.Where(b => b is IMyGyro).Select(t => t as IMyGyro).ToList();
@@ -298,13 +318,15 @@ namespace ShipManagers.Components.Thrusters
                 cockpit = blocks.Where(b => b is IMyCockpit).FirstOrDefault() as IMyCockpit;
                 remoteControl = blocks.Where(b => b is IMyRemoteControl).FirstOrDefault() as IMyRemoteControl;
 
-                if ((!thrusters.Any())|| (!gyros.Any()))
+                connectors = blocks.Where(b => b is IMyShipConnector).Select(t => t as IMyShipConnector).ToList();
+
+                if (!thrusters.Any() || !gyros.Any())
                 {
                     mainProgram.Echo("No thrusters or gyro, init FAIL");
                     return;
                 }
 
-                if ((cockpit == null) && (remoteControl == null))
+                if (cockpit == null && remoteControl == null)
                 {
                     mainProgram.Echo("No cocpit or remote ctr, init FAIL");
                     return;
@@ -353,6 +375,14 @@ namespace ShipManagers.Components.Thrusters
                 accBack = thrustersBackward.Sum(t => t.MaxEffectiveThrust);
                 mainProgram.Echo($"Thr back: {thrustersBackward.Count}");
 
+                totalMass = cockpit.CalculateShipMass().TotalMass;
+                calcAccUp = accUp / totalMass;
+                calcAccDown = accDown / totalMass;
+                calcAccLeft = accLeft / totalMass;
+                calcAccRight = accRight / totalMass;
+                calcAccForward = accForward / totalMass;
+                calcAccBack = accBack / totalMass;
+
                 mainProgram.Echo("------Init completed----------");
 
                 ClearOverrideGyros();
@@ -364,18 +394,12 @@ namespace ShipManagers.Components.Thrusters
             /// </summary>
             public void Update()
             {
-                var accUp = thrustersUp.Sum(t => t.MaxEffectiveThrust);
-                var accDown = thrustersDown.Sum(t => t.MaxEffectiveThrust);
-                var accLeft = thrustersLeft.Sum(t => t.MaxEffectiveThrust);
-                var accRight = thrustersRight.Sum(t => t.MaxEffectiveThrust);
-                var accForward = thrustersForward.Sum(t => t.MaxEffectiveThrust);
-                var accBack = thrustersBackward.Sum(t => t.MaxEffectiveThrust);
 
                 GetLocalParams();
 
 
-                if(GyrosHold)
-                SetGyro(HoldGyros());
+                if (GyrosHold)
+                    SetGyro(HoldGyros());
 
                 PrintData();
 
@@ -416,11 +440,11 @@ namespace ShipManagers.Components.Thrusters
             public void SwhitchGyrosHold()
             {
                 GyrosHold = !GyrosHold;
-               if(GyrosHold)
+                if (GyrosHold)
                 {
                     OverrideGyros();
                 }
-               else
+                else
                 {
                     ClearOverrideGyros();
                 }
@@ -433,6 +457,43 @@ namespace ShipManagers.Components.Thrusters
                 if (!GyrosHold)
                     SwhitchGyrosHold();
 
+            }
+
+
+            public void SaveConnector()
+            {
+                var actConn = connectors.Where(c => c.Status == MyShipConnectorStatus.Connected).FirstOrDefault();
+                if (actConn != null)
+                {
+                    targetConnector = actConn.OtherConnector;
+                }
+
+            }
+
+            public IMyShipConnector GetSavedConnector()
+            {
+                if (targetConnector != null)
+                    return targetConnector;
+                return null;
+            }
+
+            public Vector3D GetConectorPos()
+            {
+                if (targetConnector != null)
+                    return cockpit.GetPosition();
+                return Vector3D.Zero;
+            }
+
+            public void EnableConnector()
+            {
+                if (targetConnector != null)
+                    targetConnector.Enabled = true;
+            }
+
+            public void DisableConnector()
+            {
+                if (targetConnector != null)
+                    targetConnector.Enabled = false;
             }
 
             /// <summary>
@@ -539,7 +600,7 @@ namespace ShipManagers.Components.Thrusters
 
                     case ControlType.RemoteControl:
                         return new Vector3D(remoteControl.GetPosition());
-           
+
                 }
 
                 return new Vector3D(0, 0, 0);
@@ -564,7 +625,8 @@ namespace ShipManagers.Components.Thrusters
                 cruiseControlLCD?.WriteText(
                     $"Mass: {totalMass} kg" +
                     $"\nMTOW: {maxTakeOffWheight}" +
-                    $"\nPayload:{Math.Round(totalMass / maxTakeOffWheight * 100, 1)} % ", false);
+                    $"\nPayload:{Math.Round(totalMass / maxTakeOffWheight * 100, 1)} %" +
+                    $"ACCs:\nU:{calcAccUp}\nD:{calcAccDown}\nL:{calcAccLeft}\nR:{calcAccRight}\nF:{calcAccForward}\nB:{calcAccBack} ", false);
 
                 cruiseControlSurf?.WriteText(
                     $"CC: {CruiseControl}" +
@@ -581,7 +643,7 @@ namespace ShipManagers.Components.Thrusters
                     $"\nDist {Math.Sqrt(distSqrToPoint)} ", false);
             }
 
-         
+
             /// <summary>
             /// Полет на заданную точку
             /// </summary>
@@ -593,6 +655,7 @@ namespace ShipManagers.Components.Thrusters
                 ThrustLeft = 0;
                 ThrustUp = 0;
 
+
                 var targetPos = targetPosition - currentPosition;
                 distSqrToPoint = Vector3D.DistanceSquared(targetPosition, currentPosition);
 
@@ -601,13 +664,16 @@ namespace ShipManagers.Components.Thrusters
                 var dirLeft = targetPos.Dot(localLeft);
                 var dirUp = targetPos.Dot(localUp);
 
-                var accFwd = (2 * fwdDir) / deltaTime;//Ускорение по осям
+                var accFwd = 2 * fwdDir / deltaTime;//Ускорение по осям
+                ForwardPid.ClampI = accFwd;
                 ThrustForward = -ForwardPid.SetK(PidKP, PidKD, PidKI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;//Тяга в Н
 
-                var accLeft = (2 * dirLeft) / deltaTime;
+                var accLeft = 2 * dirLeft / deltaTime;
+                LeftPid.ClampI = accLeft;
                 ThrustLeft = -LeftPid.SetK(PidKP, PidKD, PidKI).SetPID(accLeft, accLeft, accLeft, deltaTime).GetSignal() * totalMass;
 
-                var accUp = (2 * dirUp) / deltaTime;
+                var accUp = 2 * dirUp / deltaTime;
+                UpPid.ClampI = accUp;
                 AltCorrThrust = UpPid.SetK(PidKP, PidKD, PidKI).SetPID(accUp, accUp, accUp, deltaTime).GetSignal() * totalMass;
 
                 ThrustUp = -totalWheight.Dot(localUp) + AltCorrThrust;
@@ -618,7 +684,7 @@ namespace ShipManagers.Components.Thrusters
                     ThrustDown = ThrustUp;
                 }
 
-                if (distSqrToPoint < 1) 
+                if (distSqrToPoint < 1)
                 {
                     FlyToPoint = false;
                     ClerarOverideEngines();
@@ -657,10 +723,10 @@ namespace ShipManagers.Components.Thrusters
                 var fwdDir = targetPos.Dot(localForward);
                 var dirLeft = targetPos.Dot(localLeft);
 
-                var accFwd = (2 * fwdDir) / deltaTime;
+                var accFwd = 2 * fwdDir / deltaTime;
                 ThrustForward = -ForwardPid.SetK(KP, KD, KI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;
 
-                var accLeft = (2 * dirLeft) / deltaTime;
+                var accLeft = 2 * dirLeft / deltaTime;
                 ThrustLeft = -LeftPid.SetK(KP, KD, KI).SetPID(accLeft, accLeft, accLeft, deltaTime).GetSignal() * totalMass;
 
 
@@ -668,9 +734,9 @@ namespace ShipManagers.Components.Thrusters
                 var vertSpeed = VertSpeedLimit;
                 double AltCorrThrust = 0;
                 PIDRegulator pid = new PIDRegulator();
-                deltaVSpeed = (vertSpeed) - (upSpeedComponent);
+                deltaVSpeed = vertSpeed - upSpeedComponent;
 
-                var upAcc = (2 * deltaVSpeed) / deltaTime;
+                var upAcc = 2 * deltaVSpeed / deltaTime;
                 AltCorrThrust = pid.SetK(AltHoldKP, AltHoldKD, 0).SetPID(upAcc, upAcc, upAcc, deltaTime).GetSignal() * totalMass;
 
                 ThrustUp = -totalWheight.Dot(localUp) + AltCorrThrust;
@@ -694,7 +760,7 @@ namespace ShipManagers.Components.Thrusters
                 deltaAlt = radioAlt - altHolding;
                 altHolding += moveY;
 
-                var upAcc = (2 * deltaAlt) / deltaTime;
+                var upAcc = 2 * deltaAlt / deltaTime;
                 AltCorrThrust -= pid.SetK(AltHoldKP, AltHoldKD, 0).SetPID(upAcc, upAcc, upAcc, deltaTime).GetSignal() * totalMass;
 
                 ThrustUp = -totalWheight.Dot(localUp - lineraVelocity) + AltCorrThrust;
@@ -738,12 +804,12 @@ namespace ShipManagers.Components.Thrusters
 
                 foreach (var tr in thrustersLeft)
                 {
-                    tr.ThrustOverridePercentage = (float)(ThrustLeft) / (float)accLeft;
+                    tr.ThrustOverridePercentage = (float)ThrustLeft / (float)accLeft;
                 }
 
                 foreach (var tr in thrustersRight)
                 {
-                    tr.ThrustOverridePercentage = -(float)(ThrustLeft) / (float)accRight;
+                    tr.ThrustOverridePercentage = -(float)ThrustLeft / (float)accRight;
                 }
 
                 foreach (var tr in thrustersForward)
@@ -765,7 +831,7 @@ namespace ShipManagers.Components.Thrusters
                         totalMass = cockpit.CalculateShipMass().PhysicalMass;
                         naturalGravity = cockpit.GetNaturalGravity();
                         totalWheight = totalMass * naturalGravity;
-                        cockpit.TryGetPlanetElevation(MyPlanetElevation.Surface,out radioAlt);
+                        cockpit.TryGetPlanetElevation(MyPlanetElevation.Surface, out radioAlt);
                         cockpit.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out baroAlt);
 
                         currentPosition = cockpit.GetPosition();
@@ -813,7 +879,14 @@ namespace ShipManagers.Components.Thrusters
                         break;
                 }
 
-                maxTakeOffWheight = accUp / naturalGravity.Length();
+                if (!naturalGravity.IsZero())
+                {
+                    maxTakeOffWheight = accUp / naturalGravity.Length();
+                }
+                else
+                {
+                    maxTakeOffWheight = accUp;
+                }
 
             }
 
@@ -889,6 +962,8 @@ namespace ShipManagers.Components.Thrusters
             public double Kd { get; set; } = 1;
             public double Ki { get; set; } = 1;
 
+            public double ClampI { get; set; }
+
             private double prevD = 0;
             public double DeltaTimer { get; set; } = 1;
 
@@ -921,7 +996,9 @@ namespace ShipManagers.Components.Thrusters
                 D = (inputD - prevD) / DeltaTimer;
                 prevD = inputD;
 
-                I = I + inputI * DeltaTimer;
+                I += inputI * DeltaTimer;
+                I = Math.Clamp(I, ClampI, ClampI);
+
                 return this;
             }
 

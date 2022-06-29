@@ -15,7 +15,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 
 
-namespace SpaceEngineers.ShipManagers.Components.RotorTurret
+namespace SpaceEngineers.ShipManagers.INOP.ROTOR
 
 {
     public sealed class Program : MyGridProgram
@@ -33,9 +33,6 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
         private Vector3D targetPosition;
         private Vector3D targetSpeed;
 
-       // private Func<IMyTerminalBlock, int, MyDetectedEntityInfo> _getWeaponTarget;
-
-
 
         public Program()
         {
@@ -49,16 +46,11 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
             listener = IGC.RegisterBroadcastListener(missileTagResiever);
             listener.SetMessageCallback(missileTagResiever);
 
- 
-
         }
-
-        //public MyDetectedEntityInfo? GetWeaponTarget(IMyTerminalBlock weapon, int weaponId = 0) =>
-        //       _getWeaponTarget?.Invoke(weapon, weaponId) ?? null;
 
         public void Main(string args, UpdateType updateSource)
         {
-            switch(args)
+            switch (args)
             {
                 case "init":
                     Base.SetUpRotors();
@@ -102,7 +94,7 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
                     double.TryParse(str[4], out targetSpeed.Y);
                     double.TryParse(str[5], out targetSpeed.Z);
 
-                   // Base.SetTarget(targetPosition, targetSpeed);
+                    // Base.SetTarget(targetPosition, targetSpeed);
                 }
             }
         }
@@ -119,6 +111,8 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
             public int ElevationModifier { get; set; }
             public int RotateModifier { get; set; }
             public int BulletSpeed { get; set; }
+            public double WeaponAttackDistance { get; set; }
+            public double WeaponDeviation { get; private set; }
 
             private IMyBlockGroup group;
             private IMyShipController control;
@@ -131,6 +125,8 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
             private Vector3D targetPosition;
             private Vector3D targetSpeed;
             private Vector3D gravity;
+
+            private double targetDistanceSqr = 0;
 
             private Program mainPrgoram;
 
@@ -149,12 +145,18 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
             private double impactTime = 0;
             private double deltaGravity = 0;
 
+            double spiralRadius = 10;
+            double maxSpiralTime = 50;
+
+
             public RotorBase(Program _mainPrgoram)
             {
                 mainPrgoram = _mainPrgoram;
                 RotateModifier = 5;
-                ElevationModifier = -3;
-                BulletSpeed = 400;
+                ElevationModifier = -5;
+                BulletSpeed = 5000;
+                WeaponAttackDistance = 1000;
+
             }
 
             public void SetUpRotors()
@@ -222,11 +224,12 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
                 {
                     if (HasTarget)
                     {
-                        if(target.IsEmpty())
+
+                        if (target.IsEmpty())
                         {
                             HasTarget = false;
 
-                            foreach(var tur in turrets)
+                            foreach (var tur in turrets)
                             {
                                 tur.Shoot = false;
                             }
@@ -236,29 +239,21 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
 
                         AutoRotation();
 
+                        mainPrgoram.Echo($"DD: {targetDistanceSqr}");
 
-                        var trg = (targetPosition - (statorHorizontal.GetPosition() - statorHorizontal.WorldMatrix.Up * ElevationModifier));
-                        var cam = camera.WorldMatrix.Forward;
-
-                        var dev = Math.Acos(Vector3D.Normalize(trg).Dot(cam)) *180/3.14;
-
-
-                        mainPrgoram.Echo($"DEV: {dev}");
-                        if (Math.Abs(dev) < 5) 
+                        if (Math.Abs(WeaponDeviation) < 5 && targetDistanceSqr < WeaponAttackDistance * WeaponAttackDistance)
                         {
-                            //shootTime++;
-                            //if (shootTime > 60) 
-                            //{
-                            //    shootTime = 0;
-                            //    cannonId++;
-                            //    turrets[cannonId].ApplyAction("ShootOnce");
 
-                            //    if (cannonId == turrets.Count-1)
-                            //        cannonId = 0;
-                            //}
                             foreach (var tur in turrets)
                             {
                                 tur.Shoot = true;
+                            }
+                        }
+                        else
+                        {
+                            foreach (var tur in turrets)
+                            {
+                                tur.Shoot = false;
                             }
                         }
                     }
@@ -276,9 +271,9 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
 
             public void ManualControl()
             {
-                if ((!control.Closed) || (!statorHorizontal.Closed) || (!statorVertical.Closed))
+                if (!control.Closed || !statorHorizontal.Closed || !statorVertical.Closed)
                 {
-                   if ((control.IsUnderControl) && (camera.IsActive))
+                    if (control.IsUnderControl && camera.IsActive)
                     {
                         UnderControl = true;
                         var rotIndicator = control.RotationIndicator;
@@ -297,7 +292,7 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
             public void SetTarget(Vector3D pos, Vector3D speed)
             {
                 targetPosition = pos;
-                targetSpeed = speed;            
+                targetSpeed = speed;
             }
 
             public void SetTarget(MyDetectedEntityInfo info)
@@ -313,7 +308,7 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
                 gravity = control.GetNaturalGravity();
                 var myPos = statorHorizontal.GetPosition() - statorHorizontal.WorldMatrix.Up * ElevationModifier;
 
-                var calcTargetPos = CalcInterceptPos(myPos, 5000, targetPosition, targetSpeed) + Spiral(myPos);// + GravityCompensation(myPos, targetPosition);
+                var calcTargetPos = CalcInterceptPos(myPos, BulletSpeed, targetPosition, targetSpeed) + Spiral(myPos);// + GravityCompensation(myPos, targetPosition);
 
                 calcTargetPos = VectorTransform(calcTargetPos, statorHorizontal.WorldMatrix.GetOrientation());
                 float azimuth = (float)Math.Atan2(-calcTargetPos.X, calcTargetPos.Z);
@@ -324,10 +319,13 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
 
                 statorHorizontal.TargetVelocityRad = azimuthDelta * RotateModifier;
                 statorVertical.TargetVelocityRad = (elevationDelta - (float)Math.PI / 2) * RotateModifier;
+
+                WeaponDeviation = Math.Acos(Vector3D.Normalize(targetPosition - myPos).Dot(camera.WorldMatrix.Forward)) * 180 / 3.14;
             }
 
             private Vector3D CalcInterceptPos(Vector3D basePos, double buletSpeed, Vector3D targetPos, Vector3D targetSpeed)
             {
+                targetDistanceSqr = Vector3D.DistanceSquared(basePos, targetPos);
 
                 Vector3D directionToTarget = Vector3D.Normalize(targetPos - basePos);
 
@@ -349,30 +347,29 @@ namespace SpaceEngineers.ShipManagers.Components.RotorTurret
 
             private Vector3D GravityCompensation(Vector3D basePos, Vector3D targetPos)
             {
-                var dir = (targetPos - basePos);
+                var dir = targetPos - basePos;
 
                 mainPrgoram.Echo($"dir: {dir.Length()}");
                 impactTime = dir.Length() / BulletSpeed;
 
-                deltaGravity = (0.5 * control.GetNaturalGravity().Length() * impactTime * impactTime) / 2;
+                deltaGravity = 0.5 * control.GetNaturalGravity().Length() * impactTime * impactTime / 2;
                 mainPrgoram.Echo($"DELTA: {deltaGravity}");
 
-                return (-1) * Vector3D.Normalize(gravity) * deltaGravity;
+                return -1 * Vector3D.Normalize(gravity) * deltaGravity;
 
             }
 
             public Vector3D Spiral(Vector3D dist)
             {
-                double radius = 1;
-                double maxSpiralTime = 50;
+
 
                 spiralTime++;
                 if (spiralTime > maxSpiralTime)
                     spiralTime = 0;
 
-                var fwd = statorHorizontal.WorldMatrix.Forward * radius;
-                var up = statorHorizontal.WorldMatrix.Up * radius;
-                var left = (statorHorizontal.WorldMatrix.Left) * radius;
+                var fwd = statorHorizontal.WorldMatrix.Forward * spiralRadius;
+                var up = statorHorizontal.WorldMatrix.Up * spiralRadius;
+                var left = statorHorizontal.WorldMatrix.Left * spiralRadius;
 
                 double angle = 2 * Math.PI * spiralTime / maxSpiralTime;
 
