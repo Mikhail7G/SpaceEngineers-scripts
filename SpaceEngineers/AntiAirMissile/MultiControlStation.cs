@@ -488,13 +488,17 @@ namespace SpaceEngineers.MultiControlStation
                 MergeBlock = groupBlocks.FirstOrDefault(b => b is IMyShipMergeBlock) as IMyShipMergeBlock;
                 SensorBlock = groupBlocks.FirstOrDefault(b => b is IMySensorBlock) as IMySensorBlock;
 
-                Trusters = groupBlocks.Where(b => b is IMyThrust)
-                                               .Where(b => b.Orientation.Forward == Base6Directions.GetOppositeDirection(RemotControl.Orientation.Forward))
-                                               .Select(t => t as IMyThrust).ToList();
+                if (RemotControl != null)
+                {
 
-                ManevricTrusters = groupBlocks.Where(b => b is IMyThrust)
-                                              .Where(b => b.Orientation.Forward != Base6Directions.GetOppositeDirection(RemotControl.Orientation.Forward))
-                                              .Select(t => t as IMyThrust).ToList();
+                    Trusters = groupBlocks.Where(b => b is IMyThrust)
+                                                   .Where(b => b.Orientation.Forward == Base6Directions.GetOppositeDirection(RemotControl.Orientation.Forward))
+                                                   .Select(t => t as IMyThrust).ToList();
+
+                    ManevricTrusters = groupBlocks.Where(b => b is IMyThrust)
+                                                  .Where(b => b.Orientation.Forward != Base6Directions.GetOppositeDirection(RemotControl.Orientation.Forward))
+                                                  .Select(t => t as IMyThrust).ToList();
+                }
 
                 Gyros = groupBlocks.Where(b => b is IMyGyro).Select(g => g as IMyGyro).ToList();
                 Warheads = groupBlocks.Where(b => b is IMyWarhead).Select(w => w as IMyWarhead).ToList();
@@ -682,7 +686,7 @@ namespace SpaceEngineers.MultiControlStation
 
             public void SensorDetection()
             {
-                if (SensorBlock != null)
+                if ((!SensorBlock.Closed) && (SensorBlock != null)) 
                 {
                     SensorBlock.Enabled = true;
                     var det = SensorBlock.LastDetectedEntity;

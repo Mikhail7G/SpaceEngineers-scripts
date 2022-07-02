@@ -22,6 +22,8 @@ namespace ShipManagers.Components.Radar
 
         /////////////////////////////////////////////////////////////
 
+        const UpdateType CommandUpdate = UpdateType.Trigger | UpdateType.Terminal;
+
         string antennaName = "Ant";
         string missileTagSender = "ch1R";//Отправляем в канал ракет координаты цели
         string beeperName = "Beeper";
@@ -31,6 +33,9 @@ namespace ShipManagers.Components.Radar
         public string LcdRadarStatus = "RadarSta";
         public string LcdTargetStatus = "RadarTarget";
         public string observerCameraName = "radarCamOBS";
+
+        public string radarAlarmNorm = "Тревога 1";
+        public string radarAlarmTargetLost = "Тревога 2";
 
         CameraRadar Radar;
         IMyRadioAntenna antenna;//антенна для передачи данных ракете, правильный метод
@@ -54,46 +59,60 @@ namespace ShipManagers.Components.Radar
 
         }
 
-        public void Main(string args)
+        public void Main(string args, UpdateType updateType)
         {
-            switch(args)
+            if ((updateType & CommandUpdate) != 0) 
+                Commands(args);
+
+            Radar.RadarUpdate();
+            SendMessageRadio();
+            RadarSound();
+
+
+        }
+
+        public void Commands(string command)
+        {
+            string comm = command.ToUpper();
+
+            switch (comm)
             {
-                case "init":
+                case "RADAR.INIT":
                     Radar.InitRadar();
                     break;
-                case "scan":
+                case "RADAR.SCAN":
                     Radar.ScanOnce();
                     break;
-                case "lock":
+                case "RADAR.LOCK":
                     Radar.TargetPrecisionFollowing();
                     break;
-                case "lockcenter":
+                case "RADAR.LOCKCENTER":
                     Radar.TargetFollowing();
                     break;
             }
 
-            Radar.RadarUpdate();
-            SendMessageRadio();
+        }
 
-
+        public void RadarSound()
+        {
             if (Radar.TrackTarget)
             {
                 radarSoundTimer++;
 
-                if (radarSoundTimer > 120) 
+                if (radarSoundTimer > 120)
                 {
                     beeper.Play();
                     radarSoundTimer = 0;
                 }
-                if(Radar.LOCClosed)
+                if (Radar.LOCClosed)
                 {
-                    beeper.SelectedSound = "Тревога 1";
-                  
+                    beeper.SelectedSound = radarAlarmNorm;
+
                 }
                 else
                 {
-                    beeper.SelectedSound = "Тревога 2";
-   
+                    beeper.SelectedSound = radarAlarmTargetLost;
+
                 }
             }
             else

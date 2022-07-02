@@ -292,8 +292,8 @@ namespace SpaceEngineers.ShipManagers.INOP.THR
                 AltHoldKD = 1;
 
                 PidKP = 1;
-                PidKD = 65;
-                PidKI = 0;
+                PidKD = 100;
+                PidKI = 1;
                 MaxSpeedServerLimit = 200;
 
 
@@ -665,15 +665,15 @@ namespace SpaceEngineers.ShipManagers.INOP.THR
                 var dirUp = targetPos.Dot(localUp);
 
                 var accFwd = 2 * fwdDir / deltaTime;//Ускорение по осям
-                ForwardPid.ClampI = accFwd;
+                ForwardPid.ClampI = fwdDir;
                 ThrustForward = -ForwardPid.SetK(PidKP, PidKD, PidKI).SetPID(accFwd, accFwd, accFwd, deltaTime).GetSignal() * totalMass;//Тяга в Н
 
                 var accLeft = 2 * dirLeft / deltaTime;
-                LeftPid.ClampI = accLeft;
+                LeftPid.ClampI = dirLeft;
                 ThrustLeft = -LeftPid.SetK(PidKP, PidKD, PidKI).SetPID(accLeft, accLeft, accLeft, deltaTime).GetSignal() * totalMass;
 
                 var accUp = 2 * dirUp / deltaTime;
-                UpPid.ClampI = accUp;
+                UpPid.ClampI = dirUp;
                 AltCorrThrust = UpPid.SetK(PidKP, PidKD, PidKI).SetPID(accUp, accUp, accUp, deltaTime).GetSignal() * totalMass;
 
                 ThrustUp = -totalWheight.Dot(localUp) + AltCorrThrust;
@@ -962,7 +962,7 @@ namespace SpaceEngineers.ShipManagers.INOP.THR
             public double Kd { get; set; } = 1;
             public double Ki { get; set; } = 1;
 
-            public double ClampI { get; set; }
+            public double ClampI { get; set; } = 0;
 
             private double prevD = 0;
             public double DeltaTimer { get; set; } = 1;
@@ -997,7 +997,7 @@ namespace SpaceEngineers.ShipManagers.INOP.THR
                 prevD = inputD;
 
                 I += inputI * DeltaTimer;
-                I = Math.Clamp(I, ClampI, ClampI);
+                I = MathHelper.Clamp(I, -ClampI, ClampI);
 
                 return this;
             }

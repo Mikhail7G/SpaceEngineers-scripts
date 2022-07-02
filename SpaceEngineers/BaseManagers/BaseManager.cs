@@ -26,8 +26,9 @@ namespace SpaceEngineers.BaseManagers
         string lcdPowerSystemName = "LCD Power";
         string lcdPartsName = "LCD Parts";
         string lcdInventoryDebugName = "LCD Debug";
-        string lcdPowerDetailedName = "LCD power full";
-        string lcdNanobotName = "LCD nano";
+        string lcdPowerDetailedName = "LCD Power full";
+        string lcdNanobotName = "LCD Nano";
+        string lcdRefinereyName = "LCD Refinerey";
 
         string assemblersSpecialOperationsName = "[sp]";
 
@@ -42,6 +43,7 @@ namespace SpaceEngineers.BaseManagers
         IMyTextPanel detailedPowerPanel;
         IMyTextPanel partsPanel;
         IMyTextPanel nanobotDisplay;
+        IMyTextPanel refinereysDisplay;
 
         IMyTextSurface mainDisplay;
 
@@ -68,6 +70,7 @@ namespace SpaceEngineers.BaseManagers
         bool useAutoBuildSystem = false;
         bool getOreFromTransports = false;
         bool useNanobotAutoBuild = false;
+        bool useRefinereysOperations = false;
 
         int totalIngnotStorageVolume = 0;
         int freeIngnotStorageVolume = 0;
@@ -96,6 +99,10 @@ namespace SpaceEngineers.BaseManagers
         Dictionary<string, int> ingnotsDict;
         Dictionary<string, int> partsDictionary;
         Dictionary<string, int> partsRequester;
+
+        //Печки
+        Dictionary<string, float> refsUpgradeList;
+        List<MyProductionItem> refinereysItems;
 
         Dictionary<MyDefinitionId, int> nanobotBuildQueue;
 
@@ -167,6 +174,9 @@ namespace SpaceEngineers.BaseManagers
             partsRequester = new Dictionary<string, int>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
 
+            refsUpgradeList = new Dictionary<string, float>();
+            refinereysItems = new List<MyProductionItem>();
+
             dataSystem = new MyIni();
             GetIniData();
 
@@ -199,7 +209,7 @@ namespace SpaceEngineers.BaseManagers
                     Echo($"Script stopped");
                     break;
                 case "PRINTBPS":
-                    Echo("Try prunt pbs names");
+                    Echo("Try print pbs names");
                     PrintAllBluepritnsNames();
                     break;
                 case "NANO":
@@ -226,7 +236,7 @@ namespace SpaceEngineers.BaseManagers
         {
             FindLcds();
             FindInventories();
-            WriteDebugText();
+            //WriteDebugText();
 
             switch (currentTick)
             {
@@ -247,10 +257,13 @@ namespace SpaceEngineers.BaseManagers
                     NanobotOperations();
                     PrintNanobotQueue();
                     break;
+                case 4:
+                    RefinereysPrintData();
+                    break;
             }
 
             currentTick++;
-            if (currentTick == 4)
+            if (currentTick == 5)
                 currentTick = 0;
 
         }
@@ -285,6 +298,7 @@ namespace SpaceEngineers.BaseManagers
                 useAutoBuildSystem = dataSystem.Get("Operations", "AutoBuildSystem").ToBoolean();
                 getOreFromTransports = dataSystem.Get("Operations", "TransferOreFromTransports").ToBoolean();
                 useNanobotAutoBuild = dataSystem.Get("Operations", "UseNanobotAutoBuild").ToBoolean();
+                useRefinereysOperations = dataSystem.Get("Operations", "UseRefinereyOperations").ToBoolean();
 
                 //Containers
                 oreStorageName = dataSystem.Get("ContainerNames", "oreStorageName").ToString();
@@ -298,6 +312,7 @@ namespace SpaceEngineers.BaseManagers
                 lcdInventoryDebugName = dataSystem.Get("DisplaysNames", "lcdInventoryDebugName").ToString();
                 lcdPowerDetailedName = dataSystem.Get("DisplaysNames", "lcdPowerDetailedName").ToString();
                 lcdNanobotName = dataSystem.Get("DisplaysNames", "NanobotDisplayName").ToString();
+                lcdRefinereyName = dataSystem.Get("DisplaysNames", "lcdRefinereyName").ToString();
 
                 //Tags
                 assemblersSpecialOperationsName = dataSystem.Get("TagsNames", "assemblersSpecialOperationsTagName").ToString();
@@ -323,14 +338,16 @@ namespace SpaceEngineers.BaseManagers
                 dataSystem.Set("Operations", "AutoBuildSystem", false);
                 dataSystem.Set("Operations", "TransferOreFromTransports", false);
                 dataSystem.Set("Operations", "UseNanobotAutoBuild", false);
+                dataSystem.Set("Operations", "UseRefinereyOperations", false);
 
                 dataSystem.AddSection("DisplaysNames");
                 dataSystem.Set("DisplaysNames", "lcdInventoryIngnotsName", "LCD Inventory");
                 dataSystem.Set("DisplaysNames", "lcdPowerSystemName", "LCD Power");
                 dataSystem.Set("DisplaysNames", "lcdPowerDetailedName", "LCD power full");
                 dataSystem.Set("DisplaysNames", "lcdPartsName", "LCD Parts");
-                dataSystem.Set("DisplaysNames", "NanobotDisplayName", "LCD nano");
+                dataSystem.Set("DisplaysNames", "NanobotDisplayName", "LCD Nano");
                 dataSystem.Set("DisplaysNames", "lcdInventoryDebugName", "LCD Debug");
+                dataSystem.Set("DisplaysNames", "lcdRefinereyName", "LCD Refinerey");
 
                 dataSystem.AddSection("ContainerNames");
                 dataSystem.Set("ContainerNames", "oreStorageName", "Ore");
@@ -351,6 +368,7 @@ namespace SpaceEngineers.BaseManagers
         public void PrintAllBluepritnsNames()
         {
             debugPanel?.WriteText("", false);
+            debugPanel?.WriteText("\n<--------Production blocks--------->", true);
 
             var blueprints = new List<MyProductionItem>();
             var ass = assemblers.Where(q => !q.IsQueueEmpty).ToList();
@@ -363,6 +381,45 @@ namespace SpaceEngineers.BaseManagers
                     debugPanel?.WriteText($"{bp.BlueprintId}\n", true);
                 }
             }
+
+            debugPanel?.WriteText("\n<--------Ore blocks--------->", true);
+            debugPanel?.WriteText("\n<--------UPGRADES--------->", true);
+
+            List<MyProductionItem> items = new List<MyProductionItem>();
+
+            var refs = refinereys.ToList();
+            foreach (var r in refs)
+            {
+                r.GetQueue(items);
+                debugPanel?.WriteText($"\nQQ:{items.Count}", true);
+
+                var upg = r as IMyUpgradableBlock;
+                Dictionary<string, float> upgradeList = new Dictionary<string, float>();
+                upg?.GetUpgrades(out upgradeList);
+
+                debugPanel?.WriteText($"\n{r.CustomName}", true);
+                foreach (var bp in upgradeList)
+                {
+                    debugPanel?.WriteText($"\n{bp}", true);
+                }
+            }
+            debugPanel?.WriteText("\n<--------END--------->", true);
+
+            //List<ITerminalAction> act = new List<ITerminalAction>();
+            //refs[0].GetActions(act);
+
+            //List<ITerminalProperty> prop = new List<ITerminalProperty>();
+            //refs[0].GetProperties(prop);
+            //foreach (var a in act)
+            //{
+            //    debugPanel?.WriteText($"\nacts: {a.Name}", true);
+            //}
+            //debugPanel?.WriteText("\n<--------PRP--------->", true);
+            //foreach (var a in prop)
+            //{
+            //    debugPanel?.WriteText($"\nPROP: {a}", true);
+            //}
+
         }
 
         /// <summary>
@@ -425,6 +482,16 @@ namespace SpaceEngineers.BaseManagers
                 Echo($"NANOBOT LCDs found:{lcdNanobotName}");
             }
 
+            if ((refinereysDisplay == null) || (refinereysDisplay.Closed))
+            {
+                refinereysDisplay = GridTerminalSystem.GetBlockWithName(lcdRefinereyName) as IMyTextPanel;
+            }
+            else
+            {
+                Echo($"Refinerey LCDs found:{lcdRefinereyName}");
+            }
+
+
             AddInstructions();
         }
 
@@ -436,11 +503,11 @@ namespace SpaceEngineers.BaseManagers
             List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType(blocks);
 
-            debugPanel.WriteText("", false);
+            debugPanel?.WriteText("", false);
 
             foreach (var b in blocks)
             {
-                debugPanel.WriteText($"\n{b.BlockDefinition}",true);
+                debugPanel?.WriteText($"\n{b.BlockDefinition}",true);
             }
 
         }
@@ -492,8 +559,9 @@ namespace SpaceEngineers.BaseManagers
             Echo($"Parts replace system: {needReplaceParts}");
             Echo($"Power mng system: {usePowerManagmentSystem}");
             Echo($"Get ore frm outer: {getOreFromTransports}");
+            Echo($"Refinerey ops: {useRefinereysOperations}");
 
-            Echo(">>>-------------------------------<<<");
+            Echo(">>>-------------------------------<<<"); 
 
             AddInstructions();
         }
@@ -521,6 +589,77 @@ namespace SpaceEngineers.BaseManagers
         public void SwitchPowerMode()
         {
             usePowerManagmentSystem = !usePowerManagmentSystem;
+        }
+
+
+        public void RefinereysPrintData()
+        {
+
+            Echo("----Refinerey status--------");
+
+            if (refinereysDisplay == null)
+                return;
+
+            refinereysDisplay?.WriteText("", false);
+            refinereysDisplay?.WriteText("<<-----------ORES----------->>", false);
+
+            foreach (var refs in refinereys)
+            {
+                if (refs is IMyUpgradableBlock)
+                {
+                    var upgradeBlock = refs as IMyUpgradableBlock;
+                    upgradeBlock?.GetUpgrades(out refsUpgradeList);
+
+                    Echo($"\n{refs.CustomName}");
+
+                    foreach (var ul in refsUpgradeList)
+                    {
+                        Echo($"\n{ul}");
+                    }
+                    Echo("\n-----------");
+
+                    refs.GetQueue(refinereysItems);
+
+                    refinereysDisplay?.WriteText($"\n{refs.CustomName} effectivity: {refsUpgradeList["Effectiveness"]}", true);
+
+                    foreach (var bp in refinereysItems)
+                    {
+                        //string pbsName = bp.BlueprintId.SubtypeName.Substring(0,bp.BlueprintId.SubtypeName.LastIndexOf("OreToIngot"));
+                        refinereysDisplay?.WriteText($"\n{bp.BlueprintId.SubtypeName} X Def:{bp.Amount} / EFF:{bp.Amount * refsUpgradeList["Effectiveness"]}", true);
+                    }
+                    refinereysDisplay?.WriteText("\n----------", true);
+                }
+                else
+                {
+                    Echo($"\nWARNING:{refs.CustomName} is not upgradable block!"); 
+                }
+
+            }
+
+            AddInstructions();
+        }
+
+        public void LoadRefinereysManually()
+        {
+            var oreInventory = containers.Where(c => c.CustomName.Contains(oreStorageName))
+                                         .Select(i => i.GetInventory(0))
+                                         .Where(i => i.ItemCount>1).ToList();
+
+            var refsInventory = refinereys.Select(i => i.GetInventory(0)).ToList();
+
+
+            if (!oreInventory.Any())
+                return;
+
+
+
+            foreach(var inv in oreInventory)
+            {
+                var item = inv.GetItemAt(0);
+                var availRefsInventory = refsInventory.Where(
+            }
+
+
         }
 
 
