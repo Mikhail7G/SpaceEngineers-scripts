@@ -239,7 +239,7 @@ namespace SpaceEngineers.BaseManagers
         {
             FindLcds();
             FindInventories();
-
+            WriteDebugText();
 
             switch (currentTick)
             {
@@ -363,20 +363,20 @@ namespace SpaceEngineers.BaseManagers
 
         public void PrintAllBluepritnsNames()
         {
-            //debugPanel?.WriteText("", false);
-            //debugPanel?.WriteText("\n<--------Production blocks--------->", true);
+            debugPanel?.WriteText("", false);
+            debugPanel?.WriteText("\n<--------Production blocks--------->", true);
 
-            //var blueprints = new List<MyProductionItem>();
-            //var ass = assemblers.Where(q => !q.IsQueueEmpty).ToList();
-            //foreach (var a in ass)
-            //{
-            //    a.GetQueue(blueprints);
+            var blueprints = new List<MyProductionItem>();
+            var ass = assemblers.Where(q => !q.IsQueueEmpty).ToList();
+            foreach (var a in ass)
+            {
+                a.GetQueue(blueprints);
 
-            //    foreach (var bp in blueprints)
-            //    {
-            //        debugPanel?.WriteText($"{bp.BlueprintId}\n", true);
-            //    }
-            //}
+                foreach (var bp in blueprints)
+                {
+                    debugPanel?.WriteText($"{bp.BlueprintId}\n", true);
+                }
+            }
 
             //debugPanel?.WriteText("\n<--------Ore blocks--------->", true);
             //debugPanel?.WriteText("\n<--------UPGRADES--------->", true);
@@ -789,7 +789,10 @@ namespace SpaceEngineers.BaseManagers
             }
 
             ingnotPanel?.WriteText("", true);
-            ingnotPanel?.WriteText($"Total/max ingnot cont volume: {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", false);
+            ingnotPanel?.WriteText($"<<-----------Ingnots----------->>" +
+                                   $"\nContainers:{ingnotInventorys.Count()}" +
+                                   $"\nVolume: {freeIngnotStorageVolume / totalIngnotStorageVolume * 100} % {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", false);
+
 
             foreach (var dict in ingnotsDict.OrderBy(k => k.Key))
             {
@@ -809,17 +812,22 @@ namespace SpaceEngineers.BaseManagers
                 return;
 
             Echo("------Replase Ore from transport------");
-            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks);
 
-            var externalContainers = blocks.Where(b => b is IMyCargoContainer)
-                                           .Where(c => c.IsFunctional)
-                                           .Where(c => c.CubeGrid != Me.CubeGrid)
-                                           .Select(t => t.GetInventory(0)).ToList();
+            //List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            //GridTerminalSystem.GetBlocksOfType(blocks);
+
+            //var externalContainers = blocks.Where(b => b is IMyCargoContainer)
+            //                               .Where(c => c.IsFunctional)
+            //                               .Where(c => c.CubeGrid != Me.CubeGrid)
+            //                               .Select(t => t.GetInventory(0)).ToList();
+
+            var externalContainers = containers.Where(c => c.IsFunctional)
+                                               .Where(c => c.CubeGrid != Me.CubeGrid)
+                                               .Select(i => i.GetInventory(0)).ToList();
 
             var targetInventory = containers.Where(c => c.CustomName.Contains(oreStorageName))
-                                           .Select(i => i.GetInventory(0))
-                                           .Where(i => !i.IsFull);
+                                            .Select(i => i.GetInventory(0))
+                                            .Where(i => !i.IsFull);
 
             Echo($"Ext conts {externalContainers.Count}");
 
@@ -969,7 +977,9 @@ namespace SpaceEngineers.BaseManagers
             }
 
             partsPanel?.WriteText("", true);
-            partsPanel?.WriteText($"Total/max parts cont volume: {freePartsStorageVolume} / {totalPartsStorageVolume} T", false);
+            partsPanel?.WriteText($"<<-----------Parts----------->>" +
+                                  $"\nContainers:{partsInventorys.Count()}" +
+                                  $"\nVolume: {freePartsStorageVolume/ totalPartsStorageVolume*100} % {freePartsStorageVolume} / {totalPartsStorageVolume} T ", false);
 
             foreach (var dict in partsDictionary.OrderBy(k => k.Key))
             {
@@ -1030,7 +1040,8 @@ namespace SpaceEngineers.BaseManagers
             int windCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_WindTurbine").Count();
             int gasCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_HydrogenEngine").Count();
 
-            detailedPowerPanel?.WriteText($"Wind: {windCount} React: {reactorsCount} Gas: {gasCount}", true);
+            detailedPowerPanel?.WriteText("<--------Gens status--------->", true);
+            detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} Gas: {gasCount}", true);
 
             foreach (var react in reactorInventory)
             {
@@ -1057,8 +1068,9 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void PrintPowerStatus()
         {
-            powerPanel?.WriteText("", false);
-            powerPanel?.WriteText($"BatteryStatus:\nTotal/Max power:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {Math.Round(currentStoredPower / maxStoredPower * 100, 1)} %"
+            powerPanel?.WriteText("", false); 
+            powerPanel?.WriteText("<--------Power status--------->", true);
+            powerPanel?.WriteText($"\nBatteryStatus:\nTotal/Max power:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {Math.Round(currentStoredPower / maxStoredPower * 100, 1)} %"
                                  + $"\nInput/Output:{Math.Round(inputPower, 2)} / {Math.Round(outputPower, 2)} {(inputPower > outputPower ? "+" : "-")} MWt/h "
                                  + $"\nGens maxOut/Out: {Math.Round(generatorsMaxOutputPower, 2)} / {Math.Round(generatorsOutputPower, 2)} MWT", true);
 
@@ -1208,6 +1220,7 @@ namespace SpaceEngineers.BaseManagers
             }
 
             nanobotDisplay.WriteText("", false);
+            nanobotDisplay.WriteText("<<-----------Nanobot module----------->>", true);
             nanobotDisplay?.WriteText($"Block:{nanobotBuildModule.CustomName} auto mode: {useNanobotAutoBuild}", true);
 
             foreach (var comp in nanobotBuildQueue.OrderBy(c => c.Key.ToString()))
