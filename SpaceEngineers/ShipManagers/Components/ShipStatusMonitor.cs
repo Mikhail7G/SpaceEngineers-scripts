@@ -27,6 +27,7 @@ namespace SpaceEngineers.ShipManagers.ShipMonitor
         {
             ShipComplexMonitor = new ShipMonitor(this);
             ShipComplexMonitor.Init();
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
 
         }
 
@@ -45,16 +46,23 @@ namespace SpaceEngineers.ShipManagers.ShipMonitor
 
         public class ShipMonitor
         {
-            public string cargoLCDName = "CargoLCD";
+            public string cargoLCDName = "CargoShipLCD";
 
-            private Program program;
+           
+            
+            string largeNanoName = "SELtdLargeNanobotDrillSystem";
+            string smallNanoName = "SELtdSmallNanobotDrillSystem";
 
-            private IMyTextPanel cargoPanel;
+            Program program;
 
-            private List<IMyCargoContainer> containers;
-            private List<IMyBatteryBlock> batteries;
-            private  List<IMyPowerProducer> generators;
-          
+            IMyTextPanel cargoPanel;
+
+            List<IMyCargoContainer> containers;
+            List<IMyBatteryBlock> batteries;
+            List<IMyPowerProducer> generators;
+            List<IMyTerminalBlock> nanoDrill;
+            Dictionary<string, int> oreList;
+
             public ShipMonitor(Program mainProg)
             {
                 program = mainProg;
@@ -62,6 +70,8 @@ namespace SpaceEngineers.ShipManagers.ShipMonitor
                 containers = new List<IMyCargoContainer>();
                 batteries = new List<IMyBatteryBlock>();
                 generators = new List<IMyPowerProducer>();
+                nanoDrill = new List<IMyTerminalBlock>();
+                oreList = new Dictionary<string, int>();
 
             }
 
@@ -85,6 +95,16 @@ namespace SpaceEngineers.ShipManagers.ShipMonitor
                                     .Where(c => c.CubeGrid == program.Me.CubeGrid)
                                     .Select(t => t as IMyPowerProducer).ToList();
 
+                if (program.Me.CubeGrid.GridSizeEnum == MyCubeSize.Large)
+                {
+                    nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == largeNanoName).ToList();
+                }
+                else if (program.Me.CubeGrid.GridSizeEnum == MyCubeSize.Small)
+                {
+                    nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == smallNanoName).ToList();
+                }
+
+
                 cargoPanel = program.GridTerminalSystem.GetBlockWithName(cargoLCDName) as IMyTextPanel;
  
 
@@ -95,7 +115,43 @@ namespace SpaceEngineers.ShipManagers.ShipMonitor
                 program.Echo($"Total" +
                            $"\nConts: {containers.Count}" +
                            $"\nBatt: {batteries.Count}" +
-                           $"\nGens: {generators.Count}");
+                           $"\nGens: {generators.Count}" +
+                           $"\nNanoDrills:{nanoDrill.Count}");
+
+                FindOres();
+            }
+
+            public void FindOres()
+            {
+                var containerInventory = containers.Select(c => c.GetInventory(0));
+                oreList.Clear();
+
+                foreach (var inventory in containerInventory)
+                {
+                    List<MyInventoryItem> items = new List<MyInventoryItem>();
+                    inventory.GetItems(items);
+
+                    foreach (var item in items)
+                    {
+                        if (item.Type.TypeId == "MyObjectBuilder_Ore")
+                        {
+                            if (oreList.ContainsKey(item.Type.SubtypeId))
+                            {
+                                oreList[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                            }
+                            else
+                            {
+                                oreList.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                            }
+                        }
+                    }
+                }
+            }
+
+            public void PrintOres()
+            {
+                if (cargoPanel == null)
+                    return;
             }
 
 

@@ -65,6 +65,7 @@ namespace SpaceEngineers.BaseManagers
 
         IMyTerminalBlock nanobotBuildModule;
 
+        bool autorun = false;
         bool needReplaceIngnots = false;
         bool needReplaceParts = false;
         bool usePowerManagmentSystem = false;
@@ -98,11 +99,13 @@ namespace SpaceEngineers.BaseManagers
         Dictionary<string, int> ingnotsDict;
         Dictionary<string, int> partsDictionary;
         Dictionary<string, int> partsRequester;
+        Dictionary<string, int> ammoDictionary;
 
         //Печки
         Dictionary<IMyRefinery, float> refinereyEfectivity;
         Dictionary<string, float> refsUpgradeList;
         List<MyProductionItem> refinereysItems;
+        List<MyInventoryItem> reactorFuel;
 
         Dictionary<MyDefinitionId, int> nanobotBuildQueue;
 
@@ -173,14 +176,22 @@ namespace SpaceEngineers.BaseManagers
             partsDictionary = new Dictionary<string, int>();
             partsRequester = new Dictionary<string, int>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
+            ammoDictionary = new Dictionary<string, int>();
 
             refsUpgradeList = new Dictionary<string, float>();
             refinereysItems = new List<MyProductionItem>();
             refinereyEfectivity = new Dictionary<IMyRefinery, float>();
+            reactorFuel = new List<MyInventoryItem>();
 
             dataSystem = new MyIni();
             monitor = new PerformanceMonitor(this);
             GetIniData();
+
+            if(autorun)
+            {
+                Runtime.UpdateFrequency = UpdateFrequency.Update100;
+                Echo($"Script running");
+            }
 
         }
 
@@ -239,7 +250,7 @@ namespace SpaceEngineers.BaseManagers
         {
             FindLcds();
             FindInventories();
-            WriteDebugText();
+           // WriteDebugText();
 
             switch (currentTick)
             {
@@ -290,6 +301,8 @@ namespace SpaceEngineers.BaseManagers
             }
             else
             {
+                autorun = dataSystem.Get("Operations", "Autorun").ToBoolean();
+
                 needReplaceIngnots = dataSystem.Get("Operations", "ReplaceIngnots").ToBoolean();
                 needReplaceParts = dataSystem.Get("Operations", "ReplaceParts").ToBoolean();
                 usePowerManagmentSystem = dataSystem.Get("Operations", "PowerManagmentSystem").ToBoolean();
@@ -329,6 +342,7 @@ namespace SpaceEngineers.BaseManagers
                 Echo("Custom data empty!");
 
                 dataSystem.AddSection("Operations");
+                dataSystem.Set("Operations", "Autorun", false);
                 dataSystem.Set("Operations", "ReplaceIngnots", false);
                 dataSystem.Set("Operations", "ReplaceParts", false);
                 dataSystem.Set("Operations", "PowerManagmentSystem", false);
@@ -364,7 +378,7 @@ namespace SpaceEngineers.BaseManagers
         public void PrintAllBluepritnsNames()
         {
             debugPanel?.WriteText("", false);
-            debugPanel?.WriteText("\n<--------Production blocks--------->", true);
+            debugPanel?.WriteText("<--------Production blocks--------->\n", true);
 
             var blueprints = new List<MyProductionItem>();
             var ass = assemblers.Where(q => !q.IsQueueEmpty).ToList();
@@ -374,47 +388,9 @@ namespace SpaceEngineers.BaseManagers
 
                 foreach (var bp in blueprints)
                 {
-                    debugPanel?.WriteText($"{bp.BlueprintId}\n", true);
+                    debugPanel?.WriteText($"{bp.BlueprintId.SubtypeId}\n", true);
                 }
             }
-
-            //debugPanel?.WriteText("\n<--------Ore blocks--------->", true);
-            //debugPanel?.WriteText("\n<--------UPGRADES--------->", true);
-
-            //List<MyProductionItem> items = new List<MyProductionItem>();
-
-            //var refs = refinereys.ToList();
-            //foreach (var r in refs)
-            //{
-            //    r.GetQueue(items);
-            //    debugPanel?.WriteText($"\nQQ:{items.Count}", true);
-
-            //    var upg = r as IMyUpgradableBlock;
-            //    Dictionary<string, float> upgradeList = new Dictionary<string, float>();
-            //    upg?.GetUpgrades(out upgradeList);
-
-            //    debugPanel?.WriteText($"\n{r.CustomName}", true);
-            //    foreach (var bp in upgradeList)
-            //    {
-            //        debugPanel?.WriteText($"\n{bp}", true);
-            //    }
-            //}
-            //debugPanel?.WriteText("\n<--------END--------->", true);
-
-            //List<ITerminalAction> act = new List<ITerminalAction>();
-            //refs[0].GetActions(act);
-
-            //List<ITerminalProperty> prop = new List<ITerminalProperty>();
-            //refs[0].GetProperties(prop);
-            //foreach (var a in act)
-            //{
-            //    debugPanel?.WriteText($"\nacts: {a.Name}", true);
-            //}
-            //debugPanel?.WriteText("\n<--------PRP--------->", true);
-            //foreach (var a in prop)
-            //{
-            //    debugPanel?.WriteText($"\nPROP: {a}", true);
-            //}
 
         }
 
@@ -502,10 +478,10 @@ namespace SpaceEngineers.BaseManagers
         {
             debugPanel?.WriteText("", false);
 
-            //List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-            //GridTerminalSystem.GetBlocksOfType(blocks);
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks);
 
-            //debugPanel?.WriteText("", false);
+            debugPanel?.WriteText("", false);
 
             //foreach (var b in blocks)
             //{
@@ -655,8 +631,11 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var refs in refinereyEfectivity)
             {
+                var load = refs.Key.InputInventory.CurrentVolume.ToIntSafe() / refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
+
                 refs.Key.GetQueue(refinereysItems);
-                refinereysDisplay?.WriteText($"\n{refs.Key.CustomName} effectivity: {refs.Value}", true);
+                refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
+                                             $"\nEffectivity: {refs.Value} Load: {load} %", true);
 
                 foreach (var bp in refinereysItems)
                 {
@@ -767,6 +746,8 @@ namespace SpaceEngineers.BaseManagers
             freeIngnotStorageVolume = ingnotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalIngnotStorageVolume = ingnotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
 
+            double precentageVolume = Math.Round(((double)freeIngnotStorageVolume / (double)totalIngnotStorageVolume) * 100,1);
+
             foreach (var inventory in ingnotInventorys)
             {
                 List<MyInventoryItem> items = new List<MyInventoryItem>();
@@ -791,7 +772,7 @@ namespace SpaceEngineers.BaseManagers
             ingnotPanel?.WriteText("", true);
             ingnotPanel?.WriteText($"<<-----------Ingnots----------->>" +
                                    $"\nContainers:{ingnotInventorys.Count()}" +
-                                   $"\nVolume: {freeIngnotStorageVolume / totalIngnotStorageVolume * 100} % {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", false);
+                                   $"\nVolume: {precentageVolume} % {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", false);
 
 
             foreach (var dict in ingnotsDict.OrderBy(k => k.Key))
@@ -955,6 +936,8 @@ namespace SpaceEngineers.BaseManagers
             freePartsStorageVolume = partsInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalPartsStorageVolume = partsInventorys.Sum(i => i.MaxVolume.ToIntSafe());
 
+            double precentageVolume = Math.Round(((double)freePartsStorageVolume / (double)totalPartsStorageVolume) * 100, 1);
+
             foreach (var inventory in partsInventorys)
             {
                 List<MyInventoryItem> items = new List<MyInventoryItem>();
@@ -973,13 +956,26 @@ namespace SpaceEngineers.BaseManagers
                             partsDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
                         }
                     }
+
+                    //if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+                    //{
+                    //    if (partsDictionary.ContainsKey(item.Type.SubtypeId))
+                    //    {
+                    //        partsDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                    //    }
+                    //    else
+                    //    {
+                    //        partsDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                    //    }
+                    //}
+
                 }
             }
 
             partsPanel?.WriteText("", true);
             partsPanel?.WriteText($"<<-----------Parts----------->>" +
                                   $"\nContainers:{partsInventorys.Count()}" +
-                                  $"\nVolume: {freePartsStorageVolume/ totalPartsStorageVolume*100} % {freePartsStorageVolume} / {totalPartsStorageVolume} T ", false);
+                                  $"\nVolume: {precentageVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T ", false);
 
             foreach (var dict in partsDictionary.OrderBy(k => k.Key))
             {
@@ -1033,8 +1029,6 @@ namespace SpaceEngineers.BaseManagers
 
             detailedPowerPanel?.WriteText("", false);
 
-            List<MyInventoryItem> items = new List<MyInventoryItem>();
-
             var reactorInventory = generators.Where(g => g.HasInventory).Select(g => g.GetInventory(0)).ToList();
             int reactorsCount = generators.Where(g => g is IMyReactor).Count();
             int windCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_WindTurbine").Count();
@@ -1045,13 +1039,13 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var react in reactorInventory)
             {
-                items.Clear();
-                react.GetItems(items);
 
-                if (items.Any())
+                react.GetItems(reactorFuel);
+
+                if (reactorFuel.Any())
                 {
-                    string lowCount = items[0].Amount < reactorMinFuel ? "TO LOW" : "";
-                    detailedPowerPanel?.WriteText($"\nR: {items[0].Type.SubtypeId} / {items[0].Amount} {lowCount}", true);
+                    string lowCount = reactorFuel[0].Amount < reactorMinFuel ? "TO LOW" : "";
+                    detailedPowerPanel?.WriteText($"\nR: {reactorFuel[0].Type.SubtypeId} / {reactorFuel[0].Amount} {lowCount}", true);
                 }
                 else
                 {
