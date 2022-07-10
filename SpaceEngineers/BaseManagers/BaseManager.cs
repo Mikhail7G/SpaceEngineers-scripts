@@ -101,6 +101,8 @@ namespace SpaceEngineers.BaseManagers
         Dictionary<string, int> partsRequester;
         Dictionary<string, int> ammoDictionary;
 
+        Dictionary<string, int> blueprintData;
+
         //Печки
         Dictionary<IMyRefinery, float> refinereyEfectivity;
         Dictionary<string, float> refsUpgradeList;
@@ -177,6 +179,7 @@ namespace SpaceEngineers.BaseManagers
             partsRequester = new Dictionary<string, int>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
             ammoDictionary = new Dictionary<string, int>();
+            blueprintData = new Dictionary<string, int>();
 
             refsUpgradeList = new Dictionary<string, float>();
             refinereysItems = new List<MyProductionItem>();
@@ -187,7 +190,7 @@ namespace SpaceEngineers.BaseManagers
             monitor = new PerformanceMonitor(this);
             GetIniData();
 
-            if(autorun)
+            if (autorun)
             {
                 Runtime.UpdateFrequency = UpdateFrequency.Update100;
                 Echo($"Script running");
@@ -221,8 +224,8 @@ namespace SpaceEngineers.BaseManagers
                     Runtime.UpdateFrequency = UpdateFrequency.None;
                     Echo($"Script stopped");
                     break;
-                case "PRINTBPS":
-                    Echo("Try print pbs names");
+                case "SAVEBPS":
+                    Echo("Try save bps names");
                     PrintAllBluepritnsNames();
                     break;
                 case "NANO":
@@ -369,6 +372,8 @@ namespace SpaceEngineers.BaseManagers
                 dataSystem.AddSection("TagsNames");
                 dataSystem.Set("TagsNames", "assemblersSpecialOperationsTagName", "[sp]");
 
+                dataSystem.AddSection("Blueprints");
+
                 Me.CustomData = dataSystem.ToString();
             }
 
@@ -389,8 +394,21 @@ namespace SpaceEngineers.BaseManagers
                 foreach (var bp in blueprints)
                 {
                     debugPanel?.WriteText($"{bp.BlueprintId.SubtypeId}\n", true);
+
+                    if (blueprintData.ContainsKey(bp.BlueprintId.SubtypeId.ToString()))
+                    {
+                        continue;
+                    }
+                    blueprintData.Add(bp.BlueprintId.SubtypeId.ToString(), 0);
                 }
             }
+
+            foreach(var key in blueprintData)
+            {
+                dataSystem.Set("Blueprints", key.Key, key.Value);
+            }
+
+            Me.CustomData = dataSystem.ToString();
 
         }
 
@@ -769,10 +787,10 @@ namespace SpaceEngineers.BaseManagers
                 }
             }
 
-            ingnotPanel?.WriteText("", true);
+            ingnotPanel?.WriteText("", false);
             ingnotPanel?.WriteText($"<<-----------Ingnots----------->>" +
                                    $"\nContainers:{ingnotInventorys.Count()}" +
-                                   $"\nVolume: {precentageVolume} % {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", false);
+                                   $"\nVolume: {precentageVolume} % {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", true);
 
 
             foreach (var dict in ingnotsDict.OrderBy(k => k.Key))
@@ -929,6 +947,7 @@ namespace SpaceEngineers.BaseManagers
             totalPartsStorageVolume = 0;
             freePartsStorageVolume = 0;
             partsDictionary.Clear();
+            ammoDictionary.Clear();
 
             var partsInventorys = containers.Where(c => c.CustomName.Contains(componentsStorageName))
                                             .Select(i => i.GetInventory(0));
@@ -957,37 +976,41 @@ namespace SpaceEngineers.BaseManagers
                         }
                     }
 
-                    //if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
-                    //{
-                    //    if (partsDictionary.ContainsKey(item.Type.SubtypeId))
-                    //    {
-                    //        partsDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
-                    //    }
-                    //    else
-                    //    {
-                    //        partsDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
-                    //    }
-                    //}
+                    if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+                    {
+                        if (ammoDictionary.ContainsKey(item.Type.SubtypeId))
+                        {
+                            ammoDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                        }
+                        else
+                        {
+                            ammoDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                        }
+                    }
 
                 }
             }
 
-            partsPanel?.WriteText("", true);
+            partsPanel?.WriteText("", false);
             partsPanel?.WriteText($"<<-----------Parts----------->>" +
                                   $"\nContainers:{partsInventorys.Count()}" +
-                                  $"\nVolume: {precentageVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T ", false);
+                                  $"\nVolume: {precentageVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T ", true);
+
 
             foreach (var dict in partsDictionary.OrderBy(k => k.Key))
             {
-                if (partsRequester.ContainsKey(dict.Key))
-                {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} / {partsRequester[dict.Key]}", true);
-                }
-                else
-                {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
-                }
+                partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                
             }
+
+            partsPanel?.WriteText("\n<<-----------Ammo----------->>", true);
+
+            foreach (var dict in ammoDictionary.OrderBy(k => k.Key))
+            {
+                partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+               
+            }
+
 
             monitor.AddInstructions("");
         }//DisplayParts()
@@ -1215,7 +1238,7 @@ namespace SpaceEngineers.BaseManagers
 
             nanobotDisplay.WriteText("", false);
             nanobotDisplay.WriteText("<<-----------Nanobot module----------->>", true);
-            nanobotDisplay?.WriteText($"Block:{nanobotBuildModule.CustomName} auto mode: {useNanobotAutoBuild}", true);
+            nanobotDisplay?.WriteText($"\nBlock:{nanobotBuildModule.CustomName} auto mode: {useNanobotAutoBuild}", true);
 
             foreach (var comp in nanobotBuildQueue.OrderBy(c => c.Key.ToString()))
             {
