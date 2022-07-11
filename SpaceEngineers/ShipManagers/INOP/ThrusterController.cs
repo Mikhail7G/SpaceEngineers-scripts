@@ -16,7 +16,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 
 ////// Модууль управления двигателями и гироскопом
 
-namespace SpaceEngineers.ShipManagers.INOP.THR
+namespace SpaceEngineers.ShipManagers.INOP
 {
     public sealed class Program : MyGridProgram
     {

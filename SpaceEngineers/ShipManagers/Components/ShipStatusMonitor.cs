@@ -14,7 +14,7 @@ using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 
-namespace SpaceEngineers.ShipManagers.ShipMonitor
+namespace SpaceEngineers.ShipManagers.Components
 {
     public sealed class Program : MyGridProgram
     {
@@ -48,8 +48,8 @@ namespace SpaceEngineers.ShipManagers.ShipMonitor
         {
             public string cargoLCDName = "CargoShipLCD";
 
-           
-            
+
+
             string largeNanoName = "SELtdLargeNanobotDrillSystem";
             string smallNanoName = "SELtdSmallNanobotDrillSystem";
 
@@ -106,7 +106,7 @@ namespace SpaceEngineers.ShipManagers.ShipMonitor
 
 
                 cargoPanel = program.GridTerminalSystem.GetBlockWithName(cargoLCDName) as IMyTextPanel;
- 
+
 
             }
 
@@ -156,7 +156,7 @@ namespace SpaceEngineers.ShipManagers.ShipMonitor
 
 
         }
-      
+
 
         ///END OF SCRIPT///////////////
     }

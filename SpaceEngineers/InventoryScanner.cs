@@ -14,7 +14,7 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-namespace Inventory
+namespace SpaceEngineers
 {
     public sealed class Program : MyGridProgram
     {
@@ -60,7 +60,7 @@ namespace Inventory
 
             var selItem = items.OrderBy(p => p.Type.SubtypeId);
 
-            foreach (var item in selItem) 
+            foreach (var item in selItem)
             {
                 if (item.Type.TypeId == "MyObjectBuilder_Ingot")//слитки
                 {
@@ -103,7 +103,7 @@ namespace Inventory
 
         public void ReplaseParts()
         {
-            foreach(IMyAssembler ass in assemblers)
+            foreach (IMyAssembler ass in assemblers)
             {
                 IMyInventory inventory = ass.GetInventory(1);
                 List<MyInventoryItem> items = new List<MyInventoryItem>();

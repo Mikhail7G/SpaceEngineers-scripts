@@ -91,6 +91,7 @@ namespace SpaceEngineers.BaseManagers
 
         float generatorsMaxOutputPower = 0;
         float generatorsOutputPower = 0;
+        float powerLoadPercentage = 0;
 
 
         int reactorMinFuel = 100;
@@ -226,7 +227,7 @@ namespace SpaceEngineers.BaseManagers
                     break;
                 case "SAVEBPS":
                     Echo("Try save bps names");
-                    PrintAllBluepritnsNames();
+                    SaveAllBluepritnsNames();
                     break;
                 case "NANO":
                     SwitchNanobotMode();
@@ -245,7 +246,6 @@ namespace SpaceEngineers.BaseManagers
                     break;
 
             }
-
         }
 
 
@@ -331,6 +331,23 @@ namespace SpaceEngineers.BaseManagers
 
                 //Tags
                 assemblersSpecialOperationsName = dataSystem.Get("TagsNames", "assemblersSpecialOperationsTagName").ToString();
+
+                //Blueprints
+                List<MyIniKey> keys = new List<MyIniKey>();
+                dataSystem.GetKeys("Blueprints", keys);
+
+                foreach(var key in keys)
+                {
+                    if(blueprintData.ContainsKey(key.Name))
+                    {
+                        blueprintData[key.Name] = dataSystem.Get(key).ToInt32();
+                    }
+                    else
+                    {
+                        blueprintData.Add(key.Name, dataSystem.Get(key).ToInt32());
+                    }
+                }
+
             }
 
             Echo("Script ready to run");
@@ -380,7 +397,22 @@ namespace SpaceEngineers.BaseManagers
             Echo("Custom data ready");
         }
 
-        public void PrintAllBluepritnsNames()
+        public void ReloadData()
+        {
+            dataSystem.Set("Operations", "Autorun", autorun);
+            dataSystem.Set("Operations", "ReplaceIngnots", needReplaceIngnots);
+            dataSystem.Set("Operations", "ReplaceParts", needReplaceParts);
+            dataSystem.Set("Operations", "PowerManagmentSystem", usePowerManagmentSystem);
+            dataSystem.Set("Operations", "DetailedPowerMonitoring", useDetailedPowerMonitoring);
+            dataSystem.Set("Operations", "AutoBuildSystem", useAutoBuildSystem);
+            dataSystem.Set("Operations", "TransferOreFromTransports", getOreFromTransports);
+            dataSystem.Set("Operations", "UseNanobotAutoBuild", useNanobotAutoBuild);
+            dataSystem.Set("Operations", "UseRefinereyOperations", useRefinereysOperations);
+
+            Me.CustomData = dataSystem.ToString();
+        }
+
+        public void SaveAllBluepritnsNames()
         {
             debugPanel?.WriteText("", false);
             debugPanel?.WriteText("<--------Production blocks--------->\n", true);
@@ -405,10 +437,14 @@ namespace SpaceEngineers.BaseManagers
 
             foreach(var key in blueprintData)
             {
+                if(dataSystem.ContainsKey("Blueprints", key.Key))
+                {
+                    continue;
+                }
                 dataSystem.Set("Blueprints", key.Key, key.Value);
             }
 
-            Me.CustomData = dataSystem.ToString();
+            ReloadData();
 
         }
 
@@ -645,15 +681,16 @@ namespace SpaceEngineers.BaseManagers
                 return;
 
             refinereysDisplay?.WriteText("", false);
-            refinereysDisplay?.WriteText("<<-----------ORES----------->>", false);
+            refinereysDisplay?.WriteText("<<-----------ORES----------->>", true);
 
             foreach (var refs in refinereyEfectivity)
             {
-                var load = refs.Key.InputInventory.CurrentVolume.ToIntSafe() / refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
+                double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
+                double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
 
                 refs.Key.GetQueue(refinereysItems);
                 refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
-                                             $"\nEffectivity: {refs.Value} Load: {load} %", true);
+                                             $"\nEffectivity: {refs.Value} Load: {loadInput} / {loadOuptut} %", true);
 
                 foreach (var bp in refinereysItems)
                 {
@@ -820,25 +857,24 @@ namespace SpaceEngineers.BaseManagers
             //                               .Where(c => c.CubeGrid != Me.CubeGrid)
             //                               .Select(t => t.GetInventory(0)).ToList();
 
-            var externalContainers = containers.Where(c => c.IsFunctional)
-                                               .Where(c => c.CubeGrid != Me.CubeGrid)
-                                               .Select(i => i.GetInventory(0)).ToList();
+            var externalInventory = containers.Where(c => c.IsFunctional)
+                                              .Where(c => c.CubeGrid != Me.CubeGrid)
+                                              .Select(i => i.GetInventory(0)).ToList();
 
             var targetInventory = containers.Where(c => c.CustomName.Contains(oreStorageName))
                                             .Select(i => i.GetInventory(0))
                                             .Where(i => !i.IsFull);
 
-            Echo($"Ext conts {externalContainers.Count}");
+            Echo($"Ext conts {externalInventory.Count}");
 
-            if ((!targetInventory.Any()) || (!externalContainers.Any()))
+            if ((!targetInventory.Any()) || (!externalInventory.Any()))
             {
                 Echo("------No items to transfer-----");
                 return;
             }
 
-            foreach (var cargo in externalContainers)
+            foreach (var cargo in externalInventory)
             {
-
                 var availConts = targetInventory.Where(inv => inv.IsConnectedTo(cargo));
 
                 if (!availConts.Any())
@@ -999,7 +1035,16 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var dict in partsDictionary.OrderBy(k => k.Key))
             {
-                partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                var bd = blueprintData.Where(k => k.Key.Contains(dict.Key));
+
+                if (bd.Any())
+                {
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} / {bd.FirstOrDefault().Value} ", true);
+                }
+                else
+                {
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                }
                 
             }
 
@@ -1007,7 +1052,16 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var dict in ammoDictionary.OrderBy(k => k.Key))
             {
-                partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                var bd = blueprintData.Where(k => k.Key.Contains(dict.Key));
+
+                if (bd.Any())
+                {
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} / {bd.FirstOrDefault().Value} ", true);
+                }
+                else
+                {
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                }
                
             }
 
@@ -1036,6 +1090,8 @@ namespace SpaceEngineers.BaseManagers
 
             generatorsMaxOutputPower = generators.Sum(g => g.MaxOutput);
             generatorsOutputPower = generators.Sum(g => g.CurrentOutput);
+
+            powerLoadPercentage = (float)Math.Round(generatorsOutputPower / generatorsMaxOutputPower * 100, 1);
 
             PowerSystemDetailed();
 
@@ -1087,7 +1143,9 @@ namespace SpaceEngineers.BaseManagers
         {
             powerPanel?.WriteText("", false); 
             powerPanel?.WriteText("<--------Power status--------->", true);
-            powerPanel?.WriteText($"\nBatteryStatus:\nTotal/Max power:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {Math.Round(currentStoredPower / maxStoredPower * 100, 1)} %"
+            powerPanel?.WriteText($"\nBatteryStatus:" +
+                                   $"\nPower Load: {powerLoadPercentage} %" +
+                                   $"\nTotal/Max power:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {Math.Round(currentStoredPower / maxStoredPower * 100, 1)} %"
                                  + $"\nInput/Output:{Math.Round(inputPower, 2)} / {Math.Round(outputPower, 2)} {(inputPower > outputPower ? "+" : "-")} MWt/h "
                                  + $"\nGens maxOut/Out: {Math.Round(generatorsMaxOutputPower, 2)} / {Math.Round(generatorsOutputPower, 2)} MWT", true);
 

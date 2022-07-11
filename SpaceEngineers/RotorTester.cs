@@ -13,7 +13,7 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-namespace RotoTest
+namespace SpaceEngineers
 {
     public sealed class Program : MyGridProgram
     {
@@ -55,15 +55,15 @@ namespace RotoTest
         {
             string[] argRes = args.Split(':');
             int lenght = argRes.Length;
-            if(argRes[0].Length>1)
+            if (argRes[0].Length > 1)
             {
                 string state = argRes[0].ToUpper();
-                switch(state)
+                switch (state)
                 {
                     case "ROTATEMODIFIER":
-                        if(lenght>1)
+                        if (lenght > 1)
                         {
-                            float.TryParse(argRes[1],out rotateModifier);
+                            float.TryParse(argRes[1], out rotateModifier);
                         }
                         break;
                 }
@@ -144,6 +144,6 @@ namespace RotoTest
             testRotator.TargetVelocityRad = (float)Math.Sin(targetAngle * 3.14 / 180 - angle);
         }
 
-        
+
     }
 }

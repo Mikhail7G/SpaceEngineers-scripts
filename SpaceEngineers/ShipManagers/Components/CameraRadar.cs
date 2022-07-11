@@ -13,9 +13,7 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-
-
-namespace ShipManagers.Components.Radar
+namespace SpaceEngineers.ShipManagers.Components
 {
     public sealed class Program : MyGridProgram
     {
@@ -61,7 +59,7 @@ namespace ShipManagers.Components.Radar
 
         public void Main(string args, UpdateType updateType)
         {
-            if ((updateType & CommandUpdate) != 0) 
+            if ((updateType & CommandUpdate) != 0)
                 Commands(args);
 
             Radar.RadarUpdate();
@@ -132,13 +130,13 @@ namespace ShipManagers.Components.Radar
                 Radar.GetPositonAndSpeed(out pos, out speed);
 
                 ///координаты цели
-                string sendingSignal = (pos.X).ToString() +
-                                       "|" + (pos.Y).ToString() +
-                                       "|" + (pos.Z).ToString() +
+                string sendingSignal = pos.X.ToString() +
+                                       "|" + pos.Y.ToString() +
+                                       "|" + pos.Z.ToString() +
 
-                                       "|" + (speed.X).ToString() + //скорость цели
-                                       "|" + (speed.Y).ToString() +
-                                       "|" + (speed.Z).ToString();
+                                       "|" + speed.X.ToString() + //скорость цели
+                                       "|" + speed.Y.ToString() +
+                                       "|" + speed.Z.ToString();
 
                 IGC.SendBroadcastMessage(missileTagSender, sendingSignal, TransmissionDistance.TransmissionDistanceMax);
             }
@@ -267,7 +265,7 @@ namespace ShipManagers.Components.Radar
 
                 mainProgram.Echo($"Total scan cameras: {cameras.Count}");
 
-                if (cameras.Count == 0) 
+                if (cameras.Count == 0)
                 {
                     return;
                 }
@@ -329,7 +327,7 @@ namespace ShipManagers.Components.Radar
             /// </summary>
             public void PrintData()
             {
-                if(cameras.Any())
+                if (cameras.Any())
                     avrCamDist = cameras.Select(c => c as IMyCameraBlock).Sum(cam => cam.AvailableScanRange) / cameras.Count;
 
                 mainProgram.Echo("----Radar vorking normally----");
@@ -363,13 +361,13 @@ namespace ShipManagers.Components.Radar
 
             private void TryScanForward()
             {
-                if (ScanDistance > 0) 
+                if (ScanDistance > 0)
                 {
-                   // if (CameraSelect()) 
+                    // if (CameraSelect()) 
                     {
                         TargetInfo = observerCamera.Raycast(ScanDistance);
-                    
-                        if(!TargetInfo.IsEmpty())
+
+                        if (!TargetInfo.IsEmpty())
                         {
                             HitPos = TargetInfo.HitPosition.Value - TargetInfo.Position + Vector3D.Normalize(TargetInfo.HitPosition.Value - Camera.GetPosition()) * 1;
 
@@ -383,7 +381,7 @@ namespace ShipManagers.Components.Radar
                             HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
                             CalculatedPosition = TargetInfo.HitPosition.Value;
 
-                            DistanceToTarget = TargetInfo.HitPosition.Value - Camera.GetPosition();       
+                            DistanceToTarget = TargetInfo.HitPosition.Value - Camera.GetPosition();
                         }
                         else
                         {
@@ -428,7 +426,7 @@ namespace ShipManagers.Components.Radar
                             {
                                 LOCClosed = true;
                                 LOCClosedTime++;
-                               //ппроверка на LOC
+                                //ппроверка на LOC
                             }
                         }
                         else
@@ -445,10 +443,10 @@ namespace ShipManagers.Components.Radar
             }
             private void TryTrackTarget()
             {
-                if(TrackTarget)
+                if (TrackTarget)
                 {
-                    tickLimit = (DistanceToTarget.Length()+10) / 2000 * 60 / cameras.Count;
-                    CalculatedTargetPos = CalculatedPosition + (TargetSpeed * ((int)tickLimit + LOCClosedTime) / 60);
+                    tickLimit = (DistanceToTarget.Length() + 10) / 2000 * 60 / cameras.Count;
+                    CalculatedTargetPos = CalculatedPosition + TargetSpeed * ((int)tickLimit + LOCClosedTime) / 60;
 
                     if (TargetInfo.IsEmpty())
                     {
@@ -492,14 +490,14 @@ namespace ShipManagers.Components.Radar
             }
             private bool CameraSelect(Vector3D scanPoz)
             {
-                var availCamera = cameras.Select(c => c as IMyCameraBlock).Where(c => c.CanScan(scanPoz)); 
+                var availCamera = cameras.Select(c => c as IMyCameraBlock).Where(c => c.CanScan(scanPoz));
                 if (availCamera.Any())
                 {
                     Camera = availCamera.First();
                     CurrentAviableCameras = availCamera.Count();
                     return true;
                 }
-                                         
+
                 return false;
             }
 

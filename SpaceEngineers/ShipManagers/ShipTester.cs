@@ -13,9 +13,7 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-
-
-namespace ShipManagers.ShipTester
+namespace SpaceEngineers.ShipManagers
 {
     public sealed class Program : MyGridProgram
     {
@@ -244,7 +242,7 @@ namespace ShipManagers.ShipTester
             waypoints.Clear();
             remoteControl.ClearWaypoints();
 
-          //  waypoints.Add(remoteControl.GetPosition()+ remoteControl.WorldMatrix.Forward * 0 + remoteControl.WorldMatrix.Left * 0);
+            //  waypoints.Add(remoteControl.GetPosition()+ remoteControl.WorldMatrix.Forward * 0 + remoteControl.WorldMatrix.Left * 0);
             //GPS:PP1:-38797.81:-38669.89:-27402.11:#FF75C9F1:
             waypoints.Add(new Vector3D(-38797.81, -38669.89, -27402.11));
             remoteControl.AddWaypoint(new Vector3D(-38797.81, -38669.89, -27402.11), "1");
@@ -312,13 +310,13 @@ namespace ShipManagers.ShipTester
             deltaAlt = radioAlt - altHolding;
 
             altHolding += cockpit.MoveIndicator.Y;
-            var upAcc = (2 * deltaAlt) / deltaTimePid;
+            var upAcc = 2 * deltaAlt / deltaTimePid;
             AltCorrThrust -= pid.SetK(1, 1, 0).SetPID(upAcc, upAcc, upAcc, deltaTimePid).GetSignal() * shipMass;
 
             UpThrust = -ShipWeight.Dot(remoteControl.WorldMatrix.Up - cockpit.GetShipVelocities().LinearVelocity) + AltCorrThrust;
             UpThrust *= Math.Max(1, cockpit.MoveIndicator.Y * 10);
 
-            if(deltaAlt>1)
+            if (deltaAlt > 1)
             {
                 downThrust = UpThrust;
             }
@@ -334,7 +332,7 @@ namespace ShipManagers.ShipTester
             double dir = 0;
 
             double vec = 0;
-    
+
             ///////////////////////////////БЛОК НАВЕДЕНИЯ ДВИГАТЕЛЕЙ НА ЦЕЛЬ////////////////////////////////////////
             if (waypoints.Count > 0)
             {
@@ -344,10 +342,10 @@ namespace ShipManagers.ShipTester
                 dir = targetPos.Dot(remoteControl.WorldMatrix.Forward);
                 var dirLeft = targetPos.Dot(remoteControl.WorldMatrix.Left);
 
-                accFwd = (2 * dir) / deltaTimePid;
+                accFwd = 2 * dir / deltaTimePid;
                 ForwardThrust -= ForwardPid.SetK(KP, KD, KI).SetPID(accFwd, accFwd, accFwd, deltaTimePid).GetSignal() * shipMass;
 
-                var acLeft = (2 * dirLeft) / deltaTimePid;
+                var acLeft = 2 * dirLeft / deltaTimePid;
                 LeftThrust = -LeftPid.SetK(KP, KD, KI).SetPID(acLeft, acLeft, acLeft, deltaTimePid).GetSignal() * shipMass;
             }
             //////////////////////////////////////////////////////////////////////////////////////////
@@ -379,18 +377,18 @@ namespace ShipManagers.ShipTester
 
             foreach (var tr in thrustersDown)
             {
-                 tr.ThrustOverridePercentage = -(float)downThrust / accDown;
+                tr.ThrustOverridePercentage = -(float)downThrust / accDown;
             }
 
 
             foreach (var tr in thrustersLeft)
             {
-                tr.ThrustOverridePercentage = (float)(LeftThrust) / accLeft;
+                tr.ThrustOverridePercentage = (float)LeftThrust / accLeft;
             }
 
             foreach (var tr in thrustersRight)
             {
-                tr.ThrustOverridePercentage = -(float)(LeftThrust) / accRight;
+                tr.ThrustOverridePercentage = -(float)LeftThrust / accRight;
             }
 
             foreach (var tr in thrustersForward)

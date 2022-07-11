@@ -15,7 +15,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 
 
-namespace SpaceEngineers.MultiControlStation
+namespace SpaceEngineers.AntiAirMissile
 {
     public sealed class Program : MyGridProgram
     {
@@ -75,7 +75,7 @@ namespace SpaceEngineers.MultiControlStation
 
         public Program()
         {
-            targetPosition = new Vector3D(0,0,0);
+            targetPosition = new Vector3D(0, 0, 0);
             targetSpeed = new Vector3D(0, 0, 0);
 
             missileList = new List<ControlledMissile>();
@@ -94,10 +94,10 @@ namespace SpaceEngineers.MultiControlStation
         public void Main(string args)
         {
             string[] arguments = args.Split('|');
-            if(arguments.Length>0)
+            if (arguments.Length > 0)
             {
                 string arg = arguments[0].ToUpper();
-                switch(arg)
+                switch (arg)
                 {
                     case "FIRE"://стрельба залпом
                         FireAll();
@@ -188,7 +188,7 @@ namespace SpaceEngineers.MultiControlStation
                     missile.MissileName = group[i].Name;
 
                     //Приск блоков ракеты и проверка на проварку всех блоков
-                    if (missile.BuildMissile(groupBlocks).MissileReady()) 
+                    if (missile.BuildMissile(groupBlocks).MissileReady())
                     {
                         missileList.Add(missile);
                     }
@@ -218,7 +218,7 @@ namespace SpaceEngineers.MultiControlStation
             Echo($"Radio target rcv channel: {missileTagResiever}");
             Echo($"Station control time: {maxAviableFlightTime} sec");
 
-            if (antenna != null) 
+            if (antenna != null)
             {
                 Echo("Antenna ready");
             }
@@ -227,7 +227,7 @@ namespace SpaceEngineers.MultiControlStation
                 Echo("No radio antenna!");
             }
 
-            if (panel != null) 
+            if (panel != null)
             {
                 Echo("Text panel OK");
             }
@@ -247,7 +247,7 @@ namespace SpaceEngineers.MultiControlStation
 
             Echo("-----Missiles info------");
 
-            foreach(var missile in missileList)
+            foreach (var missile in missileList)
             {
                 missile.DrawMissileInfo(this);
             }
@@ -296,14 +296,14 @@ namespace SpaceEngineers.MultiControlStation
                 return;
             }
 
-            for (int i = 0; i < missileInFlightList.Count; i++) 
+            for (int i = 0; i < missileInFlightList.Count; i++)
             {
-                if(missileInFlightList[i].MissileAlive())
+                if (missileInFlightList[i].MissileAlive())
                 {
                     missileInFlightList[i].UpdateMissile(targetPosition, targetSpeed);
 
                     //Время жизни ракеты, для того чтоб не забивать лист ракет в полете
-                    if (missileInFlightList[i].FlightTime > maxAviableFlightTime * 60) 
+                    if (missileInFlightList[i].FlightTime > maxAviableFlightTime * 60)
                     {
                         missileInFlightList[i].Detonate();
                         missileInFlightList.RemoveAt(i);
@@ -374,7 +374,7 @@ namespace SpaceEngineers.MultiControlStation
                                 $"\nRadio expl dist {missileRadioExplosionDistance} m" +
                                 $"\n----PowerSystems-----" +
                                 $"\nAcc powered: {missile.TotalBatteryPower * 100 / missile.MaxBatteryPower} % " +
-                                $"\n-------------------------", true);  
+                                $"\n-------------------------", true);
         }
 
         /// <summary>
@@ -382,7 +382,7 @@ namespace SpaceEngineers.MultiControlStation
         /// </summary>
         public void FireAll()
         {
-            if(missileList.Count==0)
+            if (missileList.Count == 0)
             {
                 FindMissile();
                 return;
@@ -399,7 +399,7 @@ namespace SpaceEngineers.MultiControlStation
             }
             missileList.Clear();
         }
-      
+
         /// <summary>
         /// Выстрел по одной выбранной ракете
         /// </summary>
@@ -476,7 +476,7 @@ namespace SpaceEngineers.MultiControlStation
 
                 Random rnd;
                 rnd = new Random();
-                wanderTime = rnd.Next(0,100) - 25;
+                wanderTime = rnd.Next(0, 100) - 25;
             }
 
             /// <summary>
@@ -510,7 +510,7 @@ namespace SpaceEngineers.MultiControlStation
 
                 EffectiveEngineThrust = Trusters.Sum(b => b.MaxEffectiveThrust);
 
-                foreach(var batt in Batteries)
+                foreach (var batt in Batteries)
                 {
                     batt.ChargeMode = ChargeMode.Recharge;
                 }
@@ -583,15 +583,15 @@ namespace SpaceEngineers.MultiControlStation
             /// </summary>
             public bool MissileReady()
             {
-                if ((Gyros.Count == 0) || Gyros.Any(b => !b.IsFunctional))
+                if (Gyros.Count == 0 || Gyros.Any(b => !b.IsFunctional))
                     return false;
-                if ((Trusters.Count == 0) || Trusters.Any(b => !b.IsFunctional)) 
+                if (Trusters.Count == 0 || Trusters.Any(b => !b.IsFunctional))
                     return false;
-                if ((RemotControl == null) || (!RemotControl.IsFunctional)) 
+                if (RemotControl == null || !RemotControl.IsFunctional)
                     return false;
-                if ((MergeBlock == null) || (!MergeBlock.IsFunctional)) 
+                if (MergeBlock == null || !MergeBlock.IsFunctional)
                     return false;
-                if ((Batteries.Count == 0) || Batteries.Any(b => !b.IsFunctional))
+                if (Batteries.Count == 0 || Batteries.Any(b => !b.IsFunctional))
                     return false;
 
                 MaxBatteryPower = Batteries.Sum(b => b.MaxStoredPower);
@@ -652,7 +652,7 @@ namespace SpaceEngineers.MultiControlStation
 
                 Vector3D resultVector = Vector3D.Normalize(correctVect).Cross(RemotControl.WorldMatrix.Forward);
 
-                if ((UseHirozonCorrector) && (!natGravity.IsZero()))
+                if (UseHirozonCorrector && !natGravity.IsZero())
                 {
                     targetRoll = Vector3D.Dot(RemotControl.WorldMatrix.Left, Vector3D.Reject(Vector3D.Normalize(-natGravity), RemotControl.WorldMatrix.Forward));
                     targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
@@ -662,7 +662,7 @@ namespace SpaceEngineers.MultiControlStation
 
                 return resultVector;
             }
-          
+
             public void SetGyro(Vector3D axis)
             {
                 foreach (IMyGyro gyro in Gyros)
@@ -675,9 +675,9 @@ namespace SpaceEngineers.MultiControlStation
 
             public void Detonate()
             {
-                foreach(var warhead in Warheads)
+                foreach (var warhead in Warheads)
                 {
-                    if(!warhead.Closed)
+                    if (!warhead.Closed)
                     {
                         warhead.Detonate();
                     }
@@ -686,7 +686,7 @@ namespace SpaceEngineers.MultiControlStation
 
             public void SensorDetection()
             {
-                if ((!SensorBlock.Closed) && (SensorBlock != null)) 
+                if (!SensorBlock.Closed && SensorBlock != null)
                 {
                     SensorBlock.Enabled = true;
                     var det = SensorBlock.LastDetectedEntity;
@@ -735,7 +735,7 @@ namespace SpaceEngineers.MultiControlStation
                 }
             }
 
-            public void UpdateMissile(Vector3D targetPosition,Vector3D targetSpeed)
+            public void UpdateMissile(Vector3D targetPosition, Vector3D targetSpeed)
             {
                 FlightTime++;
 
@@ -746,11 +746,11 @@ namespace SpaceEngineers.MultiControlStation
                     sqrDistance = Vector3D.DistanceSquared(mPos, targetPosition);
 
                     SensorDetection();
-                  
+
                     //расчет точки перехвата цели и поворот гироскопа на цель
                     Vector3D interPos = CalcInterceptPos(mPos, mSpeed, targetPosition, targetSpeed);
 
-                    if (sqrDistance > 1000 * 1000) 
+                    if (sqrDistance > 1000 * 1000)
                     {
                         interPos += Wander(targetPosition);
                     }
@@ -803,7 +803,7 @@ namespace SpaceEngineers.MultiControlStation
 
                 double angle = 2 * Math.PI * spiralTime / maxSpiralTime;
 
-                Vector3D spiral = fwd + (left * Math.Cos(angle) + up * Math.Sin(angle));
+                Vector3D spiral = fwd + left * Math.Cos(angle) + up * Math.Sin(angle);
 
                 return spiral;
             }

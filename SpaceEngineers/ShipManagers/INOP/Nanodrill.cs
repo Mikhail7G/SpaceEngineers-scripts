@@ -19,7 +19,7 @@ using VRage.Game.ModAPI.Ingame.Utilities;
 
 //Garbage script IONP
 
-namespace SpaceEngineers.ShipManagers.INOP.DRIL
+namespace SpaceEngineers.ShipManagers.INOP
 
 {
     public sealed class Program : MyGridProgram

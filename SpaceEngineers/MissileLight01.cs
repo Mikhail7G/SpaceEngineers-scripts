@@ -13,7 +13,7 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-namespace missilelight
+namespace SpaceEngineers
 {
     public sealed class Program : MyGridProgram
     {
@@ -59,7 +59,7 @@ namespace missilelight
         public void Main(string args)
         {
 
-            if(!init)
+            if (!init)
             {
                 entity = GridTerminalSystem.GetBlockWithName("radio") as IMyEntity;
                 RemoteCon = GridTerminalSystem.GetBlockWithName("radio") as IMyRemoteControl;
@@ -85,12 +85,12 @@ namespace missilelight
 
             message = Math.Round(block.GetPosition().X).ToString() +
                 "|" + Math.Round(block.GetPosition().Y).ToString() +
-                "|" + Math.Round(block.GetPosition().Z).ToString() + 
-                "|" + Math.Round(flightAltitude) + 
+                "|" + Math.Round(block.GetPosition().Z).ToString() +
+                "|" + Math.Round(flightAltitude) +
                 "|" + Math.Round(targetDistanse);
 
-            myTextPanel.WriteText("FlightTime: " + timerTick.ToString() + 
-                                  "\nDistance To Target: " + Math.Round(targetDistanse) + 
+            myTextPanel.WriteText("FlightTime: " + timerTick.ToString() +
+                                  "\nDistance To Target: " + Math.Round(targetDistanse) +
                                   "\nMissile Alt: " + Math.Round(flightAltitude));
 
             IGC.SendBroadcastMessage(tag, message, TransmissionDistance.TransmissionDistanceMax);
@@ -137,14 +137,14 @@ namespace missilelight
 
             Vector3D distanseNormalized = Vector3D.Normalize(vec - pos);
 
-            double targetPitch = Math.Acos(Vector3D.Dot(up, distanseNormalized)) - (Math.PI / 2);
-            double targetYaw = Math.Acos(Vector3D.Dot(left, Vector3D.Normalize(Vector3D.Reject(distanseNormalized, up)))) - (Math.PI / 2);
-            double targetRoll = Math.Acos(Vector3D.Dot(left, Vector3D.Reject(Vector3D.Normalize(-RemoteCon.GetNaturalGravity()), fwd))) - (Math.PI / 2);
+            double targetPitch = Math.Acos(Vector3D.Dot(up, distanseNormalized)) - Math.PI / 2;
+            double targetYaw = Math.Acos(Vector3D.Dot(left, Vector3D.Normalize(Vector3D.Reject(distanseNormalized, up)))) - Math.PI / 2;
+            double targetRoll = Math.Acos(Vector3D.Dot(left, Vector3D.Reject(Vector3D.Normalize(-RemoteCon.GetNaturalGravity()), fwd))) - Math.PI / 2;
 
-            return new Vector3D(targetYaw,-targetPitch,targetRoll);
+            return new Vector3D(targetYaw, -targetPitch, targetRoll);
         }
 
-        void SetGyro(Vector3D vec,float power)
+        void SetGyro(Vector3D vec, float power)
         {
             gyro.SetValueFloat("Power", power);
             gyro.SetValueFloat("Yaw", (float)vec.GetDim(0));

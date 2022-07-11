@@ -15,7 +15,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 
 
-namespace SpaceEngineers.ShipManagers.INOP.ROTOR
+namespace SpaceEngineers.ShipManagers.INOP
 
 {
     public sealed class Program : MyGridProgram
@@ -373,7 +373,7 @@ namespace SpaceEngineers.ShipManagers.INOP.ROTOR
 
                 double angle = 2 * Math.PI * spiralTime / maxSpiralTime;
 
-                Vector3D spiral = fwd + (left * Math.Cos(angle) + up * Math.Sin(angle));
+                Vector3D spiral = fwd + left * Math.Cos(angle) + up * Math.Sin(angle);
 
                 return spiral;
             }

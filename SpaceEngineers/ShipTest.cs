@@ -13,9 +13,7 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-
-
-namespace ShipTests
+namespace SpaceEngineers
 {
     public sealed class Program : MyGridProgram
     {
@@ -30,19 +28,19 @@ namespace ShipTests
             _panelLight = GridTerminalSystem.GetBlockWithName("Interior Light") as IMyInteriorLight;
             _textPanel = GridTerminalSystem.GetBlockWithName("LCD Panel") as IMyTextPanel;
 
-           
+
             _stateMachine = RunStuffOverTime();
 
-          
+
             Runtime.UpdateFrequency |= UpdateFrequency.Update1;
         }
 
         public void Main(string argument, UpdateType updateType)
         {
-            
-           // if ((updateType & UpdateType.Once) == UpdateType.Once)
+
+            // if ((updateType & UpdateType.Once) == UpdateType.Once)
             {
-               RunStateMachine();
+                RunStateMachine();
             }
         }
 
@@ -51,7 +49,7 @@ namespace ShipTests
 
             if (_stateMachine != null)
             {
-              
+
                 bool hasMoreSteps = _stateMachine.MoveNext();
 
                 if (!hasMoreSteps)
@@ -67,18 +65,18 @@ namespace ShipTests
             }
         }
 
-       
+
         public IEnumerator<bool> RunStuffOverTime()
         {
 
             _panelLight.Enabled = true;
-           
+
             yield return true;
 
             bool cont = true;
             int i = 0;
 
-            while (cont) 
+            while (cont)
             {
                 _textPanel.WriteText(i.ToString());
                 i++;
