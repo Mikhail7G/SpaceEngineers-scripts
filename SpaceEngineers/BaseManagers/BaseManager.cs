@@ -105,8 +105,8 @@ namespace SpaceEngineers.BaseManagers
         Dictionary<string, int> partsDictionary;
         Dictionary<string, int> partsRequester;
         Dictionary<string, int> ammoDictionary;
+        Dictionary<string, int> buildedIngnotsDictionary;
 
-        // Dictionary<string, int> blueprintData;
         Dictionary<string, string> blueprintData;
 
         //Печки
@@ -115,6 +115,7 @@ namespace SpaceEngineers.BaseManagers
         List<MyProductionItem> refinereysItems;
         List<MyInventoryItem> reactorFuel;
 
+        //Поиск чертежей
         MyProductionItem lastDetectedBlueprintItem;
         MyInventoryItem? lastDetectedConstructItem;
 
@@ -144,7 +145,8 @@ namespace SpaceEngineers.BaseManagers
             partsRequester = new Dictionary<string, int>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
             ammoDictionary = new Dictionary<string, int>();
-            // blueprintData = new Dictionary<string, int>();
+            buildedIngnotsDictionary = new Dictionary<string, int>();
+
             blueprintData = new Dictionary<string, string>();
 
             refsUpgradeList = new Dictionary<string, float>();
@@ -192,7 +194,7 @@ namespace SpaceEngineers.BaseManagers
                     break;
                 case "SAVEBPS":
                     Echo("Try save bps names");
-                    SwitchBluepritnGetter();
+                    SwitchBlueprintGetter();
                     break;
                 case "NANO":
                     SwitchNanobotMode();
@@ -219,7 +221,7 @@ namespace SpaceEngineers.BaseManagers
             FindLcds();
             FindInventories();
             // WriteDebugText();
-            SaveAllBluepritnsNames();
+            SaveAllBlueprintsNames();
 
             switch (currentTick)
             {
@@ -378,106 +380,7 @@ namespace SpaceEngineers.BaseManagers
             Me.CustomData = dataSystem.ToString();
         }
 
-
-        public void SwitchBluepritnGetter()
-        {
-            assemblerBlueprintGetter =!assemblerBlueprintGetter;
-            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersSpecialOperationsName)).First();
-
-            if (assemblerBlueprintGetter)
-            {      
-                SpecialAssemblerLastName = ass.CustomName;
-                ass.CustomName = assemblersSpecialOperationsName + "Assembler ready to copy bps";
-                ass.ClearQueue();
-                ass.SetValueBool("OnOff", false);
-            }
-            else
-            {
-                ass.CustomName = SpecialAssemblerLastName;
-                ass.ClearQueue();
-                ass.SetValueBool("OnOff", true);
-            }
-           
-        }
-
-        /// <summary>
-        /// Сохранение названий черчежей компонентов, в ручном режиме
-        /// </summary>
-        public void SaveAllBluepritnsNames()
-        {
-            if (!assemblerBlueprintGetter)
-                return;
-
-            needReplaceParts = false;
-
-            debugPanel?.WriteText("", false);
-            debugPanel?.WriteText("<--------Production blocks--------->\n", true);
-
-            var targetInventory = containers.Where(c => c.CustomName.Contains(componentsStorageName))
-                                          .Select(i => i.GetInventory(0))
-                                          .Where(i => !i.IsFull);
-
-            var blueprints = new List<MyProductionItem>();
-            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersSpecialOperationsName)).First();
-            var assInv = ass.GetInventory(1);
-
-            ass.CustomName = assemblersSpecialOperationsName + "Assembler ready to copy bps";
-
-            if (ass == null)
-                return;
-
-            ass.GetQueue(blueprints);
-
-            if (blueprints.Count > 1)
-            {
-                ass.ClearQueue();
-                return;
-            }
-
-            if (!ass.IsQueueEmpty)
-            {
-                lastDetectedBlueprintItem = blueprints[0];
-                ass.CustomName = assemblersSpecialOperationsName + $"bps:{lastDetectedBlueprintItem.BlueprintId.SubtypeName}";
-                ass.SetValueBool("OnOff", true);
-                return;
-            }
-
-            if (assInv.ItemCount == 0)
-                return;
-
-            lastDetectedConstructItem = assInv.GetItemAt(assInv.ItemCount - 1);
-            if (lastDetectedConstructItem == null)
-                return;
-
-            ass.CustomName = assemblersSpecialOperationsName + $"item:{lastDetectedConstructItem.Value.Type.SubtypeId}";
-
-            if (assInv.TransferItemTo(targetInventory.First(), 0, null, true))
-                ass.SetValueBool("OnOff", false);
-
-
-            if (!blueprintData.ContainsKey(lastDetectedConstructItem.Value.Type.SubtypeId))
-            {
-                blueprintData.Add(lastDetectedConstructItem.Value.Type.SubtypeId, lastDetectedBlueprintItem.BlueprintId.SubtypeId.ToString());
-            }
-            else
-            {
-                blueprintData[lastDetectedConstructItem.Value.Type.SubtypeId] = lastDetectedBlueprintItem.BlueprintId.SubtypeId.ToString();
-            }
-
-            foreach(var key in blueprintData)
-            {
-                debugPanel?.WriteText($"ITEM:{key.Key} X BP: {key.Value} \n", true);
-            }
-
-            foreach (var key in blueprintData)
-            {
-                dataSystem.Set("Blueprints", key.Key, key.Value);
-            }
-
-            ReloadData();
-
-        }
-
+      
         /// <summary>
         /// Поиск необходимых дисплеев, можно без них
         /// </summary>
@@ -669,6 +572,7 @@ namespace SpaceEngineers.BaseManagers
             Echo($"Power mng system: {usePowerManagmentSystem}");
             Echo($"Get ore frm outer: {getOreFromTransports}");
             Echo($"Refinerey ops: {useRefinereysOperations}");
+            Echo($"Scan blueprints: {assemblerBlueprintGetter}");
 
             Echo(">>>-------------------------------<<<");
 
@@ -710,7 +614,7 @@ namespace SpaceEngineers.BaseManagers
                 return;
 
             refinereysDisplay?.WriteText("", false);
-            refinereysDisplay?.WriteText("<<-----------ORES----------->>", true);
+            refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
 
             foreach (var refs in refinereyEfectivity)
             {
@@ -741,15 +645,12 @@ namespace SpaceEngineers.BaseManagers
                                          .Select(i => i.GetInventory(0))
                                          .Where(i => i.ItemCount > 0).ToList();
 
-
             if (!oreInventory.Any())
                 return;
 
-           
             foreach (var inv in oreInventory)
             {
 
- 
             }
             monitor.AddInstructions("");
         }
@@ -838,7 +739,7 @@ namespace SpaceEngineers.BaseManagers
 
                 foreach (var item in items)
                 {
-                    if (item.Type.TypeId == "MyObjectBuilder_Ingot")//слитки
+                   // if (item.Type.TypeId == "MyObjectBuilder_Ingot")//слитки
                     {
                         if (ingnotsDict.ContainsKey(item.Type.SubtypeId))
                         {
@@ -846,7 +747,7 @@ namespace SpaceEngineers.BaseManagers
                         }
                         else
                         {
-                            ingnotsDict.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                            ingnotsDict.Add(item.ToString(), item.Amount.ToIntSafe());
                         }
                     }
                 }
@@ -1029,7 +930,7 @@ namespace SpaceEngineers.BaseManagers
                         }
                     }
 
-                    if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+                    if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы buildedIngnotsDictionary
                     {
                         if (ammoDictionary.ContainsKey(item.Type.SubtypeId))
                         {
@@ -1040,11 +941,25 @@ namespace SpaceEngineers.BaseManagers
                             ammoDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
                         }
                     }
+
+                    if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Построенные слитки
+                    {
+                        if (buildedIngnotsDictionary.ContainsKey(item.Type.SubtypeId))
+                        {
+                            buildedIngnotsDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                        }
+                        else
+                        {
+                            buildedIngnotsDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                        }
+                    }
+
                 }
             }
 
             partsPanel?.WriteText("", false);
-            partsPanel?.WriteText($"\nContainers:{partsInventorys.Count()}" +
+            partsPanel?.WriteText($"\n<<-----------Production----------->>" +
+                                  $"\nContainers:{partsInventorys.Count()}" +
                                   $"\nVolume: {precentageVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T" +
                                   "\n<<-----------Parts----------->>", true);
 
@@ -1076,6 +991,19 @@ namespace SpaceEngineers.BaseManagers
             }
 
             partsPanel?.WriteText("\n<<-----------As Ingnot----------->>", true);
+
+            foreach (var dict in buildedIngnotsDictionary.OrderBy(k => k.Key))
+            {
+                if (blueprintData.ContainsKey(dict.Key))
+                {
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} BP ready ", true);
+                }
+                else
+                {
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                }
+            }
+
 
             monitor.AddInstructions("");
         }//DisplayParts()
@@ -1155,7 +1083,7 @@ namespace SpaceEngineers.BaseManagers
             powerPanel?.WriteText("<--------Power status--------->", true);
             powerPanel?.WriteText($"\nBatteryStatus:" +
                                    $"\nPower Load: {powerLoadPercentage} %" +
-                                   $"\nTotal/Max power:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {Math.Round(currentStoredPower / maxStoredPower * 100, 1)} %"
+                                   $"\nTotal/Max stored:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {Math.Round(currentStoredPower / maxStoredPower * 100, 1)} %"
                                  + $"\nInput/Output:{Math.Round(inputPower, 2)} / {Math.Round(outputPower, 2)} {(inputPower > outputPower ? "+" : "-")} MWt/h "
                                  + $"\nGens maxOut/Out: {Math.Round(generatorsMaxOutputPower, 2)} / {Math.Round(generatorsOutputPower, 2)} MWT", true);
 
@@ -1323,6 +1251,106 @@ namespace SpaceEngineers.BaseManagers
             }
 
             monitor.AddInstructions("");
+        }
+
+        /// <summary>
+        /// Начать/остановить поиск черчежей
+        /// </summary>
+        public void SwitchBlueprintGetter()
+        {
+            assemblerBlueprintGetter = !assemblerBlueprintGetter;
+            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersSpecialOperationsName)).First();
+
+            if (assemblerBlueprintGetter)
+            {
+                SpecialAssemblerLastName = ass.CustomName;
+                ass.CustomName = assemblersSpecialOperationsName + "Assembler ready to copy bps";
+                ass.ClearQueue();
+                ass.SetValueBool("OnOff", false);
+            }
+            else
+            {
+                ass.CustomName = SpecialAssemblerLastName;
+                ass.ClearQueue();
+                ass.SetValueBool("OnOff", true);
+            }
+        }
+
+        /// <summary>
+        /// Сохранение названий черчежей компонентов, в ручном режиме
+        /// </summary>
+        public void SaveAllBlueprintsNames()
+        {
+            if (!assemblerBlueprintGetter)
+                return;
+
+            needReplaceParts = false;
+
+            debugPanel?.WriteText("", false);
+            debugPanel?.WriteText("<--------Production blocks--------->\n", true);
+
+            var targetInventory = containers.Where(c => c.CustomName.Contains(componentsStorageName))
+                                            .Select(i => i.GetInventory(0))
+                                            .Where(i => !i.IsFull);
+
+            var blueprints = new List<MyProductionItem>();
+            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersSpecialOperationsName)).First();
+            var assInv = ass.GetInventory(1);
+
+            ass.CustomName = assemblersSpecialOperationsName + "Assembler ready to copy bps";
+
+            if (ass == null)
+                return;
+
+            ass.GetQueue(blueprints);
+
+            if (blueprints.Count > 1)
+            {
+                ass.ClearQueue();
+                return;
+            }
+
+            if (!ass.IsQueueEmpty)
+            {
+                lastDetectedBlueprintItem = blueprints[0];
+                ass.CustomName = assemblersSpecialOperationsName + $"bps:{lastDetectedBlueprintItem.BlueprintId.SubtypeName}";
+                ass.SetValueBool("OnOff", true);
+                return;
+            }
+
+            if (assInv.ItemCount == 0)
+                return;
+
+            lastDetectedConstructItem = assInv.GetItemAt(assInv.ItemCount - 1);
+            if (lastDetectedConstructItem == null)
+                return;
+
+            ass.CustomName = assemblersSpecialOperationsName + $"item:{lastDetectedConstructItem.Value.Type.SubtypeId}";
+
+            if (assInv.TransferItemTo(targetInventory.First(), 0, null, true))
+                ass.SetValueBool("OnOff", false);
+
+            if (!blueprintData.ContainsKey(lastDetectedConstructItem.Value.Type.SubtypeId))
+            {
+                blueprintData.Add(lastDetectedConstructItem.Value.Type.SubtypeId, lastDetectedBlueprintItem.BlueprintId.SubtypeId.ToString());
+            }
+            else
+            {
+                blueprintData[lastDetectedConstructItem.Value.Type.SubtypeId] = lastDetectedBlueprintItem.BlueprintId.SubtypeId.ToString();
+            }
+
+            foreach (var key in blueprintData)
+            {
+                debugPanel?.WriteText($"ITEM:{key.Key} X BP: {key.Value} \n", true);
+            }
+
+            foreach (var key in blueprintData)
+            {
+                dataSystem.Set("Blueprints", key.Key, key.Value);
+            }
+
+            ReloadData();
+
         }
 
 
