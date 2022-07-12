@@ -98,12 +98,13 @@ namespace SpaceEngineers.BaseManagers
         bool assemblerBlueprintGetter = false;
         string SpecialAssemblerLastName = "";
 
-        int reactorMinFuel = 100;
+        int maxReactorPayload = 500;
+
 
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
         Dictionary<string, int> ingnotsDict;
         Dictionary<string, int> partsDictionary;
-        Dictionary<string, int> partsRequester;
+        Dictionary<string, int> partsIngnotAndOresDictionary;
         Dictionary<string, int> ammoDictionary;
         Dictionary<string, int> buildedIngnotsDictionary;
 
@@ -112,8 +113,11 @@ namespace SpaceEngineers.BaseManagers
         //Печки
         Dictionary<IMyRefinery, float> refinereyEfectivity;
         Dictionary<string, float> refsUpgradeList;
+        List<MyInventoryItem> ingnotItems;
         List<MyProductionItem> refinereysItems;
+        List<MyInventoryItem> productionItems;
         List<MyInventoryItem> reactorFuel;
+
 
         //Поиск чертежей
         MyProductionItem lastDetectedBlueprintItem;
@@ -142,7 +146,7 @@ namespace SpaceEngineers.BaseManagers
 
             ingnotsDict = new Dictionary<string, int>();
             partsDictionary = new Dictionary<string, int>();
-            partsRequester = new Dictionary<string, int>();
+            partsIngnotAndOresDictionary = new Dictionary<string, int>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
             ammoDictionary = new Dictionary<string, int>();
             buildedIngnotsDictionary = new Dictionary<string, int>();
@@ -151,6 +155,8 @@ namespace SpaceEngineers.BaseManagers
 
             refsUpgradeList = new Dictionary<string, float>();
             refinereysItems = new List<MyProductionItem>();
+            productionItems = new List<MyInventoryItem>();
+            ingnotItems = new List<MyInventoryItem>();
             refinereyEfectivity = new Dictionary<IMyRefinery, float>();
             reactorFuel = new List<MyInventoryItem>();
 
@@ -613,6 +619,8 @@ namespace SpaceEngineers.BaseManagers
             if (refinereysDisplay == null)
                 return;
 
+            refinereysItems.Clear();
+
             refinereysDisplay?.WriteText("", false);
             refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
 
@@ -620,7 +628,7 @@ namespace SpaceEngineers.BaseManagers
             {
                 double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
                 double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
-
+               
                 refs.Key.GetQueue(refinereysItems);
                 refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
                                              $"\nEffectivity: {refs.Value} Load: {loadInput} / {loadOuptut} %", true);
@@ -723,6 +731,7 @@ namespace SpaceEngineers.BaseManagers
             totalIngnotStorageVolume = 0;
             freeIngnotStorageVolume = 0;
             ingnotsDict.Clear();
+            ingnotItems.Clear();
 
             var ingnotInventorys = containers.Where(c => c.CustomName.Contains(ingnotStorageName))
                                              .Select(i => i.GetInventory(0));
@@ -734,12 +743,11 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var inventory in ingnotInventorys)
             {
-                List<MyInventoryItem> items = new List<MyInventoryItem>();
-                inventory.GetItems(items);
+                inventory.GetItems(ingnotItems);
 
-                foreach (var item in items)
+                foreach (var item in ingnotItems)
                 {
-                   // if (item.Type.TypeId == "MyObjectBuilder_Ingot")//слитки
+                    if (item.Type.TypeId == "MyObjectBuilder_Ingot")//слитки 
                     {
                         if (ingnotsDict.ContainsKey(item.Type.SubtypeId))
                         {
@@ -747,9 +755,22 @@ namespace SpaceEngineers.BaseManagers
                         }
                         else
                         {
-                            ingnotsDict.Add(item.ToString(), item.Amount.ToIntSafe());
+                            ingnotsDict.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
                         }
                     }
+
+                    if (item.Type.TypeId == "MyObjectBuilder_Ore")//построенная руда  
+                    {
+                        if (partsIngnotAndOresDictionary.ContainsKey(item.Type.SubtypeId))
+                        {
+                            partsIngnotAndOresDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                        }
+                        else
+                        {
+                            partsIngnotAndOresDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                        }
+                    }
+
                 }
             }
 
@@ -762,7 +783,15 @@ namespace SpaceEngineers.BaseManagers
             {
                 ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
             }
-           
+
+            ingnotPanel?.WriteText("\n<<-----------Ores----------->>", true);
+
+            foreach (var dict in partsIngnotAndOresDictionary.OrderBy(k => k.Key))
+            {
+                ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+            }
+
+
             monitor.AddInstructions("");
         }//DisplayIngnots()
 
@@ -900,8 +929,10 @@ namespace SpaceEngineers.BaseManagers
 
             totalPartsStorageVolume = 0;
             freePartsStorageVolume = 0;
+            productionItems.Clear();
             partsDictionary.Clear();
             ammoDictionary.Clear();
+            buildedIngnotsDictionary.Clear();
 
             var partsInventorys = containers.Where(c => c.CustomName.Contains(componentsStorageName))
                                             .Select(i => i.GetInventory(0));
@@ -913,10 +944,9 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var inventory in partsInventorys)
             {
-                List<MyInventoryItem> items = new List<MyInventoryItem>();
-                inventory.GetItems(items);
+                inventory.GetItems(productionItems);
 
-                foreach (var item in items)
+                foreach (var item in productionItems)
                 {
                     if (item.Type.TypeId == "MyObjectBuilder_Component")//части
                     {
@@ -930,7 +960,7 @@ namespace SpaceEngineers.BaseManagers
                         }
                     }
 
-                    if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы buildedIngnotsDictionary
+                    if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
                     {
                         if (ammoDictionary.ContainsKey(item.Type.SubtypeId))
                         {
@@ -942,7 +972,7 @@ namespace SpaceEngineers.BaseManagers
                         }
                     }
 
-                    if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Построенные слитки
+                    if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
                     {
                         if (buildedIngnotsDictionary.ContainsKey(item.Type.SubtypeId))
                         {
@@ -953,12 +983,11 @@ namespace SpaceEngineers.BaseManagers
                             buildedIngnotsDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
                         }
                     }
-
                 }
             }
 
             partsPanel?.WriteText("", false);
-            partsPanel?.WriteText($"\n<<-----------Production----------->>" +
+            partsPanel?.WriteText($"<<-----------Production----------->>" +
                                   $"\nContainers:{partsInventorys.Count()}" +
                                   $"\nVolume: {precentageVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T" +
                                   "\n<<-----------Parts----------->>", true);
@@ -1003,8 +1032,6 @@ namespace SpaceEngineers.BaseManagers
                     partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
                 }
             }
-
-
             monitor.AddInstructions("");
         }//DisplayParts()
 
@@ -1057,16 +1084,33 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var react in reactorInventory)
             {
-                react.GetItems(reactorFuel);
-
-                if (reactorFuel.Any())
+                if (react.ItemCount != 0)
                 {
-                    string lowCount = reactorFuel[0].Amount < reactorMinFuel ? "TO LOW" : "";
-                    detailedPowerPanel?.WriteText($"\nR: {reactorFuel[0].Type.SubtypeId} / {reactorFuel[0].Amount} {lowCount}", true);
+                    var block = react.Owner as IMyReactor;
+
+                    var item = react.GetItemAt(0);
+
+                    if (item != null)
+                    {
+                        detailedPowerPanel?.WriteText($"\nR:{item.Value.Type.SubtypeId} / {item.Value.Amount}", true);
+
+                        if (item.Value.Type.SubtypeId == "Uranium")
+                        {
+                            if (item.Value.Amount > maxReactorPayload)
+                            {
+                                block.UseConveyorSystem = false;
+                            }
+                            else
+                            {
+                                block.UseConveyorSystem = true;
+                            }
+                        }
+                    }
                 }
                 else
                 {
-                    var targInv = react.Owner as IMyTerminalBlock;
+                    var targInv = react.Owner as IMyReactor;
+                    targInv.UseConveyorSystem = true;
                     detailedPowerPanel?.WriteText($"\nR:{targInv?.CustomName} EMPTY!!", true);
                 }
             }
@@ -1355,7 +1399,7 @@ namespace SpaceEngineers.BaseManagers
 
 
         public class PerformanceMonitor
-        { 
+        {
             public int TotalInstructions { get; private set; }
             public int MaxInstructions { get; private set; }
             public double UpdateTime { get; private set; }
