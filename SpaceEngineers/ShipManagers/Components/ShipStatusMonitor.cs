@@ -46,22 +46,28 @@ namespace SpaceEngineers.ShipManagers.Components
 
         public class ShipMonitor
         {
-            public string cargoLCDName = "CargoShipLCD";
-
-
-
+            string cargoLCDName = "CargoShipLCD";
+            string drillLCDName = "DrillShipLCD";
             string largeNanoName = "SELtdLargeNanobotDrillSystem";
             string smallNanoName = "SELtdSmallNanobotDrillSystem";
+
+            double freeOreStorageVolume;
+            double totalOreStorageVolume;
+            double orePrecentageVolume;
 
             Program program;
 
             IMyTextPanel cargoPanel;
+            IMyTextPanel drillPanel;
 
             List<IMyCargoContainer> containers;
             List<IMyBatteryBlock> batteries;
             List<IMyPowerProducer> generators;
             List<IMyTerminalBlock> nanoDrill;
-            Dictionary<string, int> oreList;
+            Dictionary<string, int> ores;
+
+            List<List<object>> miningFields;
+            Dictionary<string, double> miningTargets;
 
             public ShipMonitor(Program mainProg)
             {
@@ -71,7 +77,9 @@ namespace SpaceEngineers.ShipManagers.Components
                 batteries = new List<IMyBatteryBlock>();
                 generators = new List<IMyPowerProducer>();
                 nanoDrill = new List<IMyTerminalBlock>();
-                oreList = new Dictionary<string, int>();
+                ores = new Dictionary<string, int>();
+                miningFields = new List<List<object>>();
+                miningTargets = new Dictionary<string, double>();
 
             }
 
@@ -104,9 +112,8 @@ namespace SpaceEngineers.ShipManagers.Components
                     nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == smallNanoName).ToList();
                 }
 
-
                 cargoPanel = program.GridTerminalSystem.GetBlockWithName(cargoLCDName) as IMyTextPanel;
-
+                drillPanel = program.GridTerminalSystem.GetBlockWithName(drillLCDName) as IMyTextPanel;
 
             }
 
@@ -119,12 +126,21 @@ namespace SpaceEngineers.ShipManagers.Components
                            $"\nNanoDrills:{nanoDrill.Count}");
 
                 FindOres();
+                PrintOres();
+
+                GetDrillData();
+                PrintMiningOres();
             }
 
             public void FindOres()
             {
                 var containerInventory = containers.Select(c => c.GetInventory(0));
-                oreList.Clear();
+                freeOreStorageVolume = containerInventory.Sum(i => i.CurrentVolume.ToIntSafe());
+                totalOreStorageVolume = containerInventory.Sum(i => i.MaxVolume.ToIntSafe());
+
+                orePrecentageVolume = Math.Round(((double)freeOreStorageVolume / (double)totalOreStorageVolume) * 100, 1);
+
+                ores.Clear();
 
                 foreach (var inventory in containerInventory)
                 {
@@ -135,13 +151,13 @@ namespace SpaceEngineers.ShipManagers.Components
                     {
                         if (item.Type.TypeId == "MyObjectBuilder_Ore")
                         {
-                            if (oreList.ContainsKey(item.Type.SubtypeId))
+                            if (ores.ContainsKey(item.Type.SubtypeId))
                             {
-                                oreList[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                                ores[item.Type.SubtypeId] += item.Amount.ToIntSafe();
                             }
                             else
                             {
-                                oreList.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                                ores.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
                             }
                         }
                     }
@@ -152,10 +168,74 @@ namespace SpaceEngineers.ShipManagers.Components
             {
                 if (cargoPanel == null)
                     return;
+
+                cargoPanel?.WriteText("", false);
+                cargoPanel?.WriteText("<--------------Ores--------------->" +
+                                      $"\nPayload: {orePrecentageVolume} %" +
+                                      $"", true);
+
+                foreach(var key in ores)
+                {
+                    cargoPanel?.WriteText($"\n{key.Key} x {key.Value}", true);
+                }
+            }
+
+            public void GetDrillData()
+            {
+                miningTargets.Clear();
+
+                foreach (var drill in nanoDrill)
+                {
+                    if ((drill == null) && (drill.Closed))
+                        continue;
+
+                    if (drill.IsWorking == false)
+                        continue;
+
+                    miningFields.Clear();
+                    miningFields = drill.GetValue<List<List<object>>>("Drill.PossibleDrillTargets");
+
+                    foreach(var mining in miningFields)
+                    {
+                        string oreName = mining[3].ToString().Remove(0, 40);
+                        string cuant = mining[4].ToString();
+
+                        double cuntToDouble = 0;
+
+                        if(double.TryParse(cuant,out cuntToDouble))
+                        {
+
+                        }
+
+                        if (miningTargets.ContainsKey(oreName))
+                        {
+                            miningTargets[oreName] += cuntToDouble;
+                        }
+                        else
+                        {
+                            miningTargets.Add(oreName, cuntToDouble);
+                        }
+
+                    }
+                }
+            }
+
+            public void PrintMiningOres()
+            {
+                if (drillPanel == null)
+                    return;
+
+                drillPanel?.WriteText("", false);
+                drillPanel?.WriteText("<------Mining Targets-------->", true);
+
+                foreach(var mining in miningTargets)
+                {
+                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value} m3", true);
+                }
             }
 
 
-        }
+        }/////////////////
 
 
         ///END OF SCRIPT///////////////

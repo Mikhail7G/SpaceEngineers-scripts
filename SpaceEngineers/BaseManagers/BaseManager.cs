@@ -47,9 +47,6 @@ namespace SpaceEngineers.BaseManagers
         IMyTextPanel nanobotDisplay;
         IMyTextPanel refinereysDisplay;
 
-        IMyTextSurface mainDisplay;
-
-
         //все объекты, содержащие инвентарь
         IEnumerable<IMyInventory> inventories;
 
@@ -74,6 +71,7 @@ namespace SpaceEngineers.BaseManagers
         bool getOreFromTransports = false;
         bool useNanobotAutoBuild = false;
         bool useRefinereysOperations = false;
+        bool reactorPayloadLimitter = false;
 
         int totalIngnotStorageVolume = 0;
         int freeIngnotStorageVolume = 0;
@@ -98,15 +96,13 @@ namespace SpaceEngineers.BaseManagers
         bool assemblerBlueprintGetter = false;
         string SpecialAssemblerLastName = "";
 
-        int maxReactorPayload = 500;
-
-
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
         Dictionary<string, int> ingnotsDict;
         Dictionary<string, int> partsDictionary;
         Dictionary<string, int> partsIngnotAndOresDictionary;
         Dictionary<string, int> ammoDictionary;
         Dictionary<string, int> buildedIngnotsDictionary;
+        Dictionary<string, int> reactorFuelLimitter;
 
         Dictionary<string, string> blueprintData;
 
@@ -116,7 +112,6 @@ namespace SpaceEngineers.BaseManagers
         List<MyInventoryItem> ingnotItems;
         List<MyProductionItem> refinereysItems;
         List<MyInventoryItem> productionItems;
-        List<MyInventoryItem> reactorFuel;
 
 
         //Поиск чертежей
@@ -134,8 +129,6 @@ namespace SpaceEngineers.BaseManagers
             Echo($"Script first init starting");
             Runtime.UpdateFrequency = UpdateFrequency.None;
 
-            mainDisplay = Me.GetSurface(1);
-
             inventories = new List<IMyInventory>();
             refinereys = new List<IMyRefinery>();
             assemblers = new List<IMyAssembler>();
@@ -150,6 +143,7 @@ namespace SpaceEngineers.BaseManagers
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
             ammoDictionary = new Dictionary<string, int>();
             buildedIngnotsDictionary = new Dictionary<string, int>();
+            reactorFuelLimitter = new Dictionary<string, int>();
 
             blueprintData = new Dictionary<string, string>();
 
@@ -158,10 +152,11 @@ namespace SpaceEngineers.BaseManagers
             productionItems = new List<MyInventoryItem>();
             ingnotItems = new List<MyInventoryItem>();
             refinereyEfectivity = new Dictionary<IMyRefinery, float>();
-            reactorFuel = new List<MyInventoryItem>();
+           
 
             dataSystem = new MyIni();
-            monitor = new PerformanceMonitor(this);
+            monitor = new PerformanceMonitor(this, Me.GetSurface(1));
+
             GetIniData();
 
             if (autorun)
@@ -258,11 +253,7 @@ namespace SpaceEngineers.BaseManagers
                 currentTick = 0;
 
             monitor.EndOfFrameCalc();
-
-            mainDisplay.WriteText("", false);
-            mainDisplay.WriteText($"AV inst: {monitor.AverageInstructionsPerTick} / {monitor.MaxInstructionsPerTick}" +
-                                  $"\nAV time:{monitor.AverageTimePerTick}", true);
-
+            monitor.Draw();
         }
 
 
@@ -278,6 +269,7 @@ namespace SpaceEngineers.BaseManagers
             }
             else
             {
+
                 autorun = dataSystem.Get("Operations", "Autorun").ToBoolean();
 
                 needReplaceIngnots = dataSystem.Get("Operations", "ReplaceIngnots").ToBoolean();
@@ -288,6 +280,7 @@ namespace SpaceEngineers.BaseManagers
                 getOreFromTransports = dataSystem.Get("Operations", "TransferOreFromTransports").ToBoolean();
                 useNanobotAutoBuild = dataSystem.Get("Operations", "UseNanobotAutoBuild").ToBoolean();
                 useRefinereysOperations = dataSystem.Get("Operations", "UseRefinereyOperations").ToBoolean();
+                reactorPayloadLimitter = dataSystem.Get("Operations", "ReactorFuelLimitter").ToBoolean();
 
                 //Containers
                 oreStorageName = dataSystem.Get("ContainerNames", "oreStorageName").ToString();
@@ -334,7 +327,7 @@ namespace SpaceEngineers.BaseManagers
             if (data.Length == 0)
             {
                 Echo("Custom data empty!");
-
+           
                 dataSystem.AddSection("Operations");
                 dataSystem.Set("Operations", "Autorun", false);
                 dataSystem.Set("Operations", "ReplaceIngnots", false);
@@ -345,6 +338,7 @@ namespace SpaceEngineers.BaseManagers
                 dataSystem.Set("Operations", "TransferOreFromTransports", false);
                 dataSystem.Set("Operations", "UseNanobotAutoBuild", false);
                 dataSystem.Set("Operations", "UseRefinereyOperations", false);
+                dataSystem.Set("Operations", "ReactorFuelLimitter", false);
 
                 dataSystem.AddSection("DisplaysNames");
                 dataSystem.Set("DisplaysNames", "lcdInventoryIngnotsName", "LCD Inventory");
@@ -522,7 +516,6 @@ namespace SpaceEngineers.BaseManagers
             inventories = blocks.Where(b => b.HasInventory)
                                 .Select(b => b.GetInventory(b.InventoryCount - 1));//берем из инвентаря готовой продукции
 
-
             refinereys = blocks.Where(b => b is IMyRefinery).Where(r => r.IsFunctional).Where(b=>b.CubeGrid==Me.CubeGrid).Select(t => t as IMyRefinery).ToList();
             assemblers = blocks.Where(b => b is IMyAssembler).Where(a => a.IsFunctional).Where(b => b.CubeGrid == Me.CubeGrid).Select(t => t as IMyAssembler).ToList();
             containers = blocks.Where(b => b is IMyCargoContainer).Where(c => c.IsFunctional).Select(t => t as IMyCargoContainer).ToList();
@@ -534,7 +527,6 @@ namespace SpaceEngineers.BaseManagers
             nanobotBuildModule = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == "SELtdLargeNanobotBuildAndRepairSystem").FirstOrDefault();
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
-
 
             foreach (var refs in refinereys.Where(refs => refs is IMyUpgradableBlock))
             {
@@ -1094,16 +1086,19 @@ namespace SpaceEngineers.BaseManagers
                     {
                         detailedPowerPanel?.WriteText($"\nR:{item.Value.Type.SubtypeId} / {item.Value.Amount}", true);
 
-                        if (item.Value.Type.SubtypeId == "Uranium")
+                        if (reactorPayloadLimitter)
                         {
-                            if (item.Value.Amount > maxReactorPayload)
-                            {
-                                block.UseConveyorSystem = false;
-                            }
-                            else
-                            {
-                                block.UseConveyorSystem = true;
-                            }
+                            //if (item.Value.Type.SubtypeId == "Uranium")
+                            //{
+                            //    if (item.Value.Amount > maxReactorPayload)
+                            //    {
+                            //        block.UseConveyorSystem = false;
+                            //    }
+                            //    else
+                            //    {
+                            //        block.UseConveyorSystem = true;
+                            //    }
+                            //}
                         }
                     }
                 }
@@ -1394,7 +1389,7 @@ namespace SpaceEngineers.BaseManagers
             }
 
             ReloadData();
-
+            monitor.AddInstructions("");
         }
 
 
@@ -1412,8 +1407,9 @@ namespace SpaceEngineers.BaseManagers
             private double avrInst;
             private double avrTime;
 
-
             private Program mainProgram;
+
+            private IMyTextSurface mainDisplay;
 
 
             public PerformanceMonitor(Program main)
@@ -1426,6 +1422,19 @@ namespace SpaceEngineers.BaseManagers
                 avrTime = 0;
 
             }
+
+            public PerformanceMonitor(Program main, IMyTextSurface display)
+            {
+                mainProgram = main;
+                CallPerTick = 0;
+                AverageInstructionsPerTick = 0;
+                AverageTimePerTick = 0;
+                avrInst = 0;
+                avrTime = 0;
+                mainDisplay = display;
+
+            }
+
 
             public void AddInstructions(string methodName)
             {
@@ -1454,6 +1463,15 @@ namespace SpaceEngineers.BaseManagers
                 avrTime = 0;
 
                 CallPerTick = 0;
+
+            }
+
+            public void Draw()
+            {
+                mainDisplay.WriteText("", false);
+                mainDisplay.WriteText($"CUR ins: {TotalInstructions}" +
+                                      $"\nAV inst: {AverageInstructionsPerTick} / {MaxInstructionsPerTick}" +
+                                      $"\nAV time:{AverageTimePerTick}", true);
 
             }
 

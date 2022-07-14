@@ -19,7 +19,7 @@ using VRage.Game.ModAPI.Ingame.Utilities;
 
 //Garbage script IONP
 
-namespace SpaceEngineers.ShipManagers.INOP
+namespace SpaceEngineers.ShipManagers.INOP.Nanodrill
 
 {
     public sealed class Program : MyGridProgram
@@ -524,6 +524,8 @@ namespace SpaceEngineers.ShipManagers.INOP
             {
                 if (Drill == null)
                     return;
+
+                miningFields.Clear();
 
                 miningFields = Drill.GetValue<List<List<object>>>("Drill.PossibleDrillTargets");
                 //fillFields = Drill.GetValue<List<List<object>>>("Drill.PossibleFillTargets");
