@@ -724,6 +724,7 @@ namespace SpaceEngineers.BaseManagers
             freeIngnotStorageVolume = 0;
             ingnotsDict.Clear();
             ingnotItems.Clear();
+            partsIngnotAndOresDictionary.Clear();
 
             var ingnotInventorys = containers.Where(c => c.CustomName.Contains(ingnotStorageName))
                                              .Select(i => i.GetInventory(0));
@@ -1381,10 +1382,6 @@ namespace SpaceEngineers.BaseManagers
             foreach (var key in blueprintData)
             {
                 debugPanel?.WriteText($"ITEM:{key.Key} X BP: {key.Value} \n", true);
-            }
-
-            foreach (var key in blueprintData)
-            {
                 dataSystem.Set("Blueprints", key.Key, key.Value);
             }
 

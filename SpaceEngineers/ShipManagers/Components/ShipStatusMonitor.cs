@@ -46,6 +46,7 @@ namespace SpaceEngineers.ShipManagers.Components
 
         public class ShipMonitor
         {
+
             string cargoLCDName = "CargoShipLCD";
             string drillLCDName = "DrillShipLCD";
             string largeNanoName = "SELtdLargeNanobotDrillSystem";
@@ -67,7 +68,8 @@ namespace SpaceEngineers.ShipManagers.Components
             Dictionary<string, int> ores;
 
             List<List<object>> miningFields;
-            Dictionary<string, double> miningTargets;
+            //Dictionary<string, double> miningTargets; TimeSpan
+            Dictionary<string, OreMiningSpeedData> miningTargets;
 
             public ShipMonitor(Program mainProg)
             {
@@ -79,7 +81,9 @@ namespace SpaceEngineers.ShipManagers.Components
                 nanoDrill = new List<IMyTerminalBlock>();
                 ores = new Dictionary<string, int>();
                 miningFields = new List<List<object>>();
-                miningTargets = new Dictionary<string, double>();
+
+               // miningTargets = new Dictionary<string, double>();
+                miningTargets = new Dictionary<string, OreMiningSpeedData>();
 
             }
 
@@ -200,22 +204,22 @@ namespace SpaceEngineers.ShipManagers.Components
                         string oreName = mining[3].ToString().Remove(0, 40);
                         string cuant = mining[4].ToString();
 
-                        double cuntToDouble = 0;
+                        double cuantToDouble = 0;
 
-                        if(double.TryParse(cuant,out cuntToDouble))
+                        if(double.TryParse(cuant,out cuantToDouble))
                         {
 
                         }
 
                         if (miningTargets.ContainsKey(oreName))
                         {
-                            miningTargets[oreName] += cuntToDouble;
+                            miningTargets[oreName].Previous = miningTargets[oreName].Current;
+                            miningTargets[oreName].Current += cuantToDouble;
                         }
                         else
                         {
-                            miningTargets.Add(oreName, cuntToDouble);
+                            miningTargets.Add(oreName, new OreMiningSpeedData { Current = cuantToDouble, Previous = 0 });
                         }
-
                     }
                 }
             }
@@ -230,10 +234,17 @@ namespace SpaceEngineers.ShipManagers.Components
 
                 foreach(var mining in miningTargets)
                 {
-                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value} m3", true);
+                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value.Current} m3 D: {(mining.Value.Previous - mining.Value.Current)}",true);
                 }
             }
 
+
+
+            public class OreMiningSpeedData
+            {
+                public double Current;
+                public double Previous;
+            }
 
         }/////////////////
 
