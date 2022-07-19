@@ -14,7 +14,7 @@ using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 
-namespace SpaceEngineers.ShipManagers.Components
+namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 {
     public sealed class Program : MyGridProgram
     {
@@ -61,6 +61,7 @@ namespace SpaceEngineers.ShipManagers.Components
             IMyTextPanel cargoPanel;
             IMyTextPanel drillPanel;
 
+            List<MyInventoryItem> oreItems;
             List<IMyCargoContainer> containers;
             List<IMyBatteryBlock> batteries;
             List<IMyPowerProducer> generators;
@@ -71,6 +72,8 @@ namespace SpaceEngineers.ShipManagers.Components
             //Dictionary<string, double> miningTargets; TimeSpan
             Dictionary<string, OreMiningSpeedData> miningTargets;
 
+            TimeSpan miningTime;
+
             public ShipMonitor(Program mainProg)
             {
                 program = mainProg;
@@ -79,6 +82,7 @@ namespace SpaceEngineers.ShipManagers.Components
                 batteries = new List<IMyBatteryBlock>();
                 generators = new List<IMyPowerProducer>();
                 nanoDrill = new List<IMyTerminalBlock>();
+                oreItems = new List<MyInventoryItem>();
                 ores = new Dictionary<string, int>();
                 miningFields = new List<List<object>>();
 
@@ -148,10 +152,9 @@ namespace SpaceEngineers.ShipManagers.Components
 
                 foreach (var inventory in containerInventory)
                 {
-                    List<MyInventoryItem> items = new List<MyInventoryItem>();
-                    inventory.GetItems(items);
+                    inventory.GetItems(oreItems);
 
-                    foreach (var item in items)
+                    foreach (var item in oreItems)
                     {
                         if (item.Type.TypeId == "MyObjectBuilder_Ore")
                         {
@@ -165,6 +168,7 @@ namespace SpaceEngineers.ShipManagers.Components
                             }
                         }
                     }
+                    oreItems.Clear();
                 }
             }
 
@@ -213,7 +217,7 @@ namespace SpaceEngineers.ShipManagers.Components
 
                         if (miningTargets.ContainsKey(oreName))
                         {
-                            miningTargets[oreName].Previous = miningTargets[oreName].Current;
+                           // miningTargets[oreName].Previous = miningTargets[oreName].Current;
                             miningTargets[oreName].Current += cuantToDouble;
                         }
                         else
@@ -234,11 +238,9 @@ namespace SpaceEngineers.ShipManagers.Components
 
                 foreach(var mining in miningTargets)
                 {
-                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value.Current} m3 D: {(mining.Value.Previous - mining.Value.Current)}",true);
+                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value.Current} m3",true);
                 }
             }
-
-
 
             public class OreMiningSpeedData
             {

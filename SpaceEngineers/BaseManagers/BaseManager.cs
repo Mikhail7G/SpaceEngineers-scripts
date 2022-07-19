@@ -23,6 +23,7 @@ namespace SpaceEngineers.BaseManagers
         string ingnotStorageName = "Ingnot";
         string componentsStorageName = "Parts";
 
+        string lcdInventoryOresName = "LCD Ore";
         string lcdInventoryIngnotsName = "LCD Inventory";
         string lcdPowerSystemName = "LCD Power";
         string lcdPartsName = "LCD Parts";
@@ -32,6 +33,7 @@ namespace SpaceEngineers.BaseManagers
         string lcdRefinereyName = "LCD Refinerey";
 
         string assemblersSpecialOperationsName = "[sp]";
+        string assemblersBlueprintLeanerName = "[bps]";
 
 
         /////////////DO NOT EDIT BELOW THE LINE//////////////////
@@ -46,6 +48,7 @@ namespace SpaceEngineers.BaseManagers
         IMyTextPanel partsPanel;
         IMyTextPanel nanobotDisplay;
         IMyTextPanel refinereysDisplay;
+        IMyTextPanel oreDisplay;
 
         //все объекты, содержащие инвентарь
         IEnumerable<IMyInventory> inventories;
@@ -73,6 +76,9 @@ namespace SpaceEngineers.BaseManagers
         bool useRefinereysOperations = false;
         bool reactorPayloadLimitter = false;
 
+        int totalOreStorageVolume = 0;
+        int freeOreStorageVolume = 0;
+
         int totalIngnotStorageVolume = 0;
         int freeIngnotStorageVolume = 0;
 
@@ -97,6 +103,7 @@ namespace SpaceEngineers.BaseManagers
         string SpecialAssemblerLastName = "";
 
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
+        Dictionary<string, int> oresDict;
         Dictionary<string, int> ingnotsDict;
         Dictionary<string, int> partsDictionary;
         Dictionary<string, int> partsIngnotAndOresDictionary;
@@ -109,6 +116,7 @@ namespace SpaceEngineers.BaseManagers
         //Печки
         Dictionary<IMyRefinery, float> refinereyEfectivity;
         Dictionary<string, float> refsUpgradeList;
+        List<MyInventoryItem> oreItems;
         List<MyInventoryItem> ingnotItems;
         List<MyProductionItem> refinereysItems;
         List<MyInventoryItem> productionItems;
@@ -130,6 +138,7 @@ namespace SpaceEngineers.BaseManagers
             Runtime.UpdateFrequency = UpdateFrequency.None;
 
             inventories = new List<IMyInventory>();
+            oreItems = new List<MyInventoryItem>();
             refinereys = new List<IMyRefinery>();
             assemblers = new List<IMyAssembler>();
             containers = new List<IMyCargoContainer>();
@@ -137,6 +146,7 @@ namespace SpaceEngineers.BaseManagers
             gasTanks = new List<IMyGasTank>();
             specialAssemblers = new List<IMyAssembler>();
 
+            oresDict = new Dictionary<string, int>();
             ingnotsDict = new Dictionary<string, int>();
             partsDictionary = new Dictionary<string, int>();
             partsIngnotAndOresDictionary = new Dictionary<string, int>();
@@ -222,6 +232,8 @@ namespace SpaceEngineers.BaseManagers
             FindLcds();
             FindInventories();
             // WriteDebugText();
+           // ServiceInfo();
+
             SaveAllBlueprintsNames();
 
             switch (currentTick)
@@ -245,6 +257,7 @@ namespace SpaceEngineers.BaseManagers
                     break;
                 case 4:
                     RefinereysPrintData();
+                    DisplayOres();
                     break;
             }
 
@@ -255,7 +268,6 @@ namespace SpaceEngineers.BaseManagers
             monitor.EndOfFrameCalc();
             monitor.Draw();
         }
-
 
         public void GetIniData()
         {
@@ -282,12 +294,13 @@ namespace SpaceEngineers.BaseManagers
                 useRefinereysOperations = dataSystem.Get("Operations", "UseRefinereyOperations").ToBoolean();
                 reactorPayloadLimitter = dataSystem.Get("Operations", "ReactorFuelLimitter").ToBoolean();
 
-                //Containers
+                //Containers 
                 oreStorageName = dataSystem.Get("ContainerNames", "oreStorageName").ToString();
                 ingnotStorageName = dataSystem.Get("ContainerNames", "ingnotStorageName").ToString();
                 componentsStorageName = dataSystem.Get("ContainerNames", "componentsStorageName").ToString();
 
-                //Displays
+                //Displays 
+                lcdInventoryOresName = dataSystem.Get("DisplaysNames", "lcdInventoryOresName").ToString();
                 lcdInventoryIngnotsName = dataSystem.Get("DisplaysNames", "lcdInventoryIngnotsName").ToString();
                 lcdPowerSystemName = dataSystem.Get("DisplaysNames", "lcdPowerSystemName").ToString();
                 lcdPartsName = dataSystem.Get("DisplaysNames", "lcdPartsName").ToString();
@@ -298,8 +311,9 @@ namespace SpaceEngineers.BaseManagers
 
                 //Tags
                 assemblersSpecialOperationsName = dataSystem.Get("TagsNames", "assemblersSpecialOperationsTagName").ToString();
+                assemblersBlueprintLeanerName = dataSystem.Get("TagsNames", "assemblersBlueprintLeanerName").ToString();
 
-               // Blueprints
+                // Blueprints
                 List<MyIniKey> keys = new List<MyIniKey>();
                 dataSystem.GetKeys("Blueprints", keys);
 
@@ -341,6 +355,7 @@ namespace SpaceEngineers.BaseManagers
                 dataSystem.Set("Operations", "ReactorFuelLimitter", false);
 
                 dataSystem.AddSection("DisplaysNames");
+                dataSystem.Set("DisplaysNames", "lcdInventoryOresName", "LCD Ore");
                 dataSystem.Set("DisplaysNames", "lcdInventoryIngnotsName", "LCD Inventory");
                 dataSystem.Set("DisplaysNames", "lcdPowerSystemName", "LCD Power");
                 dataSystem.Set("DisplaysNames", "lcdPowerDetailedName", "LCD Power full");
@@ -356,6 +371,7 @@ namespace SpaceEngineers.BaseManagers
 
                 dataSystem.AddSection("TagsNames");
                 dataSystem.Set("TagsNames", "assemblersSpecialOperationsTagName", "[sp]");
+                dataSystem.Set("TagsNames", "assemblersBlueprintLeanerName", "[bps]");
 
                 dataSystem.AddSection("Blueprints");
 
@@ -380,7 +396,7 @@ namespace SpaceEngineers.BaseManagers
             Me.CustomData = dataSystem.ToString();
         }
 
-      
+
         /// <summary>
         /// Поиск необходимых дисплеев, можно без них
         /// </summary>
@@ -456,7 +472,43 @@ namespace SpaceEngineers.BaseManagers
                 Echo($"Refinerey LCDs found:{lcdRefinereyName}");
             }
 
+            if ((oreDisplay == null) || (oreDisplay.Closed))
+            {
+                Echo($"Try find:{lcdInventoryOresName}");
+                oreDisplay = GridTerminalSystem.GetBlockWithName(lcdInventoryOresName) as IMyTextPanel;
+            }
+            else
+            {
+                Echo($"Ores LCDs found:{lcdInventoryOresName}");
+            }
+
         }
+
+        //public void ServiceInfo()
+        //{
+        //    debugPanel?.WriteText("", false);
+        //    debugPanel?.WriteText($"\nrefinereys {refinereys.Count}x{refinereys.Capacity}" +
+        //                          $"\nassemblers {assemblers.Count}x{assemblers.Capacity}" +
+        //                          $"\ncontainers {containers.Count}x{containers.Capacity}" +
+        //                          $"\nbatteries {batteries.Count}x{batteries.Capacity}" +
+        //                          $"\ngasTanks {gasTanks.Count}x{gasTanks.Capacity}" +
+        //                          $"\ngenerators {generators.Count}x{generators.Capacity}" +
+        //                          $"\nspecialAssemblers {specialAssemblers.Count}x{specialAssemblers.Capacity}" +
+        //                          $"\noresDict {oresDict.Count}" +
+        //                          $"\ningnotsDict {ingnotsDict.Count}" +
+        //                          $"\npartsDictionary {partsDictionary.Count}" +
+        //                          $"\npartsIngnotAndOresDictionary {partsIngnotAndOresDictionary.Count}" +
+        //                          $"\nammoDictionary {ammoDictionary.Count}" +
+        //                          $"\nbuildedIngnotsDictionary {buildedIngnotsDictionary.Count}" +
+        //                          $"\nrefinereyEfectivity {refinereyEfectivity.Count}" +
+        //                          $"\nrefsUpgradeList {refsUpgradeList.Count}" +
+        //                          $"\noreItems {oreItems.Count}x{oreItems.Capacity}" +
+        //                          $"\ningnotItems {ingnotItems.Count}x{ingnotItems.Capacity}" +
+        //                          $"\nrefinereysItems {refinereysItems.Count}x{refinereysItems.Capacity}" +
+        //                          $"\nproductionItems {productionItems.Count}x{productionItems.Capacity}" +
+        //                          $"\nnanobotBuildQueue {nanobotBuildQueue.Count}" +
+        //                          $" ", true);
+        //}
 
         /// <summary>
         /// Отладка
@@ -611,8 +663,6 @@ namespace SpaceEngineers.BaseManagers
             if (refinereysDisplay == null)
                 return;
 
-            refinereysItems.Clear();
-
             refinereysDisplay?.WriteText("", false);
             refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
 
@@ -633,6 +683,8 @@ namespace SpaceEngineers.BaseManagers
                 refinereysDisplay?.WriteText("\n----------", true);
 
             }
+            refinereysItems.Clear();
+
             monitor.AddInstructions("");
         }
 
@@ -655,7 +707,63 @@ namespace SpaceEngineers.BaseManagers
             monitor.AddInstructions("");
         }
 
+        /// <summary>
+        /// Отображение руды на базе в контейнерах
+        /// </summary>
+        public void DisplayOres()
+        {
+            if (oreDisplay == null)
+                return;
+       
+            var oreInventory = containers.Where(c => c.CustomName.Contains(oreStorageName))
+                                        .Select(i => i.GetInventory(0))
+                                        .Where(i => i.ItemCount > 0).ToList();
 
+            if (!oreInventory.Any())
+                return;
+
+            oresDict.Clear();
+
+            freeOreStorageVolume = oreInventory.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalOreStorageVolume = oreInventory.Sum(i => i.MaxVolume.ToIntSafe());
+
+            double precentageVolume = Math.Round(((double)freeOreStorageVolume / (double)totalOreStorageVolume) * 100, 1);
+
+
+            foreach (var inv in oreInventory)
+            {
+                inv.GetItems(oreItems);
+
+                foreach(var item in oreItems)
+                {
+                    if (item.Type.TypeId == "MyObjectBuilder_Ore")//построенная руда  
+                    {
+                        if (oresDict.ContainsKey(item.Type.SubtypeId))
+                        {
+                            oresDict[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                        }
+                        else
+                        {
+                            oresDict.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                        }
+                    }
+                }
+                oreItems.Clear();
+            }
+
+            oreDisplay?.WriteText("", false);
+            oreDisplay?.WriteText($"<<-----------Ores----------->>{oreItems.Count} x {oreItems.Capacity}" +
+                                   $"\nContainers:{oreInventory.Count()}" +
+                                   $"\nVolume: {precentageVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
+
+            foreach (var dict in oresDict.OrderBy(k => k.Key))
+            {
+                oreDisplay?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+            }
+
+            monitor.AddInstructions("");
+
+        }
 
 
 
@@ -723,7 +831,6 @@ namespace SpaceEngineers.BaseManagers
             totalIngnotStorageVolume = 0;
             freeIngnotStorageVolume = 0;
             ingnotsDict.Clear();
-            ingnotItems.Clear();
             partsIngnotAndOresDictionary.Clear();
 
             var ingnotInventorys = containers.Where(c => c.CustomName.Contains(ingnotStorageName))
@@ -765,12 +872,15 @@ namespace SpaceEngineers.BaseManagers
                     }
 
                 }
+                ingnotItems.Clear();
             }
 
             ingnotPanel?.WriteText("", false);
             ingnotPanel?.WriteText($"<<-----------Ingnots----------->>" +
                                    $"\nContainers:{ingnotInventorys.Count()}" +
                                    $"\nVolume: {precentageVolume} % {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", true);
+
+            ingnotPanel?.WriteText("\n<<-----------Ingnots----------->>", true);
 
             foreach (var dict in ingnotsDict.OrderBy(k => k.Key))
             {
@@ -922,7 +1032,7 @@ namespace SpaceEngineers.BaseManagers
 
             totalPartsStorageVolume = 0;
             freePartsStorageVolume = 0;
-            productionItems.Clear();
+          
             partsDictionary.Clear();
             ammoDictionary.Clear();
             buildedIngnotsDictionary.Clear();
@@ -977,6 +1087,7 @@ namespace SpaceEngineers.BaseManagers
                         }
                     }
                 }
+                productionItems.Clear();
             }
 
             partsPanel?.WriteText("", false);
@@ -1299,12 +1410,19 @@ namespace SpaceEngineers.BaseManagers
         public void SwitchBlueprintGetter()
         {
             assemblerBlueprintGetter = !assemblerBlueprintGetter;
-            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersSpecialOperationsName)).First();
+            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).First();
+
+            if (ass == null)
+            {
+                assemblerBlueprintGetter = false;
+                return;
+            }
 
             if (assemblerBlueprintGetter)
             {
+                needReplaceParts = false;
                 SpecialAssemblerLastName = ass.CustomName;
-                ass.CustomName = assemblersSpecialOperationsName + "Assembler ready to copy bps";
+                ass.CustomName = assemblersBlueprintLeanerName + "Assembler ready to copy bps";
                 ass.ClearQueue();
                 ass.SetValueBool("OnOff", false);
             }
@@ -1324,8 +1442,6 @@ namespace SpaceEngineers.BaseManagers
             if (!assemblerBlueprintGetter)
                 return;
 
-            needReplaceParts = false;
-
             debugPanel?.WriteText("", false);
             debugPanel?.WriteText("<--------Production blocks--------->\n", true);
 
@@ -1334,14 +1450,13 @@ namespace SpaceEngineers.BaseManagers
                                             .Where(i => !i.IsFull);
 
             var blueprints = new List<MyProductionItem>();
-            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersSpecialOperationsName)).First();
-            var assInv = ass.GetInventory(1);
-
-            ass.CustomName = assemblersSpecialOperationsName + "Assembler ready to copy bps";
-
+            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).First();
             if (ass == null)
                 return;
 
+            var assInv = ass.GetInventory(1);
+
+            ass.CustomName = assemblersBlueprintLeanerName + "Assembler ready to copy bps";
             ass.GetQueue(blueprints);
 
             if (blueprints.Count > 1)
@@ -1353,7 +1468,7 @@ namespace SpaceEngineers.BaseManagers
             if (!ass.IsQueueEmpty)
             {
                 lastDetectedBlueprintItem = blueprints[0];
-                ass.CustomName = assemblersSpecialOperationsName + $"bps:{lastDetectedBlueprintItem.BlueprintId.SubtypeName}";
+                ass.CustomName = assemblersBlueprintLeanerName + $"bps:{lastDetectedBlueprintItem.BlueprintId.SubtypeName}";
                 ass.SetValueBool("OnOff", true);
                 return;
             }
@@ -1365,7 +1480,7 @@ namespace SpaceEngineers.BaseManagers
             if (lastDetectedConstructItem == null)
                 return;
 
-            ass.CustomName = assemblersSpecialOperationsName + $"item:{lastDetectedConstructItem.Value.Type.SubtypeId}";
+            ass.CustomName = assemblersBlueprintLeanerName + $"item:{lastDetectedConstructItem.Value.Type.SubtypeId}";
 
             if (assInv.TransferItemTo(targetInventory.First(), 0, null, true))
                 ass.SetValueBool("OnOff", false);
