@@ -1409,7 +1409,6 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void SwitchBlueprintGetter()
         {
-            assemblerBlueprintGetter = !assemblerBlueprintGetter;
             var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).First();
 
             if (ass == null)
@@ -1417,6 +1416,8 @@ namespace SpaceEngineers.BaseManagers
                 assemblerBlueprintGetter = false;
                 return;
             }
+
+            assemblerBlueprintGetter = !assemblerBlueprintGetter;
 
             if (assemblerBlueprintGetter)
             {
