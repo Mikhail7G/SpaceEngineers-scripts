@@ -105,7 +105,7 @@ namespace SpaceEngineers.BaseManagers
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
         Dictionary<string, int> oresDict;
         Dictionary<string, int> ingnotsDict;
-        Dictionary<string, int> partsDictionary;
+        Dictionary<string, ItemBalanser> partsDictionary;
         Dictionary<string, int> partsIngnotAndOresDictionary;
         Dictionary<string, int> ammoDictionary;
         Dictionary<string, int> buildedIngnotsDictionary;
@@ -148,7 +148,7 @@ namespace SpaceEngineers.BaseManagers
 
             oresDict = new Dictionary<string, int>();
             ingnotsDict = new Dictionary<string, int>();
-            partsDictionary = new Dictionary<string, int>();
+            partsDictionary = new Dictionary<string, ItemBalanser>();
             partsIngnotAndOresDictionary = new Dictionary<string, int>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
             ammoDictionary = new Dictionary<string, int>();
@@ -1055,11 +1055,11 @@ namespace SpaceEngineers.BaseManagers
                     {
                         if (partsDictionary.ContainsKey(item.Type.SubtypeId))
                         {
-                            partsDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                            partsDictionary[item.Type.SubtypeId].Current += item.Amount.ToIntSafe();
                         }
                         else
                         {
-                            partsDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                            partsDictionary.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
                         }
                     }
 
@@ -1090,6 +1090,34 @@ namespace SpaceEngineers.BaseManagers
                 productionItems.Clear();
             }
 
+            StringBuilder build = new StringBuilder();
+            partsPanel?.ReadText(build);
+
+            var str = build.ToString().Split('\n');
+
+           // debugPanel?.WriteText("", false);
+            foreach (var st in str)
+            {
+                if(st.Contains("/"))
+                {
+                    string name = st.Substring(0,st.LastIndexOf(":")).Trim();
+                    string count = st.Substring(st.IndexOf("/") + 1);
+
+                    int amount = 0;
+
+                    if (int.TryParse(count, out amount))
+                    {
+                        //debugPanel?.WriteText("\n" + name + "" + count + "XX" + amount, true);
+
+                        if (partsDictionary.ContainsKey(name))
+                        {
+                            partsDictionary[name].Requested = amount;
+                        }
+
+                    }
+                }
+            }
+
             partsPanel?.WriteText("", false);
             partsPanel?.WriteText($"<<-----------Production----------->>" +
                                   $"\nContainers:{partsInventorys.Count()}" +
@@ -1101,11 +1129,11 @@ namespace SpaceEngineers.BaseManagers
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value}. /", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} /", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
 
@@ -1330,54 +1358,63 @@ namespace SpaceEngineers.BaseManagers
             nanobotBuildQueue = nanobotBuildModule.GetValue<Dictionary<MyDefinitionId, int>>("BuildAndRepair.MissingComponents");
             Echo($"Nanobot total components:{nanobotBuildQueue.Count}");
 
-            AddNanobotPartsToProduct();
+            if (nanobotBuildQueue.Any())
+                AddNanobotPartsToProduct();
 
             monitor.AddInstructions("");
         }
 
         public void AddNanobotPartsToProduct()
         {
-            if (useNanobotAutoBuild == false)
-                return;
-
+           
             nanobuildReady = true;
 
             foreach (var ass in specialAssemblers)
             {
-                ass.ClearQueue();
+                if(!ass.IsProducing)
+                {
+                    ass.ClearQueue();
+                }
             }
 
-            var freeAssemblers = specialAssemblers.FirstOrDefault(ass => ass.IsQueueEmpty);
-            if (freeAssemblers == null)
+            var freeAssemblers = specialAssemblers.Where(ass => ass.IsQueueEmpty).ToList();
+            if (!freeAssemblers.Any())
                 return;
 
             foreach (var bps in nanobotBuildQueue)
             {
-               
-                //var bd = blueprintData.Where(k => k.Key.Contains(bps.Key.SubtypeName));
+                var bd = blueprintData.Where(k => k.Key.Contains(bps.Key.SubtypeName));
 
-                //if(!bd.Any())
-                //{
-                //    Echo($"WARNING no blueprint: {bps.Key.SubtypeName}");
-                //    nanobuildReady = false;
-                //    continue;
-                //}
+                if (!bd.Any())
+                {
+                    Echo($"WARNING no blueprint: {bps.Key.SubtypeName}");
+                    nanobuildReady = false;
+                    continue;
+                }
 
-                //string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Key;
+                string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Value;
 
-                //VRage.MyFixedPoint amount = (VRage.MyFixedPoint)bps.Value;
-                //MyDefinitionId blueprint;
+                MyDefinitionId blueprint;
 
-                //if (!MyDefinitionId.TryParse(name, out blueprint))
-                //{
-                //    Echo($"WARNING cant parse: {name}");
-                //    continue;
-                //}
+                if (!MyDefinitionId.TryParse(name, out blueprint))
+                {
+                    Echo($"WARNING cant parse: {name}");
+                    continue;
+                }
 
-                //if (freeAssemblers.CanUseBlueprint(blueprint))
-                //{
-                //    freeAssemblers.AddQueueItem(blueprint, amount);
-                //}
+                var availAss = freeAssemblers.Where(ass => ass.CanUseBlueprint(blueprint)).ToList();
+                if (!availAss.Any())
+                    return;
+
+                var count = bps.Value / availAss.Count;
+                if (count < 1)
+                    count = 1;
+
+                foreach(var ass in availAss)
+                {
+                    VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
+                    ass.AddQueueItem(blueprint, amount);
+                }
             }
 
             monitor.AddInstructions("");
@@ -1505,6 +1542,11 @@ namespace SpaceEngineers.BaseManagers
             monitor.AddInstructions("");
         }
 
+        public class ItemBalanser
+        {
+            public int Current { set; get; } = 0;
+            public int Requested { set; get; } = 0;
+        }
 
         public class PerformanceMonitor
         {
@@ -1595,3 +1637,91 @@ namespace SpaceEngineers.BaseManagers
     }
 
 }
+
+//[Blueprints]
+//AluminiumPlate = AluminiumPlate
+//BulletproofGlass = BulletproofGlass
+//CementMixItem = CementMixItem
+//Computer = ComputerComponent
+//Construction = ConstructionComponent
+//CopperPlate = CopperPlate
+//Detector = DetectorComponent
+//Display = Display
+//Explosives = ExplosivesComponent
+//Girder = GirderComponent
+//GravityGenerator = GravityGeneratorComponent
+//InteriorPlate = InteriorPlate
+//LargeTube = LargeTube
+//Medical = MedicalComponent
+//MediumCopperTube = MediumCopperTube
+//MetalGrid = MetalGrid
+//Motor = MotorComponent
+//PowerCell = PowerCell
+//RadioCommunication = RadioCommunicationComponent
+//Reactor = ReactorComponent
+//ShieldComponent = ShieldComponentBP
+//SmallCopperTube = SmallCopperTube
+//SmallTube = SmallTube
+//SolarCell = SolarCell
+//SteelBolt = SteelBolt
+//SteelPlate = SteelPlate
+//Superconductor = Superconductor
+//Thrust = ThrustComponent
+//AluminiumFanBlade = AluminiumFanBlade
+//BallBearing = BallBearing
+//CeramicPlate = CeramicPlate
+//Chain = Chain
+//CopperZincPlate = CopperZincPlate
+//DenseSteelPlate = DenseSteelPlate
+//LargeCopperTube = LargeCopperTube
+//Neutronium = Neutronium
+//PolyCarbonatePlate = PolyCarbonatePlate
+//PulseCannonConstructionBoxS = PulseCannonConstructionComponentS
+//Reinforced_Mesh = Reinforced_Mesh
+//ReinforcedPlate = ReinforcedPlate
+//LaserConstructionBoxS = SmallLaserConstructionComponentS
+//SteelPulley = SteelPulley
+//SteelSpring = SteelSpring
+//StrongCopperPlate = StrongCopperPlate
+//AdvancedReactorBundle = AdvancedReactorBundle
+//Cutters = Cutters
+//DiamondTooling = DiamondTooling
+//Filter = Filter
+//KC_Component = KC_Component
+//LaserConstructionBoxL = LaserConstructionComponent
+//Octocore = OctocoreComponent
+//PulseCannonConstructionBoxL = PulseCannonConstructionComponent
+//TitaniumAlloyPlate = TitaniumAlloyPlate
+//TitaniumPlate = TitaniumPlate
+//StrongTitanPlate = TitanPlate
+//TungstenAlloyPlate = TungstenAlloyPlate
+//dcZincPlate = ZincPlate
+//AdvancedThrustModule = AdvancedThrustModule
+//ArcReactorcomponent = ArcReactorcomponent
+//CryoPump = CryoPump
+//K - Crystal_Interface = K - Crystal_Interface
+//largehydrogeninjector = largehydrogeninjector
+//Nadium_Radioactive = Radioactive_Nadium_Ingot
+//Trinium = Trinium
+//Xenucore = XenucoreComponent
+//Dynamite = Dynamite
+//RTG_Plutonium238 = Plutonium238_RTG_BPDef
+//BareBrassWire = BareBrassWire
+//BrazingRod = BrazingRod
+//CapacitorBank = CapacitorBankComponent
+//CoolingHeatsink = CoolingHeatsinkComponent
+//Diode = Diode
+//EnergyCristal = EnergyCristal
+//FocusPrysm = FocusPrysmComponent
+//HeatSink - T2 = HeatSink - T2
+//LeadAcidCell = LeadAcidCell
+//LiIonCell = LiIonCell
+//LithiumPowerCell = LithiumPowerCell
+//PowerCoupler = PowerCouplerComponent
+//PWMCircuit = PWMCircuitComponent
+//Resistor = Resistor
+//SafetyBypass = SafetyBypassComponent
+//Sensor = Sensor
+//ShieldFrequencyModule = ShieldFrequencyModuleComponent
+//Transistor = Transistor
+//WarpCell = WarpCell
