@@ -36,16 +36,6 @@ namespace SpaceEngineers.AntiAirMissile
         string textMonitorName = "!MissileMonitor";
         string textMonitorMissileName = "!MissileInfo";
 
-        /// <summary>
-        /// Название компонентов блоков ракет
-        /// </summary>
-        string remoteControlName = "Radio";//
-        string decouplerName = "Decoupler";//
-        string missileEnginesName = "MissileEng";//
-        string missileGyrosName = "MissileGyro";//
-        string missileGravityEngineName = "Gravity";
-        string missileManevricEngineName = "Manv";
-        string missileWarheadName = "Warhead";
 
         string missileTagResiever = "ch1R";//Получаем данные от системы целеуказания по радиоканалу
 
@@ -71,7 +61,8 @@ namespace SpaceEngineers.AntiAirMissile
         List<ControlledMissile> missileList;
         List<ControlledMissile> missileInFlightList;
 
-        MyIni dataSystem;
+       // MyIni dataSystem;
+        PerformanceMonitor perfMonitor;
 
         public Program()
         {
@@ -89,6 +80,8 @@ namespace SpaceEngineers.AntiAirMissile
             listener.SetMessageCallback(missileTagResiever);
 
             WriteMissileStaticParams();
+
+            perfMonitor = new PerformanceMonitor(this, Me.GetSurface(1));
         }
 
         public void Main(string args)
@@ -135,6 +128,9 @@ namespace SpaceEngineers.AntiAirMissile
             UpdateFlightMissile();
 
             DrawInfo();
+
+            perfMonitor.EndOfFrameCalc();
+            perfMonitor.Draw();
         }
 
         /// <summary>
@@ -208,6 +204,7 @@ namespace SpaceEngineers.AntiAirMissile
             }
 
             GetStationInfo();
+            perfMonitor.AddInstructions("");
         }
 
         /// <summary>
@@ -251,6 +248,8 @@ namespace SpaceEngineers.AntiAirMissile
             {
                 missile.DrawMissileInfo(this);
             }
+
+            perfMonitor.AddInstructions("");
         }
 
         /// <summary>
@@ -274,6 +273,8 @@ namespace SpaceEngineers.AntiAirMissile
                     double.TryParse(str[5], out targetSpeed.Z);
                 }
             }
+
+            perfMonitor.AddInstructions("");
         }
 
         /// <summary>
@@ -315,6 +316,8 @@ namespace SpaceEngineers.AntiAirMissile
                     missileInFlightList.RemoveAt(i);
                 }
             }
+
+            perfMonitor.AddInstructions("");
         }
 
         /// <summary>
@@ -431,9 +434,9 @@ namespace SpaceEngineers.AntiAirMissile
             public bool UseHirozonCorrector { set; get; }
 
             public List<IMyGyro> Gyros;
-            public List<IMyThrust> Trusters;//двигатели вперед
+            public List<IMyThrust> Thrusters;//двигатели вперед
             public List<IMyThrust> GravityTrusters;//двигатели для гашения гравитации
-            public List<IMyThrust> ManevricTrusters;//маневровые двигаетли
+            public List<IMyThrust> ManevricThrusters;//маневровые двигаетли
             public List<IMyWarhead> Warheads;//боеголовки
             public List<IMyBatteryBlock> Batteries;//аккумуляторы
 
@@ -462,21 +465,35 @@ namespace SpaceEngineers.AntiAirMissile
 
             public static int MissileRadioExpDistance = 5;
 
+            //Настройки  ПИД регулятора
+            private PIDRegulator yawPID;
+            private PIDRegulator rollPID;
+            private PIDRegulator pitchPID;
+
+            private double pK = 1;
+            private double dK = 0;
+            private double iK = 0;
+
             public ControlledMissile()
             {
                 FlightTime = 0;
                 UseHirozonCorrector = false;
 
                 Gyros = new List<IMyGyro>();
-                Trusters = new List<IMyThrust>();
+                Thrusters = new List<IMyThrust>();
                 GravityTrusters = new List<IMyThrust>();
-                ManevricTrusters = new List<IMyThrust>();
+                ManevricThrusters = new List<IMyThrust>();
                 Warheads = new List<IMyWarhead>();
                 Batteries = new List<IMyBatteryBlock>();
 
                 Random rnd;
                 rnd = new Random();
                 wanderTime = rnd.Next(0, 100) - 25;
+
+                yawPID = new PIDRegulator();
+                rollPID = new PIDRegulator();
+                pitchPID = new PIDRegulator();
+
             }
 
             /// <summary>
@@ -491,11 +508,11 @@ namespace SpaceEngineers.AntiAirMissile
                 if (RemotControl != null)
                 {
 
-                    Trusters = groupBlocks.Where(b => b is IMyThrust)
+                    Thrusters = groupBlocks.Where(b => b is IMyThrust)
                                                    .Where(b => b.Orientation.Forward == Base6Directions.GetOppositeDirection(RemotControl.Orientation.Forward))
                                                    .Select(t => t as IMyThrust).ToList();
 
-                    ManevricTrusters = groupBlocks.Where(b => b is IMyThrust)
+                    ManevricThrusters = groupBlocks.Where(b => b is IMyThrust)
                                                   .Where(b => b.Orientation.Forward != Base6Directions.GetOppositeDirection(RemotControl.Orientation.Forward))
                                                   .Select(t => t as IMyThrust).ToList();
                 }
@@ -508,20 +525,20 @@ namespace SpaceEngineers.AntiAirMissile
                 MaxBatteryPower = Batteries.Sum(b => b.MaxStoredPower);
                 TotalBatteryPower = Batteries.Sum(b => b.CurrentStoredPower);
 
-                EffectiveEngineThrust = Trusters.Sum(b => b.MaxEffectiveThrust);
+                EffectiveEngineThrust = Thrusters.Sum(b => b.MaxEffectiveThrust);
 
                 foreach (var batt in Batteries)
                 {
                     batt.ChargeMode = ChargeMode.Recharge;
                 }
 
-                foreach (var truster in Trusters)
+                foreach (var truster in Thrusters)
                 {
                     truster.SetValueBool("OnOff", false);
                     truster.ThrustOverridePercentage = -1;
                 }
 
-                foreach (var truster in ManevricTrusters)
+                foreach (var truster in ManevricThrusters)
                 {
                     truster.SetValueBool("OnOff", false);
                 }
@@ -560,14 +577,14 @@ namespace SpaceEngineers.AntiAirMissile
             {
                 EchoMonitor.Echo("------------------");
                 EchoMonitor.Echo($"Size: {RemotControl.CubeGrid.GridSizeEnum}" +
-                   $"\nEngines: {Trusters.Count}" +
+                   $"\nEngines: {Thrusters.Count}" +
                    $"\nGyros: {Gyros.Count}" +
-                   $"\nManevrEngines: {ManevricTrusters.Count}" +
+                   $"\nManevrEngines: {ManevricThrusters.Count}" +
                    $"\nWarheads: {Warheads.Count}" +
                    $"\nRadio expl dist {MissileRadioExpDistance} m");
 
-                if (SensorBlock != null)
-                    EchoMonitor.Echo("Sencor block: OK");
+                string sensorSta = SensorBlock != null ? "Sencor block: OK" : "No Sencor";
+                EchoMonitor.Echo(sensorSta);
 
                 EchoMonitor.Echo($"----PowerSystems-----" +
                 $"\nTotal batt: {Batteries.Count}" +
@@ -585,7 +602,7 @@ namespace SpaceEngineers.AntiAirMissile
             {
                 if (Gyros.Count == 0 || Gyros.Any(b => !b.IsFunctional))
                     return false;
-                if (Trusters.Count == 0 || Trusters.Any(b => !b.IsFunctional))
+                if (Thrusters.Count == 0 || Thrusters.Any(b => !b.IsFunctional))
                     return false;
                 if (RemotControl == null || !RemotControl.IsFunctional)
                     return false;
@@ -596,7 +613,7 @@ namespace SpaceEngineers.AntiAirMissile
 
                 MaxBatteryPower = Batteries.Sum(b => b.MaxStoredPower);
                 TotalBatteryPower = Batteries.Sum(b => b.CurrentStoredPower);
-                EffectiveEngineThrust = Trusters.Sum(b => b.MaxEffectiveThrust);
+                EffectiveEngineThrust = Thrusters.Sum(b => b.MaxEffectiveThrust);
                 missileMass = RemotControl.CalculateShipMass().PhysicalMass;
 
                 return true;
@@ -606,7 +623,7 @@ namespace SpaceEngineers.AntiAirMissile
             {
                 if (Gyros.Any(g => g.Closed))
                     return false;
-                if (Trusters.Any(t => t.Closed))
+                if (Thrusters.Any(t => t.Closed))
                     return false;
                 if (RemotControl.Closed)
                     return false;
@@ -686,7 +703,7 @@ namespace SpaceEngineers.AntiAirMissile
 
             public void SensorDetection()
             {
-                if (!SensorBlock.Closed && SensorBlock != null)
+                if (SensorBlock != null && !SensorBlock.Closed)
                 {
                     SensorBlock.Enabled = true;
                     var det = SensorBlock.LastDetectedEntity;
@@ -710,10 +727,10 @@ namespace SpaceEngineers.AntiAirMissile
                         batt.ChargeMode = ChargeMode.Auto;
                     }
 
-                    foreach (var truster in Trusters)
+                    foreach (var thruster in Thrusters)
                     {
-                        truster.SetValueBool("OnOff", true);
-                        truster.ThrustOverridePercentage = 1;
+                        thruster.SetValueBool("OnOff", true);
+                        thruster.ThrustOverridePercentage = 1;
                     }
 
                     foreach (var gyro in Gyros)
@@ -721,9 +738,9 @@ namespace SpaceEngineers.AntiAirMissile
                         gyro.SetValueBool("Override", true);
                     }
 
-                    foreach (var truster in ManevricTrusters)
+                    foreach (var thruster in ManevricThrusters)
                     {
-                        truster.SetValueBool("OnOff", true);
+                        thruster.SetValueBool("OnOff", true);
                     }
 
                     foreach (IMyWarhead head in Warheads)
@@ -808,6 +825,179 @@ namespace SpaceEngineers.AntiAirMissile
                 return spiral;
             }
 
+        }
+
+
+        public class PerformanceMonitor
+        {
+            public int TotalInstructions { get; private set; }
+            public int MaxInstructions { get; private set; }
+            public double UpdateTime { get; private set; }
+            public int CallPerTick { get; private set; }
+            public double AverageInstructionsPerTick { get; private set; }
+            public double AverageTimePerTick { get; private set; }
+
+            public double MaxInstructionsPerTick { get; private set; }
+
+            private double avrInst;
+            private double avrTime;
+
+            private Program mainProgram;
+
+            private IMyTextSurface mainDisplay;
+
+
+            public PerformanceMonitor(Program main)
+            {
+                mainProgram = main;
+                CallPerTick = 0;
+                AverageInstructionsPerTick = 0;
+                AverageTimePerTick = 0;
+                avrInst = 0;
+                avrTime = 0;
+
+            }
+
+            public PerformanceMonitor(Program main, IMyTextSurface display)
+            {
+                mainProgram = main;
+                CallPerTick = 0;
+                AverageInstructionsPerTick = 0;
+                AverageTimePerTick = 0;
+                avrInst = 0;
+                avrTime = 0;
+                mainDisplay = display;
+
+            }
+
+
+            public void AddInstructions(string methodName)
+            {
+                TotalInstructions = mainProgram.Runtime.CurrentInstructionCount;
+                MaxInstructions = mainProgram.Runtime.MaxInstructionCount;
+                avrInst += TotalInstructions;
+
+                UpdateTime = mainProgram.Runtime.LastRunTimeMs;
+                avrTime += UpdateTime;
+
+                CallPerTick++;
+
+                //var currMethodName = System.Reflection.MethodBase.GetCurrentMethod().Name;
+            }
+
+            public void EndOfFrameCalc()
+            {
+                AverageInstructionsPerTick = avrInst / CallPerTick;
+
+
+                if (MaxInstructionsPerTick < avrInst)
+                    MaxInstructionsPerTick = avrInst;
+
+                avrInst = 0;
+
+                AverageTimePerTick = avrTime / CallPerTick;
+                avrTime = 0;
+
+                CallPerTick = 0;
+
+            }
+
+            public void Draw()
+            {
+                mainDisplay?.WriteText("", false);
+                mainDisplay?.WriteText($"CUR ins: {TotalInstructions}" +
+                                      $"\nAV inst: {AverageInstructionsPerTick} / {MaxInstructionsPerTick}" +
+                                      $"\nAV time:{AverageTimePerTick}", true);
+
+            }
+
+        }
+
+        public class PIDRegulator
+        {
+
+            public double P = 0;
+            public double D = 0;
+            public double I = 0;
+
+            public double Kp { get; set; } = 1;
+            public double Kd { get; set; } = 1;
+            public double Ki { get; set; } = 1;
+
+            public double ClampI { get; set; } = 0;
+            public double DeltaTimer { get; set; } = 1;
+
+            private double prevD = 0;
+
+            public PIDRegulator()
+            {
+
+            }
+
+            /// <summary>
+            /// Установка коэффициентов
+            /// </summary>
+            public PIDRegulator SetK(double _Kp, double _kD, double _kI)
+            {
+                Kp = _Kp;
+                Kd = _kD;
+                Ki = _kI;
+
+                return this;
+            }
+
+            /// <summary>
+            /// Установка регулирующего значения
+            /// </summary>
+            public PIDRegulator SetPID(double inputP, double inputD, double inputI, double deltaTimer)
+            {
+                DeltaTimer = deltaTimer;
+
+                P = inputP;
+
+                D = (inputD - prevD) / DeltaTimer;
+                prevD = inputD;
+
+                I += inputI * DeltaTimer;
+                I = MathHelper.Clamp(I, -ClampI, ClampI);
+
+                return this;
+            }
+
+            /// <summary>
+            /// Установка регулирующего значения
+            /// </summary>
+            public PIDRegulator SetPID(double input)
+            {
+                DeltaTimer = 1;
+
+                P = input;
+
+                D = (input - prevD) / DeltaTimer;
+                prevD = input;
+
+                I += input * DeltaTimer;
+                I = MathHelper.Clamp(I, -ClampI, ClampI);
+
+                return this;
+            }
+
+            /// <summary>
+            /// Возвращяем сигнал управления
+            /// </summary>
+            public double GetSignal()
+            {
+                double outSignal = P * Kp + D * Kd + I * Ki;
+
+                return outSignal;
+            }
+
+            public void Reset()
+            {
+                P = 0;
+                D = 0;
+                I = 0;
+            }
         }
 
         //////////////END OF SCRIPT/////////////////////////////
