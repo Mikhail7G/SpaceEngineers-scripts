@@ -1101,11 +1101,11 @@ namespace SpaceEngineers.BaseManagers
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} BP ready ", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value}. /", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} /", true);
                 }
             }
 
@@ -1115,11 +1115,11 @@ namespace SpaceEngineers.BaseManagers
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} BP ready ", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value}. /", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} /", true);
                 }
             }
 
@@ -1129,11 +1129,11 @@ namespace SpaceEngineers.BaseManagers
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} BP ready ", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value}. /", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} /", true);
                 }
             }
             monitor.AddInstructions("");

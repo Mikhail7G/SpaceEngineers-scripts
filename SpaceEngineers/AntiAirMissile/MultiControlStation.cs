@@ -24,10 +24,12 @@ namespace SpaceEngineers.AntiAirMissile
         /// </summary>
         int maxAviableFlightTime = 120; //seconds
 
+        int missileTakeOffSafeyTimer = 150; //Ticks
+
         /// <summary>
         /// Дистанция потрыва ракеты в метрах
         /// </summary>
-        public int missileRadioExplosionDistance = 10;
+        int missileRadioExplosionDistance = 10;
 
         /// <summary>
         /// Назавания компонентов наземной станции
@@ -49,7 +51,10 @@ namespace SpaceEngineers.AntiAirMissile
         Vector3D targetSpeed;//скрость цели
 
         bool scriptEnabled = false;//работает ли скрипт каждый тик
-        string missileTagFinder = null;//тэг поиска ракет
+        string missileTagFinder = "";//тэг поиска ракет
+
+        bool missileUseWander = true;
+        bool missileUseSpiral = true;
 
         //компоненты пусковой базы
         IMyRadioAntenna antenna;
@@ -61,11 +66,14 @@ namespace SpaceEngineers.AntiAirMissile
         List<ControlledMissile> missileList;
         List<ControlledMissile> missileInFlightList;
 
-       // MyIni dataSystem;
+        MyIni dataSystem;
         PerformanceMonitor perfMonitor;
 
         public Program()
         {
+            dataSystem = new MyIni();
+            ReadIni();
+
             targetPosition = new Vector3D(0, 0, 0);
             targetSpeed = new Vector3D(0, 0, 0);
 
@@ -79,9 +87,59 @@ namespace SpaceEngineers.AntiAirMissile
             listener = IGC.RegisterBroadcastListener(missileTagResiever);
             listener.SetMessageCallback(missileTagResiever);
 
-            WriteMissileStaticParams();
-
             perfMonitor = new PerformanceMonitor(this, Me.GetSurface(1));
+
+        }
+
+        public void ReadIni()
+        {
+            InitData();
+
+            MyIniParseResult dataResult;
+            if (!dataSystem.TryParse(Me.CustomData, out dataResult))
+            {
+                Echo($"CustomData error:\nLine {dataResult}");
+            }
+            else
+            {
+                missileTagFinder = dataSystem.Get("Names", "MissileGroupName").ToString();
+                antennaName = dataSystem.Get("Names", "StationAntennaName").ToString();
+                textMonitorName = dataSystem.Get("Names", "StationMissileMonitor").ToString();
+                textMonitorMissileName = dataSystem.Get("Names", "StationMissileInfoMonitor").ToString();
+                missileTagResiever = dataSystem.Get("Names", "RadioResieveChannel").ToString();
+
+                maxAviableFlightTime = dataSystem.Get("Params", "StationControlTime").ToInt32();
+                missileTakeOffSafeyTimer = dataSystem.Get("Params", "MissileTakeOffSafeyTicks").ToInt32();
+                missileRadioExplosionDistance = dataSystem.Get("Params", "RadioExplDistance").ToInt32();
+                missileUseWander = dataSystem.Get("Params", "UseWander").ToBoolean();
+                missileUseSpiral = dataSystem.Get("Params", "UseSpiral").ToBoolean();
+            }
+
+        }
+
+        public void InitData()
+        {
+            var data = Me.CustomData;
+
+            if(!data.Any())
+            {
+                dataSystem.AddSection("Names");
+                dataSystem.Set("Names", "MissileGroupName", "Missile.");
+                dataSystem.Set("Names", "RadioResieveChannel", "ch1R");
+
+                dataSystem.Set("Names", "StationAntennaName", "!AntGround");
+                dataSystem.Set("Names", "StationMissileMonitor", "!MissileMonitor");
+                dataSystem.Set("Names", "StationMissileInfoMonitor", "!MissileInfo");
+
+                dataSystem.AddSection("Params");
+                dataSystem.Set("Params", "StationControlTime", 120);
+                dataSystem.Set("Params", "MissileTakeOffSafeyTicks", 150);
+                dataSystem.Set("Params", "RadioExplDistance", 10);
+                dataSystem.Set("Params", "UseWander", true);
+                dataSystem.Set("Params", "UseSpiral", true);
+
+                Me.CustomData = dataSystem.ToString();
+            }
         }
 
         public void Main(string args)
@@ -151,17 +209,12 @@ namespace SpaceEngineers.AntiAirMissile
             scriptEnabled = false;
         }
 
-        public void WriteMissileStaticParams()
-        {
-            ControlledMissile.MissileRadioExpDistance = missileRadioExplosionDistance;
-        }
 
         /// <summary>
         /// Поиск компонентов с названиями по группам, для сборки ракет в субгридах
         /// </summary>
         public void FindMissile()
         {
-            missileTagFinder = Me.CustomData;//тэг для поиска ракет
             missileList.Clear();
 
             currentSelectedMissile = 0;
@@ -180,10 +233,21 @@ namespace SpaceEngineers.AntiAirMissile
                     List<IMyTerminalBlock> groupBlocks = new List<IMyTerminalBlock>();
                     group[i].GetBlocks(groupBlocks);
 
-                    ControlledMissile missile = new ControlledMissile();
-                    missile.MissileName = group[i].Name;
+                    ControlledMissile missile = new ControlledMissile
+                    {
+                        MissileName = group[i].Name,
+                        UseSpiral = missileUseSpiral,
+                        UseWander = missileUseWander,
+                        MissileRadioExpDistance = missileRadioExplosionDistance,
+                        MinimumSafeTakeOffTimer = missileTakeOffSafeyTimer
+                    };
+                    //missile.MissileName = group[i].Name;
+                    //missile.UseSpiral = missileUseSpiral;
+                    //missile.UseWander = missileUseWander;
+                    //missile.MissileRadioExpDistance = missileRadioExplosionDistance;
+                    //missile.MinimumSafeTakeOffTimer = missileTakeOffSafeyTimer;
 
-                    //Приск блоков ракеты и проверка на проварку всех блоков
+                    //Поиск блоков ракеты и проверка на проварку всех блоков
                     if (missile.BuildMissile(groupBlocks).MissileReady())
                     {
                         missileList.Add(missile);
@@ -429,9 +493,11 @@ namespace SpaceEngineers.AntiAirMissile
 
         public class ControlledMissile
         {
-            public int FlightTime { private set; get; }
-            public string MissileName { set; get; }
-            public bool UseHirozonCorrector { set; get; }
+            public int FlightTime { private set; get; }//время полета ракеты с момента запуска
+            public string MissileName { set; get; }//имя
+            public bool UseHirozonCorrector { set; get; }//использовать ли корректировку гироскопа для ориентации по гравитации
+            public bool UseWander { set; get; } = true;//использование случайной траектории
+            public bool UseSpiral { set; get; } = true;//финальная спиральная траектория
 
             public List<IMyGyro> Gyros;
             public List<IMyThrust> Thrusters;//двигатели вперед
@@ -444,17 +510,17 @@ namespace SpaceEngineers.AntiAirMissile
             public IMyShipMergeBlock MergeBlock;//блок соеденителя
             public IMySensorBlock SensorBlock;
 
-            public float TotalBatteryPower { set; get; } = 0;
-            public float MaxBatteryPower { set; get; } = 0;
-
-            public float EffectiveEngineThrust { set; get; } = 0;
-
-            private double missileMass = 0;
+            public double FinalApproachDistance { set; get; } = 1000;//дистанция финального наведения на цель
+            public float TotalBatteryPower { set; get; } = 0;//заряд батарей
+            public float MaxBatteryPower { set; get; } = 0;//отдача батарей
+            public float EffectiveEngineThrust { set; get; } = 0;//эффективная тяга двигателей
+            public int MissileRadioExpDistance { set; get; } = 5;//дистанция срабатывания сенсора на детонацию
+            public double SpiralRadius { set; get; } = 10;//радиус спирали
+            public double SpiralMaxTime { set; get; } = 300;//время спирали
+            public int MinimumSafeTakeOffTimer { set; get; } = 150;//время в тиках безопасного взлета ракеты после запуска
 
             private Vector3D linearVel = new Vector3D();
             private Vector3D natGravity = new Vector3D();
-
-            private int minimumSafeTakeOffTimer = 150;
 
             private int wanderTime = 0;
             private int spiralTime = 0;
@@ -462,8 +528,6 @@ namespace SpaceEngineers.AntiAirMissile
             private double sqrDistance;
 
             private Vector3D wander = new Vector3D();
-
-            public static int MissileRadioExpDistance = 5;
 
             //Настройки  ПИД регулятора
             private PIDRegulator yawPID;
@@ -493,6 +557,10 @@ namespace SpaceEngineers.AntiAirMissile
                 yawPID = new PIDRegulator();
                 rollPID = new PIDRegulator();
                 pitchPID = new PIDRegulator();
+
+                yawPID.SetK(pK, dK, iK);
+                rollPID.SetK(pK, dK, iK);
+                pitchPID.SetK(pK, dK, iK);
 
             }
 
@@ -589,8 +657,6 @@ namespace SpaceEngineers.AntiAirMissile
                 EchoMonitor.Echo($"----PowerSystems-----" +
                 $"\nTotal batt: {Batteries.Count}" +
                 $"\nAcc powered: {TotalBatteryPower * 100 / MaxBatteryPower} % " +
-                $"\nMass/Wheight: {Math.Round(RemotControl.CalculateShipMass().TotalMass, 2)} kg" +
-                $"/{Math.Round(RemotControl.CalculateShipMass().TotalMass * RemotControl.GetNaturalGravity().Length(), 2)} N" +
                 $"\nEng effective thrust: {EffectiveEngineThrust} kN");
                 EchoMonitor.Echo("------------------");
             }
@@ -614,7 +680,6 @@ namespace SpaceEngineers.AntiAirMissile
                 MaxBatteryPower = Batteries.Sum(b => b.MaxStoredPower);
                 TotalBatteryPower = Batteries.Sum(b => b.CurrentStoredPower);
                 EffectiveEngineThrust = Thrusters.Sum(b => b.MaxEffectiveThrust);
-                missileMass = RemotControl.CalculateShipMass().PhysicalMass;
 
                 return true;
             }
@@ -756,7 +821,7 @@ namespace SpaceEngineers.AntiAirMissile
             {
                 FlightTime++;
 
-                if (FlightTime > minimumSafeTakeOffTimer)
+                if (FlightTime > MinimumSafeTakeOffTimer)
                 {
                     var mPos = RemotControl.GetPosition();
                     var mSpeed = RemotControl.GetShipVelocities().LinearVelocity.Length();
@@ -767,13 +832,13 @@ namespace SpaceEngineers.AntiAirMissile
                     //расчет точки перехвата цели и поворот гироскопа на цель
                     Vector3D interPos = CalcInterceptPos(mPos, mSpeed, targetPosition, targetSpeed);
 
-                    if (sqrDistance > 1000 * 1000)
+                    if (sqrDistance > FinalApproachDistance * FinalApproachDistance)
                     {
-                        interPos += Wander(targetPosition);
+                        interPos += Wander();
                     }
                     else
                     {
-                        interPos += Spiral(targetPosition);
+                        interPos += Spiral();
                     }
 
                     SetGyro(RottateMissileToTargetNew(interPos));
@@ -783,8 +848,11 @@ namespace SpaceEngineers.AntiAirMissile
             /// <summary>
             /// Режим случайного маневрирования
             /// </summary>
-            public Vector3D Wander(Vector3D dist)
+            public Vector3D Wander()
             {
+                if (!UseWander)
+                    return Vector3D.Zero;
+
                 wanderTime++;
                 if (wanderTime > 50)
                 {
@@ -805,20 +873,20 @@ namespace SpaceEngineers.AntiAirMissile
             /// <summary>
             /// Движение по спирали
             /// </summary>
-            public Vector3D Spiral(Vector3D dist)
+            public Vector3D Spiral()
             {
-                double radius = 10;
-                double maxSpiralTime = 300;
+                if(!UseSpiral)
+                    return Vector3D.Zero;
 
                 spiralTime++;
-                if (spiralTime > maxSpiralTime)
+                if (spiralTime > SpiralMaxTime)
                     spiralTime = 0;
 
-                var fwd = RemotControl.WorldMatrix.Forward * radius;
-                var up = RemotControl.WorldMatrix.Up * radius;
-                var left = RemotControl.WorldMatrix.Left * radius;
+                var fwd = RemotControl.WorldMatrix.Forward * SpiralRadius;
+                var up = RemotControl.WorldMatrix.Up * SpiralRadius;
+                var left = RemotControl.WorldMatrix.Left * SpiralRadius;
 
-                double angle = 2 * Math.PI * spiralTime / maxSpiralTime;
+                double angle = 2 * Math.PI * spiralTime / SpiralMaxTime;
 
                 Vector3D spiral = fwd + left * Math.Cos(angle) + up * Math.Sin(angle);
 
@@ -916,18 +984,17 @@ namespace SpaceEngineers.AntiAirMissile
         public class PIDRegulator
         {
 
-            public double P = 0;
-            public double D = 0;
-            public double I = 0;
+            double P = 0;
+            double D = 0;
+            double I = 0;
 
             public double Kp { get; set; } = 1;
             public double Kd { get; set; } = 1;
             public double Ki { get; set; } = 1;
 
-            public double ClampI { get; set; } = 0;
             public double DeltaTimer { get; set; } = 1;
 
-            private double prevD = 0;
+            double prevD = 0;
 
             public PIDRegulator()
             {
@@ -959,7 +1026,6 @@ namespace SpaceEngineers.AntiAirMissile
                 prevD = inputD;
 
                 I += inputI * DeltaTimer;
-                I = MathHelper.Clamp(I, -ClampI, ClampI);
 
                 return this;
             }
@@ -969,15 +1035,28 @@ namespace SpaceEngineers.AntiAirMissile
             /// </summary>
             public PIDRegulator SetPID(double input)
             {
-                DeltaTimer = 1;
-
                 P = input;
 
                 D = (input - prevD) / DeltaTimer;
                 prevD = input;
 
                 I += input * DeltaTimer;
-                I = MathHelper.Clamp(I, -ClampI, ClampI);
+
+                return this;
+            }
+
+            /// <summary>
+            /// Установка регулирующего значения
+            /// </summary>
+            public PIDRegulator SetPID(double input,double clampI)
+            {
+                P = input;
+
+                D = (input - prevD) / DeltaTimer;
+                prevD = input;
+
+                I += input * DeltaTimer;
+                I = MathHelper.Clamp(I, -clampI, clampI);
 
                 return this;
             }
