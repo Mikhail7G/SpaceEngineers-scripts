@@ -104,11 +104,11 @@ namespace SpaceEngineers.BaseManagers
 
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
         Dictionary<string, int> oresDict;
-        Dictionary<string, int> ingnotsDict;
+        Dictionary<string, ItemBalanser> ingnotsDict;
         Dictionary<string, ItemBalanser> partsDictionary;
         Dictionary<string, int> partsIngnotAndOresDictionary;
-        Dictionary<string, int> ammoDictionary;
-        Dictionary<string, int> buildedIngnotsDictionary;
+        Dictionary<string, ItemBalanser> ammoDictionary;
+        Dictionary<string, ItemBalanser> buildedIngnotsDictionary;
         Dictionary<string, int> reactorFuelLimitter;
 
         Dictionary<string, string> blueprintData;
@@ -120,6 +120,8 @@ namespace SpaceEngineers.BaseManagers
         List<MyInventoryItem> ingnotItems;
         List<MyProductionItem> refinereysItems;
         List<MyInventoryItem> productionItems;
+
+        StringBuilder partsDisplayData;
 
 
         //Поиск чертежей
@@ -146,13 +148,15 @@ namespace SpaceEngineers.BaseManagers
             gasTanks = new List<IMyGasTank>();
             specialAssemblers = new List<IMyAssembler>();
 
+            partsDisplayData = new StringBuilder();
+
             oresDict = new Dictionary<string, int>();
-            ingnotsDict = new Dictionary<string, int>();
+            ingnotsDict = new Dictionary<string, ItemBalanser>();
             partsDictionary = new Dictionary<string, ItemBalanser>();
             partsIngnotAndOresDictionary = new Dictionary<string, int>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
-            ammoDictionary = new Dictionary<string, int>();
-            buildedIngnotsDictionary = new Dictionary<string, int>();
+            ammoDictionary = new Dictionary<string, ItemBalanser>();
+            buildedIngnotsDictionary = new Dictionary<string, ItemBalanser>();
             reactorFuelLimitter = new Dictionary<string, int>();
 
             blueprintData = new Dictionary<string, string>();
@@ -827,10 +831,15 @@ namespace SpaceEngineers.BaseManagers
             {
                 return;
             }
+
+            foreach(var dict in ingnotsDict.ToList())
+            {
+                dict.Value.Current = 0;
+            }
          
             totalIngnotStorageVolume = 0;
             freeIngnotStorageVolume = 0;
-            ingnotsDict.Clear();
+           // ingnotsDict.Clear();
             partsIngnotAndOresDictionary.Clear();
 
             var ingnotInventorys = containers.Where(c => c.CustomName.Contains(ingnotStorageName))
@@ -851,11 +860,11 @@ namespace SpaceEngineers.BaseManagers
                     {
                         if (ingnotsDict.ContainsKey(item.Type.SubtypeId))
                         {
-                            ingnotsDict[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                            ingnotsDict[item.Type.SubtypeId].Current += item.Amount.ToIntSafe();
                         }
                         else
                         {
-                            ingnotsDict.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                            ingnotsDict.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
                         }
                     }
 
@@ -884,7 +893,7 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var dict in ingnotsDict.OrderBy(k => k.Key))
             {
-                ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} ", true);
             }
 
             ingnotPanel?.WriteText("\n<<-----------Ores----------->>", true);
@@ -1033,9 +1042,22 @@ namespace SpaceEngineers.BaseManagers
             totalPartsStorageVolume = 0;
             freePartsStorageVolume = 0;
           
-            partsDictionary.Clear();
-            ammoDictionary.Clear();
-            buildedIngnotsDictionary.Clear();
+            foreach(var dict in partsDictionary)
+            {
+                dict.Value.Current = 0;
+            }
+            foreach(var dict in ammoDictionary)
+            {
+                dict.Value.Current = 0;
+            }
+            foreach (var dict in buildedIngnotsDictionary)
+            {
+                dict.Value.Current = 0;
+            }
+
+            // partsDictionary.Clear();
+            // ammoDictionary.Clear();
+            //buildedIngnotsDictionary.Clear();
 
             var partsInventorys = containers.Where(c => c.CustomName.Contains(componentsStorageName))
                                             .Select(i => i.GetInventory(0));
@@ -1067,11 +1089,11 @@ namespace SpaceEngineers.BaseManagers
                     {
                         if (ammoDictionary.ContainsKey(item.Type.SubtypeId))
                         {
-                            ammoDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                            ammoDictionary[item.Type.SubtypeId].Current += item.Amount.ToIntSafe();
                         }
                         else
                         {
-                            ammoDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                            ammoDictionary.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
                         }
                     }
 
@@ -1079,21 +1101,22 @@ namespace SpaceEngineers.BaseManagers
                     {
                         if (buildedIngnotsDictionary.ContainsKey(item.Type.SubtypeId))
                         {
-                            buildedIngnotsDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                            buildedIngnotsDictionary[item.Type.SubtypeId].Current += item.Amount.ToIntSafe();
                         }
                         else
                         {
-                            buildedIngnotsDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                            buildedIngnotsDictionary.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
                         }
                     }
                 }
                 productionItems.Clear();
             }
 
-            StringBuilder build = new StringBuilder();
-            partsPanel?.ReadText(build);
+            //Блок считывания и заполнения данных о количестве компонентов с дисплея
+            partsDisplayData.Clear();
+            partsPanel?.ReadText(partsDisplayData);
 
-            var str = build.ToString().Split('\n');
+            var str = partsDisplayData.ToString().Split('\n');
 
            // debugPanel?.WriteText("", false);
             foreach (var st in str)
@@ -1119,7 +1142,7 @@ namespace SpaceEngineers.BaseManagers
             }
 
             partsPanel?.WriteText("", false);
-            partsPanel?.WriteText($"<<-----------Production----------->>" +
+            partsPanel?.WriteText($"<<-------------Production------------->>" +
                                   $"\nContainers:{partsInventorys.Count()}" +
                                   $"\nVolume: {precentageVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T" +
                                   "\n<<-----------Parts----------->>", true);
@@ -1143,11 +1166,11 @@ namespace SpaceEngineers.BaseManagers
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value}. /", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} /", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
 
@@ -1157,11 +1180,11 @@ namespace SpaceEngineers.BaseManagers
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value}. /", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value} /", true);
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
             monitor.AddInstructions("");
@@ -1611,6 +1634,8 @@ namespace SpaceEngineers.BaseManagers
 
                 if (MaxInstructionsPerTick < avrInst)
                     MaxInstructionsPerTick = avrInst;
+
+              
 
                 avrInst = 0;
 
