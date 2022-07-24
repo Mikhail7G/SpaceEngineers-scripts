@@ -584,22 +584,9 @@ namespace SpaceEngineers.BaseManagers
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
-            foreach (var refs in refinereys.Where(refs => refs is IMyUpgradableBlock))
-            {
-                var upgradeBlock = refs as IMyUpgradableBlock;
-                upgradeBlock?.GetUpgrades(out refsUpgradeList);
-
-                if (refinereyEfectivity.ContainsKey(refs))
-                {
-                    refinereyEfectivity[refs] = refsUpgradeList["Effectiveness"];
-                }
-                else
-                {
-                    refinereyEfectivity.Add(refs, refsUpgradeList["Effectiveness"]);
-                }
-            }
 
             Echo(">>>-------------------------------<<<");
+            Echo($"Current frame: {currentTick}");
             Echo($"Refinereys found:{refinereys.Count}");
             Echo($"Assemblers found:{assemblers.Count}");
             Echo($"Special assemblers found:{specialAssemblers.Count}");
@@ -613,7 +600,7 @@ namespace SpaceEngineers.BaseManagers
                                            $"{generators.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
 
             Echo($"Gas found my/conn: {gasTanks.Where(b => b.CubeGrid == Me.CubeGrid).Count()}/" +
-                                         $"{gasTanks.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
+                                    $"{gasTanks.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
 
             string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
             Echo($"Nanobot:{nanoFinded}:{nanobotBuildModule.CustomName}");
@@ -666,6 +653,21 @@ namespace SpaceEngineers.BaseManagers
         {
             if (refinereysDisplay == null)
                 return;
+
+            foreach (var refs in refinereys.Where(refs => refs is IMyUpgradableBlock))
+            {
+                var upgradeBlock = refs as IMyUpgradableBlock;
+                upgradeBlock?.GetUpgrades(out refsUpgradeList);
+
+                if (refinereyEfectivity.ContainsKey(refs))
+                {
+                    refinereyEfectivity[refs] = refsUpgradeList["Effectiveness"];
+                }
+                else
+                {
+                    refinereyEfectivity.Add(refs, refsUpgradeList["Effectiveness"]);
+                }
+            }
 
             refinereysDisplay?.WriteText("", false);
             refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
@@ -806,17 +808,38 @@ namespace SpaceEngineers.BaseManagers
                     Echo($"No reacheable containers, check connection!");
                     continue;
                 }
-                var item = refs.GetItemAt(0);
+
+                var currentCargo = refs.ItemCount;
                 var targInv = availConts.First().Owner as IMyCargoContainer;
 
-                if (refs.TransferItemTo(availConts.First(), 0, null, true))
+                for (int i = 0; i <= currentCargo; i++) 
                 {
-                    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    var item = refs.GetItemAt(i);
+
+                    if (item == null)
+                        continue;
+
+                    if (refs.TransferItemTo(availConts.First(), i, null, true))
+                    {
+                        Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    }
+                    else
+                    {
+                        Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    }
                 }
-                else
-                {
-                    Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
-                }
+
+                //var item = refs.GetItemAt(0);
+                //var targInv = availConts.First().Owner as IMyCargoContainer;
+
+                //if (refs.TransferItemTo(availConts.First(), 0, null, true))
+                //{
+                //    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                //}
+                //else
+                //{
+                //    Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                //}
 
             }
             monitor.AddInstructions("");
