@@ -1473,7 +1473,7 @@ namespace SpaceEngineers.BaseManagers
                 return;
             }
 
-            string sysState = nanobuildReady == true ? $"\nBlock:{nanobotBuildModule.CustomName} auto mode: {useNanobotAutoBuild}" : "\nNanobuild failed!!! check PC!!";
+            string sysState = nanobuildReady == true ? $"\nBlock:{nanobotBuildModule.CustomName}\nWork: {useNanobotAutoBuild}" : "\nNanobuild failed!!! check PC!!";
 
             nanobotDisplay?.WriteText("", false);
             nanobotDisplay?.WriteText("<<-----------Nanobot module----------->>", true);

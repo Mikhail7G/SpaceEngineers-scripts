@@ -52,9 +52,9 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             string largeNanoName = "SELtdLargeNanobotDrillSystem";
             string smallNanoName = "SELtdSmallNanobotDrillSystem";
 
-            double freeOreStorageVolume;
-            double totalOreStorageVolume;
-            double orePrecentageVolume;
+            double freeCargoStorageVolume;
+            double totalCargoStorageVolume;
+            double cargoPrecentageVolume;
 
             Program program;
 
@@ -143,10 +143,10 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             public void FindOres()
             {
                 var containerInventory = containers.Select(c => c.GetInventory(0));
-                freeOreStorageVolume = containerInventory.Sum(i => i.CurrentVolume.ToIntSafe());
-                totalOreStorageVolume = containerInventory.Sum(i => i.MaxVolume.ToIntSafe());
+                freeCargoStorageVolume = containerInventory.Sum(i => i.CurrentVolume.ToIntSafe());
+                totalCargoStorageVolume = containerInventory.Sum(i => i.MaxVolume.ToIntSafe());
 
-                orePrecentageVolume = Math.Round(((double)freeOreStorageVolume / (double)totalOreStorageVolume) * 100, 1);
+                cargoPrecentageVolume = Math.Round(((double)freeCargoStorageVolume / (double)totalCargoStorageVolume) * 100, 1);
 
                 ores.Clear();
 
@@ -178,9 +178,9 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                     return;
 
                 cargoPanel?.WriteText("", false);
-                cargoPanel?.WriteText("<--------------Ores--------------->" +
-                                      $"\nPayload: {orePrecentageVolume} %" +
-                                      $"", true);
+                cargoPanel?.WriteText("<--------------Cargo--------------->" +
+                                      $"\nPayload: {cargoPrecentageVolume} %" +
+                                      $"\n<--------------Ores--------------->", true);
 
                 foreach(var key in ores)
                 {
