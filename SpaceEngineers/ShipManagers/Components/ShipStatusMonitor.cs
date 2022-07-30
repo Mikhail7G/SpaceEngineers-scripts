@@ -18,14 +18,34 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 {
     public sealed class Program : MyGridProgram
     {
+        //Lcd's
+        string cargoLCDName = "CargoShipLCD";
+        string drillLCDName = "DrillShipLCD";
+
+        string oreContainersName = "Ore";
+
+        string largeNanoName = "SELtdLargeNanobotDrillSystem";//NOT EDIT
+        string smallNanoName = "SELtdSmallNanobotDrillSystem";//NOT EDIT
 
         /////////////DO NOT EDIT BELOW THE LINE//////////////////
 
         public ShipMonitor ShipComplexMonitor;
 
+        MyIni dataSystem;
+
         public Program()
         {
-            ShipComplexMonitor = new ShipMonitor(this);
+            dataSystem = new MyIni();
+
+            ShipComplexMonitor = new ShipMonitor(this)
+            {
+                CargoLCDName = cargoLCDName,
+                DrillLCDName = drillLCDName,
+                LargeNanoName = largeNanoName,
+                SmallNanoName = smallNanoName,
+                OreContainersName = oreContainersName
+            };
+
             ShipComplexMonitor.Init();
             Runtime.UpdateFrequency = UpdateFrequency.Update100;
 
@@ -36,7 +56,8 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
         {
             Update();
 
-
+            if ((updateType & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
+                ShipComplexMonitor.Command(args);
         }
 
         public void Update()
@@ -47,10 +68,13 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
         public class ShipMonitor
         {
 
-            string cargoLCDName = "CargoShipLCD";
-            string drillLCDName = "DrillShipLCD";
-            string largeNanoName = "SELtdLargeNanobotDrillSystem";
-            string smallNanoName = "SELtdSmallNanobotDrillSystem";
+            public string CargoLCDName = "CargoShipLCD";
+            public string DrillLCDName = "DrillShipLCD";
+
+            public string OreContainersName = "Ore";
+
+            public string LargeNanoName = "SELtdLargeNanobotDrillSystem";
+            public string SmallNanoName = "SELtdSmallNanobotDrillSystem";
 
             double freeCargoStorageVolume;
             double totalCargoStorageVolume;
@@ -66,13 +90,14 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             List<IMyBatteryBlock> batteries;
             List<IMyPowerProducer> generators;
             List<IMyTerminalBlock> nanoDrill;
+            List<IMyShipConnector> connectors;
             Dictionary<string, int> ores;
 
             List<List<object>> miningFields;
             //Dictionary<string, double> miningTargets; TimeSpan
             Dictionary<string, OreMiningSpeedData> miningTargets;
 
-            TimeSpan miningTime;
+            //TimeSpan miningTime;
 
             public ShipMonitor(Program mainProg)
             {
@@ -83,6 +108,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 generators = new List<IMyPowerProducer>();
                 nanoDrill = new List<IMyTerminalBlock>();
                 oreItems = new List<MyInventoryItem>();
+                connectors = new List<IMyShipConnector>();
                 ores = new Dictionary<string, int>();
                 miningFields = new List<List<object>>();
 
@@ -91,37 +117,70 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
             }
 
+            /// <summary>
+            /// Выполнение комманд от пользователя
+            /// </summary>
+            public void Command(string command)
+            {
+                string com = command.ToUpper();
+
+                switch(com)
+                {
+                    case "UNLOAD":
+                        break;
+                }
+            }
+
             public void Init()
             {
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-                program.GridTerminalSystem.GetBlocksOfType(blocks);
+                program.GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == program.Me.CubeGrid);
 
                 containers = blocks.Where(b => b is IMyCargoContainer)
-                                    .Where(c => c.IsFunctional)
-                                    .Where(c => c.CubeGrid == program.Me.CubeGrid)
-                                    .Select(t => t as IMyCargoContainer).ToList();
+                                   .Where(c => c.IsFunctional)
+                                   .Select(t => t as IMyCargoContainer).ToList();
 
                 batteries = blocks.Where(b => b is IMyBatteryBlock)
-                                    .Where(c => c.IsFunctional)
-                                    .Where(c => c.CubeGrid == program.Me.CubeGrid)
-                                    .Select(t => t as IMyBatteryBlock).ToList();
+                                   .Where(c => c.IsFunctional)
+                                   .Select(t => t as IMyBatteryBlock).ToList();
 
                 generators = blocks.Where(b => b is IMyPowerProducer)
-                                    .Where(c => c.IsFunctional)
-                                    .Where(c => c.CubeGrid == program.Me.CubeGrid)
-                                    .Select(t => t as IMyPowerProducer).ToList();
+                                   .Where(c => c.IsFunctional)
+                                   .Select(t => t as IMyPowerProducer).ToList();
+
+                connectors = blocks.Where(b => b is IMyShipConnector)
+                                  .Where(c => c.IsFunctional)
+                                  .Select(t => t as IMyShipConnector).ToList();
 
                 if (program.Me.CubeGrid.GridSizeEnum == MyCubeSize.Large)
                 {
-                    nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == largeNanoName).ToList();
+                    nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == LargeNanoName).ToList();
                 }
                 else if (program.Me.CubeGrid.GridSizeEnum == MyCubeSize.Small)
                 {
-                    nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == smallNanoName).ToList();
+                    nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == SmallNanoName).ToList();
                 }
 
-                cargoPanel = program.GridTerminalSystem.GetBlockWithName(cargoLCDName) as IMyTextPanel;
-                drillPanel = program.GridTerminalSystem.GetBlockWithName(drillLCDName) as IMyTextPanel;
+                cargoPanel = blocks.Where(b => b is IMyTextPanel && b.CustomName.Contains(CargoLCDName))
+                                   .Where(c => c.IsFunctional)
+                                   .Select(t => t as IMyTextPanel).FirstOrDefault();
+
+                drillPanel = blocks.Where(b => b is IMyTextPanel && b.CustomName.Contains(DrillLCDName))
+                                   .Where(c => c.IsFunctional)
+                                   .Select(t => t as IMyTextPanel).FirstOrDefault();
+
+
+                if (cargoPanel != null)
+                {
+                    cargoPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    cargoPanel.FontSize = 1;
+                }
+
+                if (drillPanel != null)
+                {
+                    drillPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    drillPanel.FontSize = 1;
+                }
 
             }
 
@@ -133,20 +192,23 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                            $"\nGens: {generators.Count}" +
                            $"\nNanoDrills:{nanoDrill.Count}");
 
-                FindOres();
+                ScanCargo();
                 PrintOres();
 
                 GetDrillData();
                 PrintMiningOres();
             }
 
-            public void FindOres()
+            public void ScanCargo()
             {
+                if (cargoPanel == null)
+                    return;
+
                 var containerInventory = containers.Select(c => c.GetInventory(0));
                 freeCargoStorageVolume = containerInventory.Sum(i => i.CurrentVolume.ToIntSafe());
                 totalCargoStorageVolume = containerInventory.Sum(i => i.MaxVolume.ToIntSafe());
 
-                cargoPrecentageVolume = Math.Round(((double)freeCargoStorageVolume / (double)totalCargoStorageVolume) * 100, 1);
+                cargoPrecentageVolume = Math.Round((double)freeCargoStorageVolume / (double)totalCargoStorageVolume * 100, 1);
 
                 ores.Clear();
 
@@ -156,7 +218,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                     foreach (var item in oreItems)
                     {
-                        if (item.Type.TypeId == "MyObjectBuilder_Ore")
+                        if (item.Type.TypeId == "MyObjectBuilder_Ore")//Руды
                         {
                             if (ores.ContainsKey(item.Type.SubtypeId))
                             {
@@ -178,9 +240,9 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                     return;
 
                 cargoPanel?.WriteText("", false);
-                cargoPanel?.WriteText("<--------------Cargo--------------->" +
+                cargoPanel?.WriteText("<------------------Cargo------------------->" +
                                       $"\nPayload: {cargoPrecentageVolume} %" +
-                                      $"\n<--------------Ores--------------->", true);
+                                      $"\n<------------------Ores------------------>", true);
 
                 foreach(var key in ores)
                 {
@@ -203,21 +265,21 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                     miningFields.Clear();
                     miningFields = drill.GetValue<List<List<object>>>("Drill.PossibleDrillTargets");
 
-                    foreach(var mining in miningFields)
+                    foreach (var mining in miningFields)
                     {
                         string oreName = mining[3].ToString().Remove(0, 40);
                         string cuant = mining[4].ToString();
 
                         double cuantToDouble = 0;
 
-                        if(double.TryParse(cuant,out cuantToDouble))
+                        if (double.TryParse(cuant, out cuantToDouble))
                         {
 
                         }
 
                         if (miningTargets.ContainsKey(oreName))
                         {
-                           // miningTargets[oreName].Previous = miningTargets[oreName].Current;
+                            // miningTargets[oreName].Previous = miningTargets[oreName].Current;
                             miningTargets[oreName].Current += cuantToDouble;
                         }
                         else
@@ -234,13 +296,55 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                     return;
 
                 drillPanel?.WriteText("", false);
-                drillPanel?.WriteText("<------Mining Targets-------->", true);
+                drillPanel?.WriteText("<------------AVG Mining Targets-------------->", true);
 
                 foreach(var mining in miningTargets)
                 {
-                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value.Current} m3",true);
+                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value.Current / nanoDrill.Count} m3",true);
                 }
             }
+
+            /// <summary>
+            /// Выгрузка руды в контейнеры базы
+            /// </summary>
+            public void UnloadOre()
+            {
+                var connected = connectors.Where(c => c.IsConnected);
+                if (!connected.Any())
+                    return;
+
+                List<IMyCargoContainer> blocks = new List<IMyCargoContainer>();
+                program.GridTerminalSystem.GetBlocksOfType(blocks, (IMyCargoContainer b) => b.CubeGrid != program.Me.CubeGrid && b.CustomName.Contains(OreContainersName));
+                var availInv = blocks.Where(b => b.IsFunctional)
+                                     .Select(b => b.GetInventory(0))
+                                     .Where(i => !i.IsFull);
+
+                var myInventroy = containers.Select(c => c.GetInventory(0));
+
+                foreach(var inv in myInventroy)
+                {
+                    var count = inv.ItemCount;
+
+                    for (int i = 0; i <= count; i++)
+                    {
+                        var item = inv.GetItemAt(i);
+
+                        if (item == null)
+                            continue;
+
+                        if (item.Value.Type.TypeId != "MyObjectBuilder_Ore")
+                            continue;
+
+                        foreach(var targetInv in availInv)
+                        {
+                            if (inv.TransferItemTo(targetInv, 0, null, true))
+                                break;
+                        }
+                    }
+                }
+
+            }
+
 
             public class OreMiningSpeedData
             {
