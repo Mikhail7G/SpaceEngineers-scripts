@@ -2,6 +2,7 @@
 using System.Text;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using VRageMath;
 using VRage.Game;
 using Sandbox.ModAPI.Interfaces;
@@ -95,7 +96,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
             List<List<object>> miningFields;
             //Dictionary<string, double> miningTargets; TimeSpan
-            Dictionary<string, OreMiningSpeedData> miningTargets;
+            Dictionary<string, OreMiningFieldData> miningTargets;
 
             //TimeSpan miningTime;
 
@@ -113,7 +114,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 miningFields = new List<List<object>>();
 
                // miningTargets = new Dictionary<string, double>();
-                miningTargets = new Dictionary<string, OreMiningSpeedData>();
+                miningTargets = new Dictionary<string, OreMiningFieldData>();
 
             }
 
@@ -127,6 +128,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 switch(com)
                 {
                     case "UNLOAD":
+                        UnloadOre();
                         break;
                 }
             }
@@ -267,24 +269,35 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                     foreach (var mining in miningFields)
                     {
-                        string oreName = mining[3].ToString().Remove(0, 40);
+
+                        string fullName = mining[0].ToString();
+
+                        System.Text.RegularExpressions.Regex regex = new System.Text.RegularExpressions.Regex(@"Id=(\d+)");
+                        System.Text.RegularExpressions.Match match = regex.Match(fullName);
+
+                        string oreName = mining[3].ToString().Remove(0, 40); 
                         string cuant = mining[4].ToString();
 
-                        double cuantToDouble = 0;
-
-                        if (double.TryParse(cuant, out cuantToDouble))
+                        if (match.Success)
                         {
+                            double cuantToDouble = 0;
 
-                        }
+                        
+                            if (double.TryParse(cuant, out cuantToDouble))
+                            {
 
-                        if (miningTargets.ContainsKey(oreName))
-                        {
-                            // miningTargets[oreName].Previous = miningTargets[oreName].Current;
-                            miningTargets[oreName].Current += cuantToDouble;
-                        }
-                        else
-                        {
-                            miningTargets.Add(oreName, new OreMiningSpeedData { Current = cuantToDouble, Previous = 0 });
+                            }
+
+                            if (miningTargets.ContainsKey(oreName))
+                            {
+                                // miningTargets[oreName].Previous = miningTargets[oreName].Current;
+                                //if (miningTargets[oreName].FieldId != match.Value)
+                                miningTargets[oreName].Current += cuantToDouble;
+                            }
+                            else
+                            {
+                                miningTargets.Add(oreName, new OreMiningFieldData { FieldId = match.Value, Current = cuantToDouble, Previous = 0 });
+                            }
                         }
                     }
                 }
@@ -300,7 +313,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                 foreach(var mining in miningTargets)
                 {
-                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value.Current / nanoDrill.Count} m3",true);
+                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value.Current} m3",true);
                 }
             }
 
@@ -309,7 +322,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             /// </summary>
             public void UnloadOre()
             {
-                var connected = connectors.Where(c => c.IsConnected);
+                var connected = connectors.Where(c => c.Status == MyShipConnectorStatus.Connected);
                 if (!connected.Any())
                     return;
 
@@ -318,6 +331,9 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 var availInv = blocks.Where(b => b.IsFunctional)
                                      .Select(b => b.GetInventory(0))
                                      .Where(i => !i.IsFull);
+
+                if (!availInv.Any())
+                    return;
 
                 var myInventroy = containers.Select(c => c.GetInventory(0));
 
@@ -346,8 +362,9 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             }
 
 
-            public class OreMiningSpeedData
+            public class OreMiningFieldData
             {
+                public string FieldId = "";
                 public double Current;
                 public double Previous;
             }

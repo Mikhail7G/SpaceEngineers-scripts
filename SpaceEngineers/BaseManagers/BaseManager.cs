@@ -778,54 +778,53 @@ namespace SpaceEngineers.BaseManagers
                                                .Select(i => i.GetInventory(0))
                                                .Where(i => !i.IsFull).ToList();
 
-            bool detectNewOre = false;
+            //foreach (var oreInv in oreInventory)
+            //{
+            //    var count = oreInv.ItemCount;
 
-            foreach (var oreInv in oreInventory)
-            {
-                var count = oreInv.ItemCount;
+            //    for (int i = 0; i <= count; i++)
+            //    {
+            //        var item = oreInv.GetItemAt(i);
 
-                for (int i = 0; i <= count; i++)
-                {
-                    var item = oreInv.GetItemAt(i);
+            //        if (item == null)
+            //            continue;
 
-                    if (item == null)
-                        continue;
+            //        var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
+            //        //if (!priorItem)
 
-                    var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
-                    if (!priorItem)
-                        detectNewOre = true;
 
-                }
-            }
+            //    }
+            //}
 
-            if (detectNewOre)
-            {
-                foreach (var refs in refinereys)
-                {
-                    var count = refs.InputInventory.ItemCount;
+            //if (detectNewOre)
+            //{
+            //    foreach (var refs in refinereys)
+            //    {
+            //        var count = refs.InputInventory.ItemCount;
 
-                    for (var i = 0; i <= count; i++)
-                    {
-                        var item = refs.InputInventory.GetItemAt(i);
+            //        for (var i = 0; i <= count; i++)
+            //        {
+            //            var item = refs.InputInventory.GetItemAt(i);
 
-                        if (item == null)
-                            continue;
+            //            if (item == null)
+            //                continue;
 
-                        var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
+            //            var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
 
-                        if (priorItem)
-                        {
-                            foreach(var targInv in targetOreInventory)
-                            {
-                                if (refs.InputInventory.TransferItemTo(targInv, i, null, true))
-                                    break;
-                            }
+            //            if (priorItem)
+            //            {
+            //                foreach(var targInv in targetOreInventory)
+            //                {
+            //                    if (refs.InputInventory.TransferItemTo(targInv, i, null, true))
+            //                        break;
+            //                }
 
-                        }
+            //            }
 
-                    }
-                }
-            }
+            //        }
+            //    }
+            //}
+
             monitor.AddInstructions("");
         }
 
@@ -1356,8 +1355,8 @@ namespace SpaceEngineers.BaseManagers
             {
                 if(st.Contains("/"))
                 {
-                    string name = st.Substring(0,st.LastIndexOf(":")).Trim();
-                    string count = st.Substring(st.IndexOf("/") + 1);
+                    string name = st.Substring(0,st.LastIndexOf(":")).Trim();// (?<Name>\w*)\s:
+                    string count = st.Substring(st.IndexOf("/") + 1);//  /(?<Amount>\s*\d+$)
 
                     int amount = 0;
 

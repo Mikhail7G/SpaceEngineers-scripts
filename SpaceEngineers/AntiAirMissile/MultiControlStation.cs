@@ -602,13 +602,15 @@ namespace SpaceEngineers.AntiAirMissile
 
                 foreach (var truster in Thrusters)
                 {
-                    truster.SetValueBool("OnOff", false);
+                    //truster.SetValueBool("OnOff", false);
+                    truster.Enabled = false;
                     truster.ThrustOverridePercentage = -1;
                 }
 
                 foreach (var truster in ManevricThrusters)
                 {
-                    truster.SetValueBool("OnOff", false);
+                    // truster.SetValueBool("OnOff", false);
+                    truster.Enabled = false;
                 }
 
 
@@ -770,10 +772,10 @@ namespace SpaceEngineers.AntiAirMissile
             {
                 if (SensorBlock != null && !SensorBlock.Closed)
                 {
-                    SensorBlock.Enabled = true;
-                    var det = SensorBlock.LastDetectedEntity;
+                    //var det = SensorBlock.LastDetectedEntity;
 
-                    if (!det.IsEmpty())
+                    // if (!det.IsEmpty())
+                    if (SensorBlock.IsActive)
                     {
                         Detonate();
                     }
@@ -794,18 +796,21 @@ namespace SpaceEngineers.AntiAirMissile
 
                     foreach (var thruster in Thrusters)
                     {
-                        thruster.SetValueBool("OnOff", true);
+                        //thruster.SetValueBool("OnOff", true);
+                        thruster.Enabled = true;
                         thruster.ThrustOverridePercentage = 1;
                     }
 
                     foreach (var gyro in Gyros)
                     {
-                        gyro.SetValueBool("Override", true);
+                       // gyro.SetValueBool("Override", true);
+                        gyro.GyroOverride = true;
                     }
 
                     foreach (var thruster in ManevricThrusters)
                     {
-                        thruster.SetValueBool("OnOff", true);
+                        //thruster.SetValueBool("OnOff", true);
+                        thruster.Enabled = true;
                     }
 
                     foreach (IMyWarhead head in Warheads)
@@ -813,7 +818,13 @@ namespace SpaceEngineers.AntiAirMissile
                         head.IsArmed = true;
                     }
 
-                    MergeBlock.SetValueBool("OnOff", false);
+                    if(SensorBlock!=null)
+                    {
+                        SensorBlock.Enabled = true;
+                    }
+
+                   // MergeBlock.SetValueBool("OnOff", false);
+                    MergeBlock.Enabled = false;
                 }
             }
 
@@ -935,6 +946,12 @@ namespace SpaceEngineers.AntiAirMissile
                 avrInst = 0;
                 avrTime = 0;
                 mainDisplay = display;
+
+                if (mainDisplay != null)
+                {
+                    mainDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    mainDisplay.FontSize = 1;
+                }
 
             }
 

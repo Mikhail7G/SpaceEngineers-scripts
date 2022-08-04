@@ -12,6 +12,7 @@ using VRage.Collections;
 using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using VRage.Game.ModAPI.Ingame.Utilities;
 
 namespace SpaceEngineers.ShipManagers.Components
 {
@@ -27,27 +28,40 @@ namespace SpaceEngineers.ShipManagers.Components
         string beeperName = "Beeper";
 
         //для радара 
-        public string RadarCameraGroupName = "radarCams";
-        public string LcdRadarStatus = "RadarSta";
-        public string LcdTargetStatus = "RadarTarget";
-        public string observerCameraName = "radarCamOBS";
+        string radarCameraGroupName = "radarCams";
+        string lcdRadarStatus = "RadarSta";
+        string lcdTargetStatus = "RadarTarget";
+        string observerCameraName = "radarCamOBS";
 
-        public string radarAlarmNorm = "Тревога 1";
-        public string radarAlarmTargetLost = "Тревога 2";
+        string radarAlarmNorm = "Тревога 1";
+        string radarAlarmTargetLost = "Тревога 2";
+
+        double scanDistance = 10000;
 
         CameraRadar Radar;
         IMyRadioAntenna antenna;//антенна для передачи данных ракете, правильный метод
         IMySoundBlock beeper;//звуковое информирование о захвате цели
 
+        MyIni dataSystem;
+
         int radarSoundTimer = 0;
+
+        PerformanceMonitor monitor;
 
         public Program()
         {
-            Radar = new CameraRadar(this);
-            Radar.RadarCameraGroupName = RadarCameraGroupName;
-            Radar.LcdRadarStatus = LcdRadarStatus;
-            Radar.LcdTargetStatus = LcdTargetStatus;
-            Radar.observerCameraName = observerCameraName;
+            dataSystem = new MyIni();
+            GetIniData();
+
+            Radar = new CameraRadar(this)
+            {
+                RadarCameraGroupName = radarCameraGroupName,
+                LcdRadarStatus = lcdRadarStatus,
+                LcdTargetStatus = lcdTargetStatus,
+                ObserverCameraName = observerCameraName,
+                ScanDistance = scanDistance
+            };
+            Radar.RadarNotify += RadarNotify;
 
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
 
@@ -55,6 +69,16 @@ namespace SpaceEngineers.ShipManagers.Components
             antenna = GridTerminalSystem.GetBlockWithName(antennaName) as IMyRadioAntenna;
             beeper = GridTerminalSystem.GetBlockWithName(beeperName) as IMySoundBlock;
 
+            monitor = new PerformanceMonitor(this, Me.GetSurface(1));
+
+        }
+
+        /// <summary>
+        /// Функция отправляет данные по радио, только в случае обнаружения цели от радара
+        /// </summary>
+        void RadarNotify()
+        {
+            SendMessageRadio();
         }
 
         public void Main(string args, UpdateType updateType)
@@ -63,9 +87,12 @@ namespace SpaceEngineers.ShipManagers.Components
                 Commands(args);
 
             Radar.RadarUpdate();
-            SendMessageRadio();
+            //SendMessageRadio();
             RadarSound();
 
+            monitor.AddInstructions("");
+            monitor.EndOfFrameCalc();
+            monitor.Draw();
 
         }
 
@@ -88,7 +115,52 @@ namespace SpaceEngineers.ShipManagers.Components
                     Radar.TargetFollowing();
                     break;
             }
+        }
 
+        public void GetIniData()
+        {
+            InitCustomData();
+
+            Echo($"Reading custom data");
+            MyIniParseResult dataResult;
+            if (!dataSystem.TryParse(Me.CustomData, out dataResult))
+            {
+                Echo($"CustomData error:\nLine {dataResult}");
+            }
+            else
+            {
+                radarCameraGroupName = dataSystem.Get("Names", "radarCameraGroupName").ToString();
+                lcdRadarStatus = dataSystem.Get("Names", "lcdRadarStatus").ToString();
+                lcdTargetStatus = dataSystem.Get("Names", "lcdTargetStatus").ToString();
+                observerCameraName = dataSystem.Get("Names", "observerCameraName").ToString();
+                missileTagSender = dataSystem.Get("Names", "radioSenderTag").ToString();
+
+                scanDistance = dataSystem.Get("Variables", "ScanDistance").ToDouble();
+            }
+        }
+
+        public void InitCustomData()
+        {
+            var data = Me.CustomData;
+
+            if (data.Length == 0)
+            {
+                Echo("Custom data empty!");
+
+                dataSystem.AddSection("Names");
+                dataSystem.Set("Names", "radarCameraGroupName", "radarCams");
+                dataSystem.Set("Names", "lcdRadarStatus", "RadarSta");
+                dataSystem.Set("Names", "lcdTargetStatus", "RadarTarget");
+                dataSystem.Set("Names", "observerCameraName", "radarCamOBS");
+                dataSystem.Set("Names", "radioSenderTag", "ch1R");
+
+                dataSystem.AddSection("Variables");
+                dataSystem.Set("Variables", "ScanDistance", 10000);
+
+                Me.CustomData = dataSystem.ToString();
+            }
+
+            Echo("Custom data ready");
         }
 
         public void RadarSound()
@@ -147,7 +219,7 @@ namespace SpaceEngineers.ShipManagers.Components
             public string RadarCameraGroupName = "radarCams";
             public string LcdRadarStatus = "RadarSta";
             public string LcdTargetStatus = "RadarTarget";
-            public string observerCameraName = "radarCamOBS";
+            public string ObserverCameraName = "radarCamOBS";
 
             /// <summary>
             /// Проверка на перекрытие линии прицеливания
@@ -167,7 +239,7 @@ namespace SpaceEngineers.ShipManagers.Components
             /// <summary>
             /// Дистацния сканирования 
             /// </summary>
-            public float ScanDistance { get; set; }
+            public double ScanDistance { get; set; }
 
             /// <summary>
             /// Сколько времени не было цели на прямой видимости в тиках
@@ -239,12 +311,19 @@ namespace SpaceEngineers.ShipManagers.Components
 
             private Program mainProgram;
 
+            public delegate void RadarScanHandler();
+            /// <summary>
+            /// Сигнализатор захвата цели
+            /// </summary>
+            public event RadarScanHandler RadarNotify;
+
             public CameraRadar(Program program)
             {
                 mainProgram = program;
                 cameras = new List<IMyTerminalBlock>();
                 TrackTarget = false;
                 scanTick = 0;
+                ScanDistance = 10000;
 
             }
 
@@ -252,14 +331,26 @@ namespace SpaceEngineers.ShipManagers.Components
             {
                 lcd = mainProgram.GridTerminalSystem.GetBlockWithName(LcdRadarStatus) as IMyTextPanel;
                 lcdInfo = mainProgram.GridTerminalSystem.GetBlockWithName(LcdTargetStatus) as IMyTextPanel;
-                observerCamera = mainProgram.GridTerminalSystem.GetBlockWithName(observerCameraName) as IMyCameraBlock;
+                observerCamera = mainProgram.GridTerminalSystem.GetBlockWithName(ObserverCameraName) as IMyCameraBlock;
+
+                if (lcd != null) 
+                {
+                    lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    lcd.FontSize = 1.5f;
+                }
+
+                if (lcdInfo != null)
+                {
+                    lcdInfo.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    lcdInfo.FontSize = 1.5f;
+                }
+
 
                 IMyBlockGroup radarGroup;
                 radarGroup = mainProgram.GridTerminalSystem.GetBlockGroupWithName(RadarCameraGroupName);
                 radarGroup.GetBlocks(cameras);
 
                 SetCameras();
-                ScanDistance = 10000;
 
                 mainProgram.Echo("----Camera radar setup started----");
 
@@ -340,7 +431,7 @@ namespace SpaceEngineers.ShipManagers.Components
                 if (!TargetInfo.IsEmpty())
                 {
                     lcd?.WriteText($"Distance: {DistanceToTarget.Length()}" +
-                               $"\nId: {TargetId}" +
+                               $"\nSpeed: {TargetSpeed.Length()}" +
                                $"\nTracked: {TrackTarget}" +
                                $"\nPrecision: {PrecisionFollowing}" +
                                $"\nLOC closed: {LOCClosed}" +
@@ -382,6 +473,8 @@ namespace SpaceEngineers.ShipManagers.Components
                             CalculatedPosition = TargetInfo.HitPosition.Value;
 
                             DistanceToTarget = TargetInfo.HitPosition.Value - Camera.GetPosition();
+
+                            RadarNotify.Invoke();
                         }
                         else
                         {
@@ -421,6 +514,8 @@ namespace SpaceEngineers.ShipManagers.Components
                                     CalculatedPosition = TargetPos;
                                 }
                                 DistanceToTarget = TargetPos - Camera.GetPosition();
+
+                                RadarNotify.Invoke();
                             }
                             else
                             {
@@ -499,6 +594,97 @@ namespace SpaceEngineers.ShipManagers.Components
                 }
 
                 return false;
+            }
+
+        }
+
+        public class PerformanceMonitor
+        {
+            public int TotalInstructions { get; private set; }
+            public int MaxInstructions { get; private set; }
+            public double UpdateTime { get; private set; }
+            public int CallPerTick { get; private set; }
+            public double AverageInstructionsPerTick { get; private set; }
+            public double AverageTimePerTick { get; private set; }
+
+            public double MaxInstructionsPerTick { get; private set; }
+
+            private double avrInst;
+            private double avrTime;
+
+            private Program mainProgram;
+
+            private IMyTextSurface mainDisplay;
+
+
+            public PerformanceMonitor(Program main)
+            {
+                mainProgram = main;
+                CallPerTick = 0;
+                AverageInstructionsPerTick = 0;
+                AverageTimePerTick = 0;
+                avrInst = 0;
+                avrTime = 0;
+
+            }
+
+            public PerformanceMonitor(Program main, IMyTextSurface display)
+            {
+                mainProgram = main;
+                CallPerTick = 0;
+                AverageInstructionsPerTick = 0;
+                AverageTimePerTick = 0;
+                avrInst = 0;
+                avrTime = 0;
+                mainDisplay = display;
+
+                if (mainDisplay != null)
+                {
+                    mainDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    mainDisplay.FontSize = 1;
+                }
+
+            }
+
+
+            public void AddInstructions(string methodName)
+            {
+                TotalInstructions = mainProgram.Runtime.CurrentInstructionCount;
+                MaxInstructions = mainProgram.Runtime.MaxInstructionCount;
+                avrInst += TotalInstructions;
+
+                UpdateTime = mainProgram.Runtime.LastRunTimeMs;
+                avrTime += UpdateTime;
+
+                CallPerTick++;
+
+                //var currMethodName = System.Reflection.MethodBase.GetCurrentMethod().Name;
+            }
+
+            public void EndOfFrameCalc()
+            {
+                AverageInstructionsPerTick = avrInst / CallPerTick;
+
+                if (MaxInstructionsPerTick < avrInst)
+                    MaxInstructionsPerTick = avrInst;
+
+
+
+                avrInst = 0;
+
+                AverageTimePerTick = avrTime / CallPerTick;
+                avrTime = 0;
+
+                CallPerTick = 0;
+
+            }
+
+            public void Draw()
+            {
+                mainDisplay?.WriteText("", false);
+                mainDisplay?.WriteText($"CUR ins: {TotalInstructions} / Max: {MaxInstructions}" +
+                                      $"\nAV inst: {AverageInstructionsPerTick} / {MaxInstructionsPerTick}" +
+                                      $"\nAV time:{AverageTimePerTick}", true);
             }
 
         }
