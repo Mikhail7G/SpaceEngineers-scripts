@@ -13,122 +13,99 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-namespace SpaceEngineers
+namespace SpaceEngineers.TurretTester
 {
     public sealed class Program : MyGridProgram
     {
+        string missileTagResiever = "ch1R";//Получаем данные от системы целеуказания по радиоканалу
+        IMyBroadcastListener listener;//слушаем эфир на получение данных о целях по радио
 
-        /// <summary>
-        /// Управление поворотной системой мышкой из кокпита, для работы надо кокпит, два ротора и монитор по желанию
-        /// </summary>
+        Vector3D targetPosition;
+        Vector3D targetSpeed;
 
+        IMyRadioAntenna antenna;
 
-        IMyShipController control;
-        IMyTextPanel panel;
-        IMyMotorAdvancedStator statorHorizontal;
-        IMyMotorAdvancedStator statorVertical;
-        List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+        List<IMyLargeTurretBase> turrets;
 
-        IMyBlockGroup group;
-
-        //название группы компонентов и необходимых модулей в них
-        string controlGroup = "2XRotorGrpup";
-        string controlName = "Oper";
-        string panelName = "LCD";
-        string statorHorizontalName = "StatorH";
-        string statorVerticalName = "StatorV";
-
-        float rotateModifier = 1;//модификатор скорости вращения
 
         public Program()
         {
-            PrepareModules();
+            targetPosition = new Vector3D();
+            targetSpeed = new Vector3D();
+
+            turrets = new List<IMyLargeTurretBase>();
+
+            listener = IGC.RegisterBroadcastListener(missileTagResiever);
+            listener.SetMessageCallback(missileTagResiever);
+
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
+
+
+            antenna = GridTerminalSystem.GetBlockWithName("Ant") as IMyRadioAntenna;
+
+
+            var group = GridTerminalSystem.GetBlockGroupWithName("Turrets");
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            group?.GetBlocks(blocks);
+
+            turrets = blocks.Where(b => b is IMyLargeTurretBase).Select(b => b as IMyLargeTurretBase).ToList();
 
         }
 
         public void Main(string args)
         {
-            string[] argRes = args.Split(':');
-            int lenght = argRes.Length;
-            if (argRes[0].Length > 1)
+            GetTargetByRadio();
+
+
+
+            foreach (var turret in turrets)
             {
-                string state = argRes[0].ToUpper();
-                switch (state)
+
+                // turret.SetTarget(targetPosition);
+                turret.TrackTarget(targetPosition, targetSpeed);
+
+                turret.SyncElevation();
+                turret.SyncAzimuth();
+
+                if (turret.IsAimed)
                 {
-                    case "ROTATEMODIFIER":
-                        if (lenght > 1)
-                        {
-                            float.TryParse(argRes[1], out rotateModifier);
-                        }
-                        break;
+                    turret.Shoot = true;
                 }
-            }
-
-
-            UpdateRotation();
-        }
-
-        public void PrepareModules()
-        {
-            Echo("-----RotorsScriptData----");
-
-            panel = GridTerminalSystem.GetBlockWithName(panelName) as IMyTextPanel;
-            if (panel != null)
-                Echo("LCD finded:" + panel.CustomName);
-
-
-            group = GridTerminalSystem.GetBlockGroupWithName(controlGroup);
-            Echo(group.Name);
-            group.GetBlocks(blocks);
-            if (blocks.Count > 0)
-            {
-
-                foreach (var block in blocks)
+                else
                 {
-                    if (block is IMyShipController)
-                    {
-                        control = block as IMyShipController;
-                        Echo("Cocpit: " + block.CustomName);
-                    }
-
-                    if (block is IMyMotorAdvancedStator)
-                    {
-                        if (block.CustomName == statorHorizontalName)
-                        {
-                            statorHorizontal = block as IMyMotorAdvancedStator;
-                            Echo("Horizontal: " + block.CustomName);
-                        }
-
-                        if (block.CustomName == statorVerticalName)
-                        {
-                            statorVertical = block as IMyMotorAdvancedStator;
-                            Echo("Vertical: " + block.CustomName);
-                        }
-                    }
+                    turret.Shoot = false;
                 }
-            }
-        }
 
-        public void UpdateRotation()
-        {
-            if (control.IsUnderControl)
-            {
-                var rot = control.RotationIndicator;
-                statorHorizontal.TargetVelocityRPM = rot.Y * rotateModifier;
-                statorVertical.TargetVelocityRPM = -rot.X * rotateModifier;
-            }
-            else
-            {
-                statorHorizontal.TargetVelocityRPM = 0;
-                statorVertical.TargetVelocityRPM = 0;
-            }
 
+            }
         }
 
         public void Save()
         {
 
+        }
+
+
+      
+
+        public void GetTargetByRadio()
+        {
+            while (listener.HasPendingMessage)
+            {
+                MyIGCMessage mess = listener.AcceptMessage();
+                if (mess.Tag == missileTagResiever)
+                {
+                    string[] str = mess.Data.ToString().Split('|');
+                    ///координаты цели
+                    double.TryParse(str[0], out targetPosition.X);
+                    double.TryParse(str[1], out targetPosition.Y);
+                    double.TryParse(str[2], out targetPosition.Z);
+                    ///его вектор скорости
+                    double.TryParse(str[3], out targetSpeed.X);
+                    double.TryParse(str[4], out targetSpeed.Y);
+                    double.TryParse(str[5], out targetSpeed.Z);
+                }
+            }
         }
 
     }

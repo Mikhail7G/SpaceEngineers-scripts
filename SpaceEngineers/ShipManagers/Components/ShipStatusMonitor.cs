@@ -98,6 +98,8 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             //Dictionary<string, double> miningTargets; TimeSpan
             Dictionary<string, OreMiningFieldData> miningTargets;
 
+            System.Text.RegularExpressions.Regex regex = new System.Text.RegularExpressions.Regex(@"Id=(\d+)");
+
             //TimeSpan miningTime;
 
             public ShipMonitor(Program mainProg)
@@ -272,7 +274,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                         string fullName = mining[0].ToString();
 
-                        System.Text.RegularExpressions.Regex regex = new System.Text.RegularExpressions.Regex(@"Id=(\d+)");
+                       
                         System.Text.RegularExpressions.Match match = regex.Match(fullName);
 
                         string oreName = mining[3].ToString().Remove(0, 40); 

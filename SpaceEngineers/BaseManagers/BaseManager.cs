@@ -86,6 +86,7 @@ namespace SpaceEngineers.BaseManagers
         int freePartsStorageVolume = 0;
 
         int currentTick = 0;
+        int assemblersDeadlockTick = 0;
 
         int refinereyReloadPrecentage = 70;
         int maxVolumeContainerPercentage = 95;
@@ -135,6 +136,9 @@ namespace SpaceEngineers.BaseManagers
         MyInventoryItem? lastDetectedConstructItem;
 
         Dictionary<MyDefinitionId, int> nanobotBuildQueue;
+
+        System.Text.RegularExpressions.Regex NameRegex = new System.Text.RegularExpressions.Regex(@"(?<Name>\w*\-?\w*)\s:");//(?<Name>\w*)\s: || (?<Name>^\w*\-*\s*\w*)\s: - c пробелами и подчеркиваниями
+        System.Text.RegularExpressions.Regex AmountRegex = new System.Text.RegularExpressions.Regex(@"(?<Amount>\d+)$");
 
 
         /// <summary>
@@ -234,7 +238,9 @@ namespace SpaceEngineers.BaseManagers
                 case "POWER":
                     SwitchPowerMode();
                     break;
-
+                case "BUILD":
+                    SwitchAutoBuildMode();
+                    break;
             }
         }
 
@@ -269,6 +275,7 @@ namespace SpaceEngineers.BaseManagers
                 case 3:
                     PowerMangment();
                     PrintPowerStatus();
+                    PartsAutoBuild();
                     break;
                 case 4:
                     GetOreFromTransport();
@@ -279,6 +286,7 @@ namespace SpaceEngineers.BaseManagers
                     LoadRefinereys();
                     RefinereysPrintData();
                     DisplayOres();
+                    AssemblersClear();
                     break;
             }
 
@@ -612,6 +620,7 @@ namespace SpaceEngineers.BaseManagers
 
             Echo(">>>-------------------------------<<<");
 
+            Echo($"Auto build system: {useAutoBuildSystem}");
             Echo($"Nanobot system: {useNanobotAutoBuild}");
             Echo($"Ingnot replace system: {needReplaceIngnots}");
             Echo($"Parts replace system: {needReplaceParts}");
@@ -711,6 +720,11 @@ namespace SpaceEngineers.BaseManagers
         public void SwitchPowerMode()
         {
             usePowerManagmentSystem = !usePowerManagmentSystem;
+        }
+
+        public void SwitchAutoBuildMode()
+        {
+            useAutoBuildSystem = !useAutoBuildSystem;
         }
 
 
@@ -1036,19 +1050,6 @@ namespace SpaceEngineers.BaseManagers
                         Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
                     }
                 }
-
-                //var item = refs.GetItemAt(0);
-                //var targInv = availConts.First().Owner as IMyCargoContainer;
-
-                //if (refs.TransferItemTo(availConts.First(), 0, null, true))
-                //{
-                //    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
-                //}
-                //else
-                //{
-                //    Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
-                //}
-
             }
             monitor.AddInstructions("");
         }
@@ -1350,31 +1351,49 @@ namespace SpaceEngineers.BaseManagers
 
             var str = partsDisplayData.ToString().Split('\n');
 
-           // debugPanel?.WriteText("", false);
+            //debugPanel?.WriteText("", false);
             foreach (var st in str)
             {
-                if(st.Contains("/"))
+                string name = "";
+                string count = "";
+
+                System.Text.RegularExpressions.Match match = NameRegex.Match(st);
+
+                if (match.Success)
                 {
-                    string name = st.Substring(0,st.LastIndexOf(":")).Trim();// (?<Name>\w*)\s:
-                    string count = st.Substring(st.IndexOf("/") + 1);//  /(?<Amount>\s*\d+$)
+                    name = match.Groups["Name"].Value;
+                }
 
-                    int amount = 0;
+                match = AmountRegex.Match(st);
 
-                    if (int.TryParse(count, out amount))
+                if (match.Success)
+                {
+                    count = match.Groups["Amount"].Value;
+                }
+
+                int amount = 0;
+
+                if (int.TryParse(count, out amount))
+                {
+                   // debugPanel?.WriteText("\n" + name + "" + count + "XX" + amount, true);
+
+                    if (partsDictionary.ContainsKey(name))
                     {
-                        //debugPanel?.WriteText("\n" + name + "" + count + "XX" + amount, true);
-
-                        if (partsDictionary.ContainsKey(name))
-                        {
-                            partsDictionary[name].Requested = amount;
-                        }
-
+                        partsDictionary[name].Requested = amount;
                     }
+
+                    if (buildedIngnotsDictionary.ContainsKey(name))
+                    {
+                        buildedIngnotsDictionary[name].Requested = amount;
+                    }
+
                 }
             }
 
+            string sysState = useAutoBuildSystem == true ? "Auto mode ON" : "Auto mode OFF";
             partsPanel?.WriteText("", false);
             partsPanel?.WriteText($"<<-------------Production------------->>" +
+                                  $"\n{sysState}" +
                                   $"\nContainers:{partsInventorys.Count()}" +
                                   $"\nVolume: {precentageVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T" +
                                   "\n<<-----------Parts----------->>", true);
@@ -1461,7 +1480,7 @@ namespace SpaceEngineers.BaseManagers
 
             detailedPowerPanel?.WriteText("", false);
 
-            var reactorInventory = generators.Where(g => g.HasInventory).Select(g => g.GetInventory(0)).ToList();
+            var reactorInventory = generators.Where(g => !g.Closed && g.HasInventory).Select(g => g.GetInventory(0)).ToList();
             int reactorsCount = generators.Where(g => g is IMyReactor).Count();
             int windCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_WindTurbine").Count();
             int gasCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_HydrogenEngine").Count();
@@ -1524,78 +1543,111 @@ namespace SpaceEngineers.BaseManagers
 
         }
 
+
+        /// <summary>
+        /// Очистка сборщиков в случае если простой более нескольких циклов
+        /// </summary>
+        public void AssemblersClear()
+        {
+            var loadedAssemblers = assemblers.Where(ass => !ass.Closed || !ass.IsQueueEmpty || !ass.IsProducing).ToList();
+            if (loadedAssemblers.Any())
+                assemblersDeadlockTick++;
+
+            if (assemblersDeadlockTick > 5)
+            {
+                foreach (var ass in loadedAssemblers)
+                {
+                    ass.ClearQueue();
+                    assemblersDeadlockTick = 0;
+                }
+            }
+        }
+
         /// <summary>
         /// Сислема заказа производства недостающих компонентов INOP
         /// </summary>
         public void PartsAutoBuild()
         {
-            //if (!useAutoBuildSystem)
-            //    return;
+            if (!useAutoBuildSystem)
+                return;
 
-            //Echo("------Auto build system-------");
-            //partsRequester.Clear();
+            needReplaceParts = true;
 
-            //string[] lines = Me.CustomData.Split('\n');
+            var desAss = specialAssemblers.Where(ass => ass.Mode == MyAssemblerMode.Disassembly);
+            if (desAss.Any())
+                return;
 
-            //foreach (var line in lines)
-            //{
-            //    string[] itemName = line.Split('=');
+            var freeAssemblers = specialAssemblers.Where(ass => ass.Closed || !ass.IsQueueEmpty || ass.OutputInventory.ItemCount > 0).ToList();
+            if (freeAssemblers.Any())
+                return;
 
-            //    if (!partsRequester.ContainsKey(itemName[0]))
-            //    {
-            //        int count = 0;
+            Echo("------Auto build system-------");
 
-            //        if (int.TryParse(itemName[1], out count))
-            //        {
-            //            partsRequester.Add(itemName[0], count);
-            //        }
-            //    }
+            foreach(var key in partsDictionary)
+            {
+                if (key.Value.Current < key.Value.Requested)
+                {
+                    AddItemToProduct(key);
+                }
+            }
 
-            //}
-            //Echo($"Detected auto build componetns: {partsRequester.Count}");
+            foreach (var key in buildedIngnotsDictionary)
+            {
+                if (key.Value.Current < key.Value.Requested)
+                {
+                    AddItemToProduct(key);
+                }
+            }
 
-            //var workingAssemblers = assemblers.Where(ass => !ass.IsQueueEmpty).ToList();
-
-            //if (workingAssemblers.Count == 0)
-            //{
-            //    foreach (var req in partsRequester)
-            //    {
-            //        if (partsDictionary.ContainsKey(req.Key))
-            //        {
-            //            int needComponents = req.Value - partsDictionary[req.Key];
-            //            if (needComponents > 0)
-            //            {
-            //                string name = "MyObjectBuilder_BlueprintDefinition/" + req.Key;//Название компонента для строительсвта
-            //                var parser = blueprintDataBase.Where(n => n.Contains(req.Key)).FirstOrDefault();//Если компонент стандартный ищем его в готовом списке
-
-            //                if (parser != null)
-            //                    name = parser;
-
-            //                Echo($"Start build: {req.Key} X {needComponents}");
-            //                Echo($"D_name: {name}");
-            //                Echo("\n");
-
-            //                MyDefinitionId blueprint;
-            //                if (!MyDefinitionId.TryParse(name, out blueprint))
-            //                    Echo($"WARNING cant parse: {name}");
-
-            //                var assemblersCanBuildThis = assemblers.Where(a => a.CanUseBlueprint(blueprint)).ToList();
-            //                var count = needComponents / assemblersCanBuildThis.Count;
-            //                if (count < 1)
-            //                    count = 1;
-
-            //                foreach (var asembler in assemblersCanBuildThis)
-            //                {
-            //                    VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
-            //                    asembler.AddQueueItem(blueprint, amount);
-            //                    Echo($"Assemblers starts: {req.Key}");
-            //                }
-            //            }
-            //        }
-            //    }
-            //}
-            //AddInstructions();
+            monitor.AddInstructions("");
         }//PartsAutoBuild()
+
+        private void AddItemToProduct(KeyValuePair<string,ItemBalanser> key)
+        {
+            var needed = key.Value.Requested - key.Value.Current;
+
+            var freeAssemblers = specialAssemblers;
+
+            var bd = blueprintData.Where(k => k.Key.Contains(key.Key));
+
+            if (!bd.Any())
+            {
+                Echo($"WARNING no blueprint: {key.Key}");
+                nanobuildReady = false;
+                return;
+            }
+
+            string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Value;
+
+            MyDefinitionId blueprint;
+
+            if (!MyDefinitionId.TryParse(name, out blueprint))
+            {
+                Echo($"WARNING cant parse: {name}");
+                return;
+            }
+
+            var availAss = freeAssemblers.Where(ass => ass.CanUseBlueprint(blueprint)).ToList();
+            if (!availAss.Any())
+                return;
+
+            var count = needed / availAss.Count;
+
+            if (count < 1)
+            {
+                availAss[0].AddQueueItem(blueprint, (VRage.MyFixedPoint)1);
+            }
+            else
+            {
+                foreach (var ass in availAss)
+                {
+                    VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
+                    ass.AddQueueItem(blueprint, amount);
+                }
+            }
+
+
+        }
 
         /// <summary>
         /// Автосборка с помощью мода Nanobot
@@ -1715,16 +1767,19 @@ namespace SpaceEngineers.BaseManagers
             if (assemblerBlueprintGetter)
             {
                 needReplaceParts = false;
+                useAutoBuildSystem = false;
                 SpecialAssemblerLastName = ass.CustomName;
                 ass.CustomName = assemblersBlueprintLeanerName + "Assembler ready to copy bps";
                 ass.ClearQueue();
-                ass.SetValueBool("OnOff", false);
+               // ass.SetValueBool("OnOff", false);
+                ass.Enabled = false;
             }
             else
             {
                 ass.CustomName = SpecialAssemblerLastName;
                 ass.ClearQueue();
-                ass.SetValueBool("OnOff", true);
+               // ass.SetValueBool("OnOff", true);
+                ass.Enabled = true;
             }
         }
 
@@ -1763,7 +1818,8 @@ namespace SpaceEngineers.BaseManagers
             {
                 lastDetectedBlueprintItem = blueprints[0];
                 ass.CustomName = assemblersBlueprintLeanerName + $"bps:{lastDetectedBlueprintItem.BlueprintId.SubtypeName}";
-                ass.SetValueBool("OnOff", true);
+                // ass.SetValueBool("OnOff", true);
+                ass.Enabled = true;
                 return;
             }
 
@@ -1777,7 +1833,8 @@ namespace SpaceEngineers.BaseManagers
             ass.CustomName = assemblersBlueprintLeanerName + $"item:{lastDetectedConstructItem.Value.Type.SubtypeId}";
 
             if (assInv.TransferItemTo(targetInventory.First(), 0, null, true))
-                ass.SetValueBool("OnOff", false);
+                ass.Enabled = false;
+               // ass.SetValueBool("OnOff", false);
 
             if (!blueprintData.ContainsKey(lastDetectedConstructItem.Value.Type.SubtypeId))
             {

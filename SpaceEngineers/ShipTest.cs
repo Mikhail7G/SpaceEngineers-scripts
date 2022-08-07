@@ -13,7 +13,7 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-namespace SpaceEngineers
+namespace SpaceEngineers.Turret
 {
     public sealed class Program : MyGridProgram
     {

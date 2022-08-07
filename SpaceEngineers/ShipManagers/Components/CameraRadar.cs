@@ -212,6 +212,7 @@ namespace SpaceEngineers.ShipManagers.Components
 
                 IGC.SendBroadcastMessage(missileTagSender, sendingSignal, TransmissionDistance.TransmissionDistanceMax);
             }
+           
         }
 
         public class CameraRadar
@@ -478,6 +479,7 @@ namespace SpaceEngineers.ShipManagers.Components
                         }
                         else
                         {
+                           
                         }
                     }
                 }
