@@ -107,7 +107,7 @@ namespace SpaceEngineers.BaseManagers
         string SpecialAssemblerLastName = "";
 
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
-        Dictionary<string, int> oresDict;
+        Dictionary<string, OrePriority> oresDict;
         Dictionary<string, ItemBalanser> ingnotsDict;
         Dictionary<string, ItemBalanser> partsDictionary;
         Dictionary<string, int> partsIngnotAndOresDictionary;
@@ -129,6 +129,7 @@ namespace SpaceEngineers.BaseManagers
         List<MyInventoryItem> productionItems;
 
         StringBuilder partsDisplayData;
+        StringBuilder oreDisplayData;
 
 
         //Поиск чертежей
@@ -139,6 +140,7 @@ namespace SpaceEngineers.BaseManagers
 
         System.Text.RegularExpressions.Regex NameRegex = new System.Text.RegularExpressions.Regex(@"(?<Name>\w*\-?\w*)\s:");//(?<Name>\w*)\s: || (?<Name>^\w*\-*\s*\w*)\s: - c пробелами и подчеркиваниями
         System.Text.RegularExpressions.Regex AmountRegex = new System.Text.RegularExpressions.Regex(@"(?<Amount>\d+)$");
+        System.Text.RegularExpressions.Regex OrePriorRegex = new System.Text.RegularExpressions.Regex(@"(?<Name>\w*\-?\w*)\s:\s\w*?\sP\s?(?<Prior>\d+)\s?$",System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
 
         /// <summary>
@@ -160,8 +162,9 @@ namespace SpaceEngineers.BaseManagers
             specialAssemblers = new List<IMyAssembler>();
 
             partsDisplayData = new StringBuilder();
+            oreDisplayData = new StringBuilder();
 
-            oresDict = new Dictionary<string, int>();
+            oresDict = new Dictionary<string, OrePriority>();
             ingnotsDict = new Dictionary<string, ItemBalanser>();
             partsDictionary = new Dictionary<string, ItemBalanser>();
             partsIngnotAndOresDictionary = new Dictionary<string, int>();
@@ -271,6 +274,7 @@ namespace SpaceEngineers.BaseManagers
                 case 2:
                     ReplaceParts();
                     DisplayParts();
+                    DisplayOres();
                     break;
                 case 3:
                     PowerMangment();
@@ -285,7 +289,6 @@ namespace SpaceEngineers.BaseManagers
                 case 5:
                     LoadRefinereys();
                     RefinereysPrintData();
-                    DisplayOres();
                     AssemblersClear();
                     break;
             }
@@ -294,6 +297,7 @@ namespace SpaceEngineers.BaseManagers
             if (currentTick == 6)
                 currentTick = 0;
 
+            monitor.AddInstructions("");
             monitor.EndOfFrameCalc();
             monitor.Draw();
         }
@@ -354,7 +358,6 @@ namespace SpaceEngineers.BaseManagers
                 keys.Clear();
 
                 // Blueprints
-                //List<MyIniKey> keys = new List<MyIniKey>();
                 dataSystem.GetKeys("Blueprints", keys);
 
                 foreach (var key in keys)
@@ -423,6 +426,9 @@ namespace SpaceEngineers.BaseManagers
             Echo("Custom data ready");
         }
 
+        /// <summary>
+        /// Перезапись настроек при изменении в поцессе работы скрипта
+        /// </summary>
         public void ReloadData()
         {
             dataSystem.Set("Operations", "Autorun", autorun);
@@ -434,6 +440,24 @@ namespace SpaceEngineers.BaseManagers
             dataSystem.Set("Operations", "TransferOreFromTransports", getOreFromTransports);
             dataSystem.Set("Operations", "UseNanobotAutoBuild", useNanobotAutoBuild);
             dataSystem.Set("Operations", "UseRefinereyOperations", useRefinereysOperations);
+            dataSystem.Set("Operations", "ReactorFuelLimitter", reactorPayloadLimitter);
+
+            dataSystem.Set("DisplaysNames", "lcdInventoryOresName", lcdInventoryOresName);
+            dataSystem.Set("DisplaysNames", "lcdInventoryIngnotsName", lcdInventoryIngnotsName);
+            dataSystem.Set("DisplaysNames", "lcdPowerSystemName", lcdPowerSystemName);
+            dataSystem.Set("DisplaysNames", "lcdPowerDetailedName", lcdPowerDetailedName);
+            dataSystem.Set("DisplaysNames", "lcdPartsName", lcdPartsName);
+            dataSystem.Set("DisplaysNames", "NanobotDisplayName", lcdNanobotName);
+            dataSystem.Set("DisplaysNames", "lcdInventoryDebugName", lcdInventoryDebugName);
+            dataSystem.Set("DisplaysNames", "lcdRefinereyName", lcdRefinereyName);
+
+            dataSystem.Set("ContainerNames", "oreStorageName", oreStorageName);
+            dataSystem.Set("ContainerNames", "ingnotStorageName", ingnotStorageName);
+            dataSystem.Set("ContainerNames", "componentsStorageName", componentsStorageName);
+
+            dataSystem.Set("TagsNames", "assemblersSpecialOperationsTagName", assemblersSpecialOperationsName);
+            dataSystem.Set("TagsNames", "assemblersBlueprintLeanerName", assemblersBlueprintLeanerName);
+
 
             Me.CustomData = dataSystem.ToString();
         }
@@ -689,7 +713,7 @@ namespace SpaceEngineers.BaseManagers
 
             //Echo(">>>-------------------------------<<<");
 
-            monitor.AddInstructions("");
+           // monitor.AddInstructions("");
         }
 
         public void SwitchNanobotMode()
@@ -773,11 +797,11 @@ namespace SpaceEngineers.BaseManagers
             }
             refinereysItems.Clear();
 
-            monitor.AddInstructions("");
+           // monitor.AddInstructions("");
         }
 
         /// <summary>
-        /// Выгрузка низкоприоритетной руды из печей
+        /// INOP
         /// </summary>
         public void ClearRefinereys()
         {
@@ -792,55 +816,57 @@ namespace SpaceEngineers.BaseManagers
                                                .Select(i => i.GetInventory(0))
                                                .Where(i => !i.IsFull).ToList();
 
-            //foreach (var oreInv in oreInventory)
-            //{
-            //    var count = oreInv.ItemCount;
+           
 
-            //    for (int i = 0; i <= count; i++)
-            //    {
-            //        var item = oreInv.GetItemAt(i);
+                //foreach (var oreInv in oreInventory)
+                //{
+                //    var count = oreInv.ItemCount;
 
-            //        if (item == null)
-            //            continue;
+                //    for (int i = 0; i <= count; i++)
+                //    {
+                //        var item = oreInv.GetItemAt(i);
 
-            //        var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
-            //        //if (!priorItem)
+                //        if (item == null)
+                //            continue;
+
+                //        var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
+                //        //if (!priorItem)
 
 
-            //    }
-            //}
+                //    }
+                //}
 
-            //if (detectNewOre)
-            //{
-            //    foreach (var refs in refinereys)
-            //    {
-            //        var count = refs.InputInventory.ItemCount;
+                //if (detectNewOre)
+                //{
+                //    foreach (var refs in refinereys)
+                //    {
+                //        var count = refs.InputInventory.ItemCount;
 
-            //        for (var i = 0; i <= count; i++)
-            //        {
-            //            var item = refs.InputInventory.GetItemAt(i);
+                //        for (var i = 0; i <= count; i++)
+                //        {
+                //            var item = refs.InputInventory.GetItemAt(i);
 
-            //            if (item == null)
-            //                continue;
+                //            if (item == null)
+                //                continue;
 
-            //            var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
+                //            var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
 
-            //            if (priorItem)
-            //            {
-            //                foreach(var targInv in targetOreInventory)
-            //                {
-            //                    if (refs.InputInventory.TransferItemTo(targInv, i, null, true))
-            //                        break;
-            //                }
+                //            if (priorItem)
+                //            {
+                //                foreach(var targInv in targetOreInventory)
+                //                {
+                //                    if (refs.InputInventory.TransferItemTo(targInv, i, null, true))
+                //                        break;
+                //                }
 
-            //            }
+                //            }
 
-            //        }
-            //    }
-            //}
+                //        }
+                //    }
+                //}
 
-            monitor.AddInstructions("");
-        }
+                // monitor.AddInstructions("");
+            }
 
         /// <summary>
         /// INOP
@@ -857,79 +883,93 @@ namespace SpaceEngineers.BaseManagers
             if (!oreInventory.Any())
                 return;
 
-            foreach (var refs in refinereys)
+            foreach(var refs in refinereys)
             {
-                if (!refs.Closed)
-                {
-                    refs.UseConveyorSystem = false;
 
-                    if (refs.InputInventory.ItemCount == 0)
-                    {
-                        //Балансировка руды по приоритетам,сачала та, что быстро плавится
-                        foreach (var inv in oreInventory)
-                        {
-                            var count = inv.ItemCount;
-
-                            for (int i = 0; i <= count; i++)
-                            {
-                                var item = inv.GetItemAt(i);
-
-                                if (item == null)
-                                    continue;
-
-                                var lowPriorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
-
-                                if (!lowPriorItem)
-                                {
-                                    if (inv.TransferItemTo(refs.InputInventory, i, null, true))
-                                    {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        //Если осталась только низкоприоитетная руда
-                        if (refs.InputInventory.ItemCount == 0)
-                        {
-                            oreInventory.FirstOrDefault().TransferItemTo(refs.InputInventory, 0, null, true);
-                        }
-                    }
-                    else
-                    {
-                        var load = (double)refs.InputInventory.CurrentVolume * 100 / (double)refs.InputInventory.MaxVolume;
-                        if (load < refinereyReloadPrecentage)
-                        {
-                            var refsItem = refs.InputInventory.GetItemAt(0);
-
-                            if (refsItem != null)
-                            {
-                                foreach (var inv in oreInventory)
-                                {
-                                    var count = inv.ItemCount;
-
-                                    for (int i = 0; i <= count; i++)
-                                    {
-                                        var item = inv.GetItemAt(i);
-
-                                        if (item == null)
-                                            continue;
-
-                                        if (item.Value.Type.SubtypeId == refsItem.Value.Type.SubtypeId)
-                                        {
-                                            if (!inv.TransferItemTo(refs.InputInventory, i, null, true))
-                                            {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
-            monitor.AddInstructions("");
+
+            //foreach (var refs in refinereys)
+            //{
+            //    if (!refs.Closed)
+            //    {
+            //        refs.UseConveyorSystem = false;
+
+            //        if (refs.InputInventory.ItemCount == 0)
+            //        {
+            //            //Балансировка руды по приоритетам,сачала та, что быстро плавится
+            //            foreach (var inv in oreInventory)
+            //            {
+            //                var count = inv.ItemCount;
+
+            //                for (int i = 0; i <= count; i++)
+            //                {
+            //                    var item = inv.GetItemAt(i);
+
+            //                    if (item == null)
+            //                        continue;
+
+            //                    var lowPriorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
+
+            //                    if (!lowPriorItem)
+            //                    {
+            //                        if (inv.TransferItemTo(refs.InputInventory, i, null, true))
+            //                        {
+            //                            break;
+            //                        }
+            //                    }
+            //                }
+            //            }
+
+            //            //Если осталась только низкоприоитетная руда
+            //            if (refs.InputInventory.ItemCount == 0)
+            //            {
+            //                oreInventory.FirstOrDefault().TransferItemTo(refs.InputInventory, 0, null, true);
+            //            }
+            //        }
+            //        else
+            //        {
+            //            var load = (double)refs.InputInventory.CurrentVolume * 100 / (double)refs.InputInventory.MaxVolume;
+            //            if (load < refinereyReloadPrecentage)
+            //            {
+            //                var refsItem = refs.InputInventory.GetItemAt(0);
+
+            //                if (refsItem != null)
+            //                {
+            //                    foreach (var inv in oreInventory)
+            //                    {
+            //                        var targItem = inv.FindItem(refsItem.Value.Type);
+
+            //                        if (targItem.HasValue)
+            //                        {
+            //                            if (!inv.TransferItemTo(refs.InputInventory, targItem.Value, null))
+            //                            {
+            //                                break;
+            //                            }
+            //                        }
+            //                        //var count = inv.ItemCount;
+
+            //                        //for (int i = 0; i <= count; i++)
+            //                        //{
+            //                        //    var item = inv.GetItemAt(i);
+
+            //                        //    if (item == null)
+            //                        //        continue;
+
+            //                        //    if (item.Value.Type.SubtypeId == refsItem.Value.Type.SubtypeId)
+            //                        //    {
+            //                        //        if (!inv.TransferItemTo(refs.InputInventory, i, null, true))
+            //                        //        {
+            //                        //            break;
+            //                        //        }
+            //                        //    }
+            //                        //}
+            //                    }
+            //                }
+            //            }
+            //        }
+            //    }
+            //}
+            // monitor.AddInstructions("");
         }
 
 
@@ -938,23 +978,33 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void DisplayOres()
         {
-            if (oreDisplay == null)
+           
+            if (!useRefinereysOperations)
                 return;
-       
+
             var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName)))
                                         .Select(i => i.GetInventory(0))
                                         .Where(i => i.ItemCount > 0).ToList();
 
             if (!oreInventory.Any())
-                return;
+            {
+                oreDisplay?.WriteText("", false);
+                oreDisplay?.WriteText($"<<-----------Ores----------->>{oreItems.Count} x {oreItems.Capacity}" +
+                                       $"\nContainers:{oreInventory.Count()}" +
+                                       $"\nVolume: {0} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
-            oresDict.Clear();
+                return;
+            }
+
+            foreach (var key in oresDict)
+            {
+                key.Value.Amount = 0;
+            }
 
             freeOreStorageVolume = oreInventory.Sum(i => i.CurrentVolume.ToIntSafe());
             totalOreStorageVolume = oreInventory.Sum(i => i.MaxVolume.ToIntSafe());
 
             double precentageVolume = Math.Round(((double)freeOreStorageVolume / (double)totalOreStorageVolume) * 100, 1);
-
 
             foreach (var inv in oreInventory)
             {
@@ -962,19 +1012,54 @@ namespace SpaceEngineers.BaseManagers
 
                 foreach(var item in oreItems)
                 {
-                    if (item.Type.TypeId == "MyObjectBuilder_Ore")//построенная руда  
+                    if (item.Type.TypeId == "MyObjectBuilder_Ore")
                     {
                         if (oresDict.ContainsKey(item.Type.SubtypeId))
                         {
-                            oresDict[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                            oresDict[item.Type.SubtypeId].Amount += item.Amount.ToIntSafe();
                         }
                         else
                         {
-                            oresDict.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                            oresDict.Add(item.Type.SubtypeId, new OrePriority
+                                                                  { Amount = item.Amount.ToIntSafe(),
+                                                                    Type = item.Type,
+                                                                    Name = item.Type.SubtypeId,
+                                                                    Priority = 0 });
+
+                           // dataSystem.Set("OrePriority", item.Type.SubtypeId, 0);
+                          //  ReloadData();
                         }
                     }
                 }
                 oreItems.Clear();
+            }
+
+            if (oreDisplay == null)
+                return;
+
+            oreDisplayData.Clear();
+            oreDisplay?.ReadText(oreDisplayData);
+
+            System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
+
+            if (matches.Count > 0)
+            {
+                foreach (System.Text.RegularExpressions.Match match in matches)
+                {
+                    // if (mat.Success)
+
+                    if(oresDict.ContainsKey(match.Groups["Name"].Value))
+                    {
+                        int prior = 0;
+                        
+                        if(int.TryParse(match.Groups["Prior"].Value,out prior))
+                        {
+                            oresDict[match.Groups["Name"].Value].Priority = prior;
+                        }
+
+                    }
+
+                }
             }
 
             oreDisplay?.WriteText("", false);
@@ -984,14 +1069,12 @@ namespace SpaceEngineers.BaseManagers
 
             foreach (var dict in oresDict.OrderBy(k => k.Key))
             {
-                oreDisplay?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+                oreDisplay?.WriteText($"\n{dict.Key} : {dict.Value.Amount} P {dict.Value.Priority} ", true);
             }
 
-            monitor.AddInstructions("");
+            //monitor.AddInstructions("");
 
         }
-
-
 
 
         /// <summary>
@@ -1051,7 +1134,7 @@ namespace SpaceEngineers.BaseManagers
                     }
                 }
             }
-            monitor.AddInstructions("");
+           // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1136,7 +1219,7 @@ namespace SpaceEngineers.BaseManagers
             }
 
 
-            monitor.AddInstructions("");
+            //monitor.AddInstructions("");
         }//DisplayIngnots()
 
 
@@ -1207,7 +1290,7 @@ namespace SpaceEngineers.BaseManagers
  
             }
 
-            monitor.AddInstructions("");
+           // monitor.AddInstructions("");
         }
 
 
@@ -1259,7 +1342,7 @@ namespace SpaceEngineers.BaseManagers
                 }
             }
 
-            monitor.AddInstructions("");
+           // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1351,7 +1434,6 @@ namespace SpaceEngineers.BaseManagers
 
             var str = partsDisplayData.ToString().Split('\n');
 
-            //debugPanel?.WriteText("", false);
             foreach (var st in str)
             {
                 string name = "";
@@ -1375,8 +1457,6 @@ namespace SpaceEngineers.BaseManagers
 
                 if (int.TryParse(count, out amount))
                 {
-                   // debugPanel?.WriteText("\n" + name + "" + count + "XX" + amount, true);
-
                     if (partsDictionary.ContainsKey(name))
                     {
                         partsDictionary[name].Requested = amount;
@@ -1386,7 +1466,6 @@ namespace SpaceEngineers.BaseManagers
                     {
                         buildedIngnotsDictionary[name].Requested = amount;
                     }
-
                 }
             }
 
@@ -1438,7 +1517,7 @@ namespace SpaceEngineers.BaseManagers
                     partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
-            monitor.AddInstructions("");
+           // monitor.AddInstructions("");
         }//DisplayParts()
 
         /// <summary>
@@ -1467,7 +1546,7 @@ namespace SpaceEngineers.BaseManagers
 
             PowerSystemDetailed();
 
-            monitor.AddInstructions("");
+           // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1524,7 +1603,7 @@ namespace SpaceEngineers.BaseManagers
                 }
             }
 
-            monitor.AddInstructions("");
+           // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1549,11 +1628,11 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void AssemblersClear()
         {
-            var loadedAssemblers = assemblers.Where(ass => !ass.Closed || !ass.IsQueueEmpty || !ass.IsProducing).ToList();
+            var loadedAssemblers = assemblers.Where(ass => !ass.Closed && !ass.IsProducing).ToList();
             if (loadedAssemblers.Any())
                 assemblersDeadlockTick++;
 
-            if (assemblersDeadlockTick > 5)
+            if (assemblersDeadlockTick > 1)
             {
                 foreach (var ass in loadedAssemblers)
                 {
@@ -1564,7 +1643,7 @@ namespace SpaceEngineers.BaseManagers
         }
 
         /// <summary>
-        /// Сислема заказа производства недостающих компонентов INOP
+        /// Сислема заказа производства недостающих компонентов
         /// </summary>
         public void PartsAutoBuild()
         {
@@ -1599,7 +1678,7 @@ namespace SpaceEngineers.BaseManagers
                 }
             }
 
-            monitor.AddInstructions("");
+           // monitor.AddInstructions("");
         }//PartsAutoBuild()
 
         private void AddItemToProduct(KeyValuePair<string,ItemBalanser> key)
@@ -1669,7 +1748,7 @@ namespace SpaceEngineers.BaseManagers
             if (nanobotBuildQueue.Any())
                 AddNanobotPartsToProduct();
 
-            monitor.AddInstructions("");
+          //  monitor.AddInstructions("");
         }
 
         public void AddNanobotPartsToProduct()
@@ -1725,7 +1804,7 @@ namespace SpaceEngineers.BaseManagers
                 }
             }
 
-            monitor.AddInstructions("");
+            //monitor.AddInstructions("");
         }
 
         public void PrintNanobotQueue()
@@ -1746,7 +1825,7 @@ namespace SpaceEngineers.BaseManagers
                 nanobotDisplay?.WriteText($"\n{comp.Key.SubtypeName} X {comp.Value}", true);
             }
 
-            monitor.AddInstructions("");
+          //  monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1768,6 +1847,8 @@ namespace SpaceEngineers.BaseManagers
             {
                 needReplaceParts = false;
                 useAutoBuildSystem = false;
+                useNanobotAutoBuild = false;
+
                 SpecialAssemblerLastName = ass.CustomName;
                 ass.CustomName = assemblersBlueprintLeanerName + "Assembler ready to copy bps";
                 ass.ClearQueue();
@@ -1852,13 +1933,22 @@ namespace SpaceEngineers.BaseManagers
             }
 
             ReloadData();
-            monitor.AddInstructions("");
+          //  monitor.AddInstructions("");
         }
 
         public class ItemBalanser
         {
             public int Current { set; get; } = 0;
             public int Requested { set; get; } = 0;
+        }
+
+        public class OrePriority
+        {
+            public MyItemType Type { set; get; }
+            public int Priority { set; get; } = 0;
+            public string Name { set; get; } = "";
+            public int Amount { set; get; } = 0;
+          
         }
 
         public class PerformanceMonitor
