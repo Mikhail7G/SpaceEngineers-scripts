@@ -32,7 +32,7 @@ namespace SpaceEngineers.Turret
             _stateMachine = RunStuffOverTime();
 
 
-            Runtime.UpdateFrequency |= UpdateFrequency.Update1;
+            Runtime.UpdateFrequency |= UpdateFrequency.Update10;
         }
 
         public void Main(string argument, UpdateType updateType)

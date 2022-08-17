@@ -355,8 +355,11 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                         foreach(var targetInv in availInv)
                         {
-                            if (inv.TransferItemTo(targetInv, 0, null, true))
-                                break;
+                            if (inv.TransferItemTo(targetInv, i, null, true))
+                            {
+                                if (item == null)
+                                    break;
+                            }  
                         }
                     }
                 }

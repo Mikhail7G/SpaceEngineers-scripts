@@ -74,7 +74,10 @@ namespace SpaceEngineers.BaseManagers
         bool getOreFromTransports = false;
         bool useNanobotAutoBuild = false;
         bool useRefinereysOperations = false;
+        bool useRefinereyPriortty = false;
         bool reactorPayloadLimitter = false;
+
+        bool detectReqBuildComp = false;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -138,9 +141,12 @@ namespace SpaceEngineers.BaseManagers
 
         Dictionary<MyDefinitionId, int> nanobotBuildQueue;
 
+        // ^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$ общий имя + необходимое кол-во
         System.Text.RegularExpressions.Regex NameRegex = new System.Text.RegularExpressions.Regex(@"(?<Name>\w*\-?\w*)\s:");//(?<Name>\w*)\s: || (?<Name>^\w*\-*\s*\w*)\s: - c пробелами и подчеркиваниями
         System.Text.RegularExpressions.Regex AmountRegex = new System.Text.RegularExpressions.Regex(@"(?<Amount>\d+)$");
-        System.Text.RegularExpressions.Regex OrePriorRegex = new System.Text.RegularExpressions.Regex(@"(?<Name>\w*\-?\w*)\s:\s\w*?\sP\s?(?<Prior>\d+)\s?$",System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        System.Text.RegularExpressions.Regex OrePriorRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\w*?\sP\s?(?<Prior>\d+)\s?$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+        System.Text.RegularExpressions.Regex ProdItemFullRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
 
         /// <summary>
@@ -267,14 +273,13 @@ namespace SpaceEngineers.BaseManagers
                     FindInventories();
                     break;
                 case 1:
-                    ClearRefinereys();
+                    //ClearRefinereys();
                     ReplaceIgnots();
                     DisplayIngnots();
                     break;
                 case 2:
                     ReplaceParts();
                     DisplayParts();
-                    DisplayOres();
                     break;
                 case 3:
                     PowerMangment();
@@ -282,6 +287,7 @@ namespace SpaceEngineers.BaseManagers
                     PartsAutoBuild();
                     break;
                 case 4:
+                    DisplayOres();
                     GetOreFromTransport();
                     NanobotOperations();
                     PrintNanobotQueue();
@@ -983,8 +989,8 @@ namespace SpaceEngineers.BaseManagers
                 return;
 
             var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName)))
-                                        .Select(i => i.GetInventory(0))
-                                        .Where(i => i.ItemCount > 0).ToList();
+                                         .Select(i => i.GetInventory(0))
+                                         .Where(i => i.ItemCount > 0).ToList();
 
             if (!oreInventory.Any())
             {
@@ -1037,28 +1043,33 @@ namespace SpaceEngineers.BaseManagers
             if (oreDisplay == null)
                 return;
 
-            oreDisplayData.Clear();
-            oreDisplay?.ReadText(oreDisplayData);
+            //Блок считывания приоритета с дисплея
 
-            System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
-
-            if (matches.Count > 0)
+            if (useRefinereyPriortty)
             {
-                foreach (System.Text.RegularExpressions.Match match in matches)
-                {
-                    // if (mat.Success)
+                oreDisplayData.Clear();
+                oreDisplay?.ReadText(oreDisplayData);
 
-                    if(oresDict.ContainsKey(match.Groups["Name"].Value))
+                System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
+
+                if (matches.Count > 0)
+                {
+                    foreach (System.Text.RegularExpressions.Match match in matches)
                     {
-                        int prior = 0;
-                        
-                        if(int.TryParse(match.Groups["Prior"].Value,out prior))
+                        // if (mat.Success)
+
+                        if (oresDict.ContainsKey(match.Groups["Name"].Value))
                         {
-                            oresDict[match.Groups["Name"].Value].Priority = prior;
+                            int prior = 0;
+
+                            if (int.TryParse(match.Groups["Prior"].Value, out prior))
+                            {
+                                oresDict[match.Groups["Name"].Value].Priority = prior;
+                            }
+
                         }
 
                     }
-
                 }
             }
 
@@ -1351,9 +1362,8 @@ namespace SpaceEngineers.BaseManagers
         public void DisplayParts()
         {
             if (partsPanel == null)
-            {
                 return;
-            }
+     
 
             totalPartsStorageVolume = 0;
             freePartsStorageVolume = 0;
@@ -1401,7 +1411,7 @@ namespace SpaceEngineers.BaseManagers
                         }
                     }
 
-                    if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+                    else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
                     {
                         if (ammoDictionary.ContainsKey(item.Type.SubtypeId))
                         {
@@ -1413,7 +1423,7 @@ namespace SpaceEngineers.BaseManagers
                         }
                     }
 
-                    if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
+                    else if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
                     {
                         if (buildedIngnotsDictionary.ContainsKey(item.Type.SubtypeId))
                         {
@@ -1434,10 +1444,14 @@ namespace SpaceEngineers.BaseManagers
 
             var str = partsDisplayData.ToString().Split('\n');
 
+            string name = "";
+            string count = "";
+
+            int amount = 0;
+
             foreach (var st in str)
             {
-                string name = "";
-                string count = "";
+               
 
                 System.Text.RegularExpressions.Match match = NameRegex.Match(st);
 
@@ -1453,7 +1467,7 @@ namespace SpaceEngineers.BaseManagers
                     count = match.Groups["Amount"].Value;
                 }
 
-                int amount = 0;
+                amount = 0;
 
                 if (int.TryParse(count, out amount))
                 {
@@ -1469,6 +1483,7 @@ namespace SpaceEngineers.BaseManagers
                 }
             }
 
+            //Блок вывода инфорации на дисплеи
             string sysState = useAutoBuildSystem == true ? "Auto mode ON" : "Auto mode OFF";
             partsPanel?.WriteText("", false);
             partsPanel?.WriteText($"<<-------------Production------------->>" +
@@ -1628,6 +1643,12 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void AssemblersClear()
         {
+            if (assemblerBlueprintGetter)
+                return;
+
+            if (!detectReqBuildComp)
+                return;
+
             var loadedAssemblers = assemblers.Where(ass => !ass.Closed && !ass.IsProducing).ToList();
             if (loadedAssemblers.Any())
                 assemblersDeadlockTick++;
@@ -1650,6 +1671,7 @@ namespace SpaceEngineers.BaseManagers
             if (!useAutoBuildSystem)
                 return;
 
+            detectReqBuildComp = false;
             needReplaceParts = true;
 
             var desAss = specialAssemblers.Where(ass => ass.Mode == MyAssemblerMode.Disassembly);
@@ -1667,6 +1689,7 @@ namespace SpaceEngineers.BaseManagers
                 if (key.Value.Current < key.Value.Requested)
                 {
                     AddItemToProduct(key);
+                    detectReqBuildComp = true;
                 }
             }
 
@@ -1675,12 +1698,16 @@ namespace SpaceEngineers.BaseManagers
                 if (key.Value.Current < key.Value.Requested)
                 {
                     AddItemToProduct(key);
+                    detectReqBuildComp = true;
                 }
             }
 
            // monitor.AddInstructions("");
         }//PartsAutoBuild()
 
+        /// <summary>
+        /// Добавить недостающий предмет на автосборку
+        /// </summary>
         private void AddItemToProduct(KeyValuePair<string,ItemBalanser> key)
         {
             var needed = key.Value.Requested - key.Value.Current;

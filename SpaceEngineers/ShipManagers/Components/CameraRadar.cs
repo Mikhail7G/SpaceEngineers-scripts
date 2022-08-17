@@ -133,6 +133,7 @@ namespace SpaceEngineers.ShipManagers.Components
                 lcdRadarStatus = dataSystem.Get("Names", "lcdRadarStatus").ToString();
                 lcdTargetStatus = dataSystem.Get("Names", "lcdTargetStatus").ToString();
                 observerCameraName = dataSystem.Get("Names", "observerCameraName").ToString();
+                antennaName = dataSystem.Get("Names", "AntennaName").ToString();
                 missileTagSender = dataSystem.Get("Names", "radioSenderTag").ToString();
 
                 scanDistance = dataSystem.Get("Variables", "ScanDistance").ToDouble();
@@ -152,6 +153,7 @@ namespace SpaceEngineers.ShipManagers.Components
                 dataSystem.Set("Names", "lcdRadarStatus", "RadarSta");
                 dataSystem.Set("Names", "lcdTargetStatus", "RadarTarget");
                 dataSystem.Set("Names", "observerCameraName", "radarCamOBS");
+                dataSystem.Set("Names", "AntennaName", "Ant");
                 dataSystem.Set("Names", "radioSenderTag", "ch1R");
 
                 dataSystem.AddSection("Variables");
