@@ -36,6 +36,10 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
         public Program()
         {
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
+
+
             dataSystem = new MyIni();
 
             ShipComplexMonitor = new ShipMonitor(this)
@@ -46,8 +50,8 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 SmallNanoName = smallNanoName,
                 OreContainersName = oreContainersName
             };
+            ShipComplexMonitor.Init(blocks);
 
-            ShipComplexMonitor.Init();
             Runtime.UpdateFrequency = UpdateFrequency.Update100;
 
         }
@@ -135,10 +139,11 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 }
             }
 
-            public void Init()
+            public void Init(List<IMyTerminalBlock> shipBlocks)
             {
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-                program.GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == program.Me.CubeGrid);
+                // program.GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == program.Me.CubeGrid);
+                blocks = shipBlocks;
 
                 containers = blocks.Where(b => b is IMyCargoContainer)
                                    .Where(c => c.IsFunctional)
@@ -260,7 +265,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                 foreach (var drill in nanoDrill)
                 {
-                    if ((drill == null) && (drill.Closed))
+                    if ((drill == null) && drill.Closed)
                         continue;
 
                     if (drill.IsWorking == false)
@@ -315,7 +320,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                 foreach(var mining in miningTargets)
                 {
-                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value.Current} m3",true);
+                    drillPanel?.WriteText($"\n{mining.Key} x {mining.Value.Current / nanoDrill.Count} m3", true);
                 }
             }
 
@@ -355,10 +360,11 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                         foreach(var targetInv in availInv)
                         {
+                            if (item == null)
+                                break;
+
                             if (inv.TransferItemTo(targetInv, i, null, true))
                             {
-                                if (item == null)
-                                    break;
                             }  
                         }
                     }

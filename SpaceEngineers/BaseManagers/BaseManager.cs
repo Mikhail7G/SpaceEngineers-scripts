@@ -14,6 +14,8 @@ using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using System.Linq;
+using System.Diagnostics;
+using System.Net.Http.Headers;
 
 namespace SpaceEngineers.BaseManagers
 {
@@ -74,7 +76,7 @@ namespace SpaceEngineers.BaseManagers
         bool getOreFromTransports = false;
         bool useNanobotAutoBuild = false;
         bool useRefinereysOperations = false;
-        bool useRefinereyPriortty = false;
+        bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
 
         bool detectReqBuildComp = false;
@@ -145,7 +147,9 @@ namespace SpaceEngineers.BaseManagers
         System.Text.RegularExpressions.Regex NameRegex = new System.Text.RegularExpressions.Regex(@"(?<Name>\w*\-?\w*)\s:");//(?<Name>\w*)\s: || (?<Name>^\w*\-*\s*\w*)\s: - c пробелами и подчеркиваниями
         System.Text.RegularExpressions.Regex AmountRegex = new System.Text.RegularExpressions.Regex(@"(?<Amount>\d+)$");
 
+        //Имя и приоритет руды, ищет по всем строкам
         System.Text.RegularExpressions.Regex OrePriorRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\w*?\sP\s?(?<Prior>\d+)\s?$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+        //Имя и количество компонентов для автостройки
         System.Text.RegularExpressions.Regex ProdItemFullRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
 
@@ -331,6 +335,7 @@ namespace SpaceEngineers.BaseManagers
                 getOreFromTransports = dataSystem.Get("Operations", "TransferOreFromTransports").ToBoolean();
                 useNanobotAutoBuild = dataSystem.Get("Operations", "UseNanobotAutoBuild").ToBoolean();
                 useRefinereysOperations = dataSystem.Get("Operations", "UseRefinereyOperations").ToBoolean();
+                useRefinereyPriorty = dataSystem.Get("Operations", "UseRefinereyPriortty").ToBoolean();
                 reactorPayloadLimitter = dataSystem.Get("Operations", "ReactorFuelLimitter").ToBoolean();
 
                 //Containers 
@@ -401,6 +406,7 @@ namespace SpaceEngineers.BaseManagers
                 dataSystem.Set("Operations", "TransferOreFromTransports", false);
                 dataSystem.Set("Operations", "UseNanobotAutoBuild", false);
                 dataSystem.Set("Operations", "UseRefinereyOperations", false);
+                dataSystem.Set("Operations", "UseRefinereyPriortty", false);
                 dataSystem.Set("Operations", "ReactorFuelLimitter", false);
 
                 dataSystem.AddSection("DisplaysNames");
@@ -446,6 +452,7 @@ namespace SpaceEngineers.BaseManagers
             dataSystem.Set("Operations", "TransferOreFromTransports", getOreFromTransports);
             dataSystem.Set("Operations", "UseNanobotAutoBuild", useNanobotAutoBuild);
             dataSystem.Set("Operations", "UseRefinereyOperations", useRefinereysOperations);
+            dataSystem.Set("Operations", "UseRefinereyPriortty", useRefinereyPriorty);
             dataSystem.Set("Operations", "ReactorFuelLimitter", reactorPayloadLimitter);
 
             dataSystem.Set("DisplaysNames", "lcdInventoryOresName", lcdInventoryOresName);
@@ -891,6 +898,39 @@ namespace SpaceEngineers.BaseManagers
 
             foreach(var refs in refinereys)
             {
+                if (refs.Closed)
+                    continue;
+
+                refs.UseConveyorSystem = false;
+
+                if (refs.InputInventory.ItemCount == 0)
+                {
+
+                }
+                else
+                {
+                    var load = (double)refs.InputInventory.CurrentVolume * 100 / (double)refs.InputInventory.MaxVolume;
+                    if (load < refinereyReloadPrecentage)
+                    {
+                        var refsItem = refs.InputInventory.GetItemAt(0);
+
+                        if (refsItem == null)
+                            continue;
+
+                        foreach (var inv in oreInventory)
+                        {
+                            var targItem = inv.FindItem(refsItem.Value.Type);
+
+                            if (targItem.HasValue)
+                            {
+                                if (!inv.TransferItemTo(refs.InputInventory, targItem.Value, null))
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
 
             }
 
@@ -996,8 +1036,9 @@ namespace SpaceEngineers.BaseManagers
             {
                 oreDisplay?.WriteText("", false);
                 oreDisplay?.WriteText($"<<-----------Ores----------->>{oreItems.Count} x {oreItems.Capacity}" +
-                                       $"\nContainers:{oreInventory.Count()}" +
-                                       $"\nVolume: {0} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
+                                      $"Use prior:{useRefinereyPriorty}" +
+                                      $"\nContainers:{oreInventory.Count}" +
+                                      $"\nVolume: {0} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
                 return;
             }
@@ -1044,8 +1085,7 @@ namespace SpaceEngineers.BaseManagers
                 return;
 
             //Блок считывания приоритета с дисплея
-
-            if (useRefinereyPriortty)
+            if (useRefinereyPriorty)
             {
                 oreDisplayData.Clear();
                 oreDisplay?.ReadText(oreDisplayData);
@@ -1066,17 +1106,17 @@ namespace SpaceEngineers.BaseManagers
                             {
                                 oresDict[match.Groups["Name"].Value].Priority = prior;
                             }
-
                         }
-
                     }
                 }
             }
+            
 
             oreDisplay?.WriteText("", false);
             oreDisplay?.WriteText($"<<-----------Ores----------->>{oreItems.Count} x {oreItems.Capacity}" +
-                                   $"\nContainers:{oreInventory.Count()}" +
-                                   $"\nVolume: {precentageVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
+                                  $"\nUse prior:{useRefinereyPriorty}" +
+                                  $"\nContainers:{oreInventory.Count}" +
+                                  $"\nVolume: {precentageVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
             foreach (var dict in oresDict.OrderBy(k => k.Key))
             {
@@ -1439,46 +1479,49 @@ namespace SpaceEngineers.BaseManagers
             }
 
             //Блок считывания и заполнения данных о количестве компонентов с дисплея
-            partsDisplayData.Clear();
-            partsPanel?.ReadText(partsDisplayData);
-
-            var str = partsDisplayData.ToString().Split('\n');
-
-            string name = "";
-            string count = "";
-
-            int amount = 0;
-
-            foreach (var st in str)
+            if (useAutoBuildSystem)
             {
-               
+                partsDisplayData.Clear();
+                partsPanel?.ReadText(partsDisplayData);
 
-                System.Text.RegularExpressions.Match match = NameRegex.Match(st);
+                var str = partsDisplayData.ToString().Split('\n');
 
-                if (match.Success)
+                string name = "";
+                string count = "";
+
+                int amount = 0;
+
+                foreach (var st in str)
                 {
-                    name = match.Groups["Name"].Value;
-                }
 
-                match = AmountRegex.Match(st);
 
-                if (match.Success)
-                {
-                    count = match.Groups["Amount"].Value;
-                }
+                    System.Text.RegularExpressions.Match match = NameRegex.Match(st);
 
-                amount = 0;
-
-                if (int.TryParse(count, out amount))
-                {
-                    if (partsDictionary.ContainsKey(name))
+                    if (match.Success)
                     {
-                        partsDictionary[name].Requested = amount;
+                        name = match.Groups["Name"].Value;
                     }
 
-                    if (buildedIngnotsDictionary.ContainsKey(name))
+                    match = AmountRegex.Match(st);
+
+                    if (match.Success)
                     {
-                        buildedIngnotsDictionary[name].Requested = amount;
+                        count = match.Groups["Amount"].Value;
+                    }
+
+                    amount = 0;
+
+                    if (int.TryParse(count, out amount))
+                    {
+                        if (partsDictionary.ContainsKey(name))
+                        {
+                            partsDictionary[name].Requested = amount;
+                        }
+
+                        if (buildedIngnotsDictionary.ContainsKey(name))
+                        {
+                            buildedIngnotsDictionary[name].Requested = amount;
+                        }
                     }
                 }
             }

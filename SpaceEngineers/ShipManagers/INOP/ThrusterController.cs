@@ -23,7 +23,7 @@ namespace SpaceEngineers.ShipManagers.INOP
 
         /////////////////////////////////////////////////////////////
 
-        private Vector3D testTarget = new Vector3D(-38797.81, -38669.89, -27402.11);
+        private Vector3D testTarget = new Vector3D(7364.16, -20008.05, 12525.12);
         private Vector3D convPosz = new Vector3D();
         private Vector3D dockPosz = new Vector3D();
         private ThrusterController Thruster;
@@ -654,6 +654,10 @@ namespace SpaceEngineers.ShipManagers.INOP
                 ThrustForward = 0;
                 ThrustLeft = 0;
                 ThrustUp = 0;
+
+                PidKP = 1;
+                PidKD = 80;
+                PidKI = 1;
 
 
                 var targetPos = targetPosition - currentPosition;
