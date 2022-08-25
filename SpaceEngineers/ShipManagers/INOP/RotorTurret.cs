@@ -25,6 +25,7 @@ namespace SpaceEngineers.ShipManagers.INOP
 
         IMyLargeTurretBase designator;
 
+        public string controlGroupName = "RadarGroup";
         string antennaName = "AntGround";
         string missileTagResiever = "ch1R";//Получаем данные от системы целеуказания по радиоканалу
         IMyBroadcastListener listener;//слушаем эфир на получение данных о целях по радио
@@ -37,7 +38,7 @@ namespace SpaceEngineers.ShipManagers.INOP
         public Program()
         {
             Base = new RotorBase(this);
-            Base.SetUpRotors();
+            Base.SetUpRotors(GridTerminalSystem.GetBlockGroupWithName(controlGroupName));
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
 
             antenna = GridTerminalSystem.GetBlockWithName(antennaName) as IMyRadioAntenna;
@@ -53,7 +54,7 @@ namespace SpaceEngineers.ShipManagers.INOP
             switch (args)
             {
                 case "init":
-                    Base.SetUpRotors();
+                    Base.SetUpRotors(GridTerminalSystem.GetBlockGroupWithName(controlGroupName));
                     break;
             }
 
@@ -159,10 +160,11 @@ namespace SpaceEngineers.ShipManagers.INOP
 
             }
 
-            public void SetUpRotors()
+            public void SetUpRotors(IMyBlockGroup bGroup)
             {
                 mainPrgoram.Echo("-----Rotors setup start----");
-                group = mainPrgoram.GridTerminalSystem.GetBlockGroupWithName(controlGroupName);
+                // group = mainPrgoram.GridTerminalSystem.GetBlockGroupWithName(controlGroupName);
+                group = bGroup;
                 if (group == null)
                 {
                     mainPrgoram.Echo($"No group detected:{controlGroupName}");
@@ -391,9 +393,42 @@ namespace SpaceEngineers.ShipManagers.INOP
                 return new Vector3D(vec.Dot(orientation.Right), vec.Dot(orientation.Up), vec.Dot(orientation.Backward));
             }
 
+
+
         }
 
         //////////////////END OF SCRIPT////////////////////////////////////////
+        ///
+        //public static Vector3D GetPredictedTargetPosition2(IMyTerminalBlock shooter, Vector3 ShipVel, MyDetectedEntityInfo target, float shotSpeed)
+        //{
+        //    Vector3D predictedPosition = target.Position;
+        //    Vector3D dirToTarget = Vector3D.Normalize(predictedPosition - shooter.GetPosition());
+
+        //    //Run Setup Calculations
+        //    Vector3 targetVelocity = target.Velocity;
+        //    targetVelocity -= ShipVel;
+        //    Vector3 targetVelOrth = Vector3.Dot(targetVelocity, dirToTarget) * dirToTarget;
+        //    Vector3 targetVelTang = targetVelocity - targetVelOrth;
+        //    Vector3 shotVelTang = targetVelTang;
+        //    float shotVelSpeed = shotVelTang.Length();
+
+        //    if (shotVelSpeed > shotSpeed)
+        //    {
+        //        // Shot is too slow 
+        //        return Vector3.Normalize(target.Velocity) * shotSpeed;
+        //    }
+        //    else
+        //    {
+        //        // Run Calculations
+        //        float shotSpeedOrth = (float)Math.Sqrt(shotSpeed * shotSpeed - shotVelSpeed * shotVelSpeed);
+        //        Vector3 shotVelOrth = dirToTarget * shotSpeedOrth;
+        //        float timeDiff = shotVelOrth.Length() - targetVelOrth.Length();
+        //        var timeToCollision = timeDiff != 0 ? ((shooter.GetPosition() - target.Position).Length()) / timeDiff : 0;
+        //        Vector3 shotVel = shotVelOrth + shotVelTang;
+        //        predictedPosition = timeToCollision > 0.01 f? shooter.GetPosition() + (Vector3D)shotVel * timeToCollision : predictedPosition;
+        //        return predictedPosition;
+        //    }
+        //}
 
     }
 
