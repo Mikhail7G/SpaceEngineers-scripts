@@ -17,6 +17,7 @@ using System.Linq;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 
+
 namespace SpaceEngineers.BaseManagers
 {
     public sealed class Program : MyGridProgram
@@ -201,7 +202,7 @@ namespace SpaceEngineers.BaseManagers
             if (autorun)
             {
                 Runtime.UpdateFrequency = UpdateFrequency.Update100;
-                Echo($"Script running");
+                Echo($"Script autostart in prog");
             }
 
         }
@@ -636,6 +637,9 @@ namespace SpaceEngineers.BaseManagers
 
         }
 
+        /// <summary>
+        /// Печатаем текст в терминал блока
+        /// </summary>
         public void DrawEcho()
         {
             Echo(">>>-------------------------------<<<");
@@ -679,13 +683,34 @@ namespace SpaceEngineers.BaseManagers
             inventories = blocks.Where(b => b.HasInventory)
                                 .Select(b => b.GetInventory(b.InventoryCount - 1));//берем из инвентаря готовой продукции
 
-            refinereys = blocks.Where(b => b is IMyRefinery).Where(r => r.IsFunctional).Where(b=>b.CubeGrid==Me.CubeGrid).Select(t => t as IMyRefinery).ToList();
-            assemblers = blocks.Where(b => b is IMyAssembler).Where(a => a.IsFunctional).Where(b => b.CubeGrid == Me.CubeGrid).Select(t => t as IMyAssembler).ToList();
-            containers = blocks.Where(b => b is IMyCargoContainer).Where(c => c.IsFunctional).Select(t => t as IMyCargoContainer).ToList();
-            batteries = blocks.Where(b => b is IMyBatteryBlock).Where(b => b.IsFunctional).Select(t => t as IMyBatteryBlock).ToList();
-            gasTanks = blocks.Where(b => b is IMyGasTank).Where(g => g.IsFunctional).Select(t => t as IMyGasTank).ToList();
+            refinereys = blocks.Where(b => b is IMyRefinery)
+                               .Where(r => r.IsFunctional)
+                               .Where(b=>b.CubeGrid==Me.CubeGrid)
+                               .Select(t => t as IMyRefinery).ToList();
 
-            generators = blocks.Where(b => b is IMyPowerProducer).Where(r => r.IsFunctional).Select(t => t as IMyPowerProducer).ToList();
+            assemblers = blocks.Where(b => b is IMyAssembler)
+                               .Where(a => a.IsFunctional)
+                               .Where(b => b.CubeGrid == Me.CubeGrid)
+                               .Select(t => t as IMyAssembler).ToList();
+
+            containers = blocks.Where(b => b is IMyCargoContainer)
+                               .Where(c => c.IsFunctional)
+                               .Select(t => t as IMyCargoContainer).ToList();
+
+            batteries = blocks.Where(b => b is IMyBatteryBlock)
+                              .Where(b => b.CubeGrid == Me.CubeGrid)
+                              .Where(b => b.IsFunctional)
+                              .Select(t => t as IMyBatteryBlock).ToList();
+
+            gasTanks = blocks.Where(b => b is IMyGasTank)
+                             .Where(b => b.CubeGrid == Me.CubeGrid)
+                             .Where(g => g.IsFunctional)
+                             .Select(t => t as IMyGasTank).ToList();
+
+            generators = blocks.Where(b => b is IMyPowerProducer)
+                               .Where(b => b.CubeGrid == Me.CubeGrid)
+                               .Where(r => r.IsFunctional)
+                               .Select(t => t as IMyPowerProducer).ToList();
 
             nanobotBuildModule = blocks.Where(b => b.IsFunctional)
                                        .Where(g => g.BlockDefinition.SubtypeName.ToString() == "SELtdLargeNanobotBuildAndRepairSystem")
@@ -693,40 +718,6 @@ namespace SpaceEngineers.BaseManagers
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
-
-            //Echo(">>>-------------------------------<<<");
-            //Echo($"Current frame: {currentTick}");
-            //Echo($"Refinereys found:{refinereys.Count}");
-            //Echo($"Assemblers found:{assemblers.Count}");
-            //Echo($"Special assemblers found:{specialAssemblers.Count}");
-            //Echo($"Containers found my/conn: {containers.Where(c => c.CubeGrid == Me.CubeGrid).Count()}/" +
-            //                               $"{containers.Where(c => c.CubeGrid != Me.CubeGrid).Count()}");
-
-            //Echo($"Battery found my/conn: {batteries.Where(b => b.CubeGrid == Me.CubeGrid).Count()}/" +
-            //                            $"{batteries.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
-
-            //Echo($"Generators found my/conn: {generators.Where(b => b.CubeGrid == Me.CubeGrid).Count()}/" +
-            //                               $"{generators.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
-
-            //Echo($"Gas found my/conn: {gasTanks.Where(b => b.CubeGrid == Me.CubeGrid).Count()}/" +
-            //                        $"{gasTanks.Where(b => b.CubeGrid != Me.CubeGrid).Count()}");
-
-            //string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
-            //Echo($"Nanobot:{nanoFinded}:{nanobotBuildModule.CustomName}");
-
-            //Echo(">>>-------------------------------<<<");
-
-            //Echo($"Nanobot system: {useNanobotAutoBuild}");
-            //Echo($"Ingnot replace system: {needReplaceIngnots}");
-            //Echo($"Parts replace system: {needReplaceParts}");
-            //Echo($"Power mng system: {usePowerManagmentSystem}");
-            //Echo($"Get ore frm outer: {getOreFromTransports}");
-            //Echo($"Refinerey ops: {useRefinereysOperations}");
-            //Echo($"Scan blueprints: {assemblerBlueprintGetter}");
-
-            //Echo(">>>-------------------------------<<<");
-
-           // monitor.AddInstructions("");
         }
 
         public void SwitchNanobotMode()
@@ -1036,7 +1027,7 @@ namespace SpaceEngineers.BaseManagers
             {
                 oreDisplay?.WriteText("", false);
                 oreDisplay?.WriteText($"<<-----------Ores----------->>{oreItems.Count} x {oreItems.Capacity}" +
-                                      $"Use prior:{useRefinereyPriorty}" +
+                                      $"Use prior:{useRefinereyPriorty} INOP" +
                                       $"\nContainers:{oreInventory.Count}" +
                                       $"\nVolume: {0} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 

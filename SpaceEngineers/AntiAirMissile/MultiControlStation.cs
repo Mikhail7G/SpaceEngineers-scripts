@@ -109,7 +109,7 @@ namespace SpaceEngineers.AntiAirMissile
                 missileTagResiever = dataSystem.Get("Names", "RadioResieveChannel").ToString();
 
                 maxAviableFlightTime = dataSystem.Get("Params", "StationControlTime").ToInt32();
-                missileTakeOffSafeyTimer = dataSystem.Get("Params", "MissileTakeOffSafeyTicks").ToInt32();
+                missileTakeOffSafeyTimer = dataSystem.Get("Params", "MissileTakeOffSafeyTime").ToInt32();
                 missileRadioExplosionDistance = dataSystem.Get("Params", "RadioExplDistance").ToInt32();
                 missileUseWander = dataSystem.Get("Params", "UseWander").ToBoolean();
                 missileUseSpiral = dataSystem.Get("Params", "UseSpiral").ToBoolean();
@@ -133,7 +133,7 @@ namespace SpaceEngineers.AntiAirMissile
 
                 dataSystem.AddSection("Params");
                 dataSystem.Set("Params", "StationControlTime", 120);
-                dataSystem.Set("Params", "MissileTakeOffSafeyTicks", 150);
+                dataSystem.Set("Params", "MissileTakeOffSafeyTime", 1);
                 dataSystem.Set("Params", "RadioExplDistance", 10);
                 dataSystem.Set("Params", "UseWander", true);
                 dataSystem.Set("Params", "UseSpiral", true);
@@ -368,7 +368,7 @@ namespace SpaceEngineers.AntiAirMissile
                     missileInFlightList[i].UpdateMissile(targetPosition, targetSpeed);
 
                     //Время жизни ракеты, для того чтоб не забивать лист ракет в полете
-                    if (missileInFlightList[i].FlightTime > maxAviableFlightTime * 60)
+                    if (missileInFlightList[i].FlightTime > (maxAviableFlightTime * 60))
                     {
                         missileInFlightList[i].Detonate();
                         missileInFlightList.RemoveAt(i);
@@ -517,7 +517,7 @@ namespace SpaceEngineers.AntiAirMissile
             public int MissileRadioExpDistance { set; get; } = 5;//дистанция срабатывания сенсора на детонацию
             public double SpiralRadius { set; get; } = 10;//радиус спирали
             public double SpiralMaxTime { set; get; } = 300;//время спирали
-            public int MinimumSafeTakeOffTimer { set; get; } = 150;//время в тиках безопасного взлета ракеты после запуска
+            public int MinimumSafeTakeOffTimer { set; get; } = 1;//время в секундах безопасного взлета ракеты после запуска
 
             private Vector3D linearVel = new Vector3D();
             private Vector3D natGravity = new Vector3D();
@@ -832,7 +832,7 @@ namespace SpaceEngineers.AntiAirMissile
             {
                 FlightTime++;
 
-                if (FlightTime > MinimumSafeTakeOffTimer)
+                if (FlightTime > (MinimumSafeTakeOffTimer * 60))
                 {
                     var mPos = RemotControl.GetPosition();
                     var mSpeed = RemotControl.GetShipVelocities().LinearVelocity.Length();

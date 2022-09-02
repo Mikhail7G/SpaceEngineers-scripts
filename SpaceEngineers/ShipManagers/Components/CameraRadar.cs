@@ -84,9 +84,14 @@ namespace SpaceEngineers.ShipManagers.Components
         public void Main(string args, UpdateType updateType)
         {
             if ((updateType & CommandUpdate) != 0)
+            {
                 Commands(args);
-
-            Radar.RadarUpdate();
+            }
+            else
+            {
+                Radar.RadarUpdate();
+            }
+               
             //SendMessageRadio();
             RadarSound();
 
@@ -167,6 +172,9 @@ namespace SpaceEngineers.ShipManagers.Components
 
         public void RadarSound()
         {
+            if (beeper == null)
+                return;
+
             if (Radar.TrackTarget)
             {
                 radarSoundTimer++;
@@ -449,7 +457,8 @@ namespace SpaceEngineers.ShipManagers.Components
                                    $"\nAvailDist: {Camera.AvailableScanRange}" +
                                    $"\nTotalCameras: {cameras.Count}" +
                                    $"\n/AvailCams: {CurrentAviableCameras}" +
-                                   $"\nOBScam: {observerCamera.AvailableScanRange}", false);
+                                   $"\nOBScam: {observerCamera.AvailableScanRange}" +
+                                   $"\nTick:{tickLimit}", false);
 
             }
 
@@ -463,17 +472,18 @@ namespace SpaceEngineers.ShipManagers.Components
 
                         if (!TargetInfo.IsEmpty())
                         {
-                            HitPos = TargetInfo.HitPosition.Value - TargetInfo.Position + Vector3D.Normalize(TargetInfo.HitPosition.Value - Camera.GetPosition()) * 1;
+                            HitPos = TargetInfo.HitPosition.Value - TargetInfo.Position + Vector3D.Normalize(TargetInfo.HitPosition.Value - Camera.GetPosition()) * 1.5f;
 
                             TargetPos = TargetInfo.Position;
                             TargetSpeed = TargetInfo.Velocity;
                             TargetId = TargetInfo.EntityId;
 
-                            MatrixD invMatrix = MatrixD.Invert(TargetInfo.Orientation);
-                            HitInvert = Vector3D.Transform(HitPos, invMatrix);
+                            //MatrixD invMatrix = MatrixD.Invert(TargetInfo.Orientation);
+                            //HitInvert = Vector3D.Transform(HitPos, invMatrix);
+                            //HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
 
-                            HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
                             CalculatedPosition = TargetInfo.HitPosition.Value;
+                           
 
                             DistanceToTarget = TargetInfo.HitPosition.Value - Camera.GetPosition();
 
@@ -507,6 +517,8 @@ namespace SpaceEngineers.ShipManagers.Components
                                 TargetSpeed = TargetInfo.Velocity;
                                 TargetId = TargetInfo.EntityId;
 
+                                MatrixD invMatrix = MatrixD.Invert(TargetInfo.Orientation);
+                                HitInvert = Vector3D.Transform(HitPos, invMatrix);
                                 HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
 
                                 if (PrecisionFollowing)
@@ -525,7 +537,7 @@ namespace SpaceEngineers.ShipManagers.Components
                             {
                                 LOCClosed = true;
                                 LOCClosedTime++;
-                                //ппроверка на LOC
+                                //проверка на LOC
                             }
                         }
                         else
@@ -535,6 +547,7 @@ namespace SpaceEngineers.ShipManagers.Components
                             TargetSpeed = Vector3D.Zero;
                             TargetId = 0;
                             TargetInfo = Camera.Raycast(Vector3D.Zero);
+
                         }
 
                     }
@@ -547,17 +560,18 @@ namespace SpaceEngineers.ShipManagers.Components
                     tickLimit = (DistanceToTarget.Length() + 10) / 2000 * 60 / cameras.Count;
                     CalculatedTargetPos = CalculatedPosition + TargetSpeed * ((int)tickLimit + LOCClosedTime) / 60;
 
+                    if (scanTick > tickLimit)
+                    {
+                        scanTick = 0;
+                        TryFollowTarget();
+                    }
+
                     if (TargetInfo.IsEmpty())
                     {
                         TrackTarget = false;
                         LOCClosed = false;
                         LOCClosedTime = 0;
-                    }
-
-                    if (scanTick > tickLimit)
-                    {
                         scanTick = 0;
-                        TryFollowTarget();
                     }
 
                     scanTick++;
