@@ -1713,9 +1713,10 @@ namespace SpaceEngineers.BaseManagers
         {
             if (!useAutoBuildSystem)
                 return;
+            
 
-            var freeAssemblers = specialAssemblers.Where(ass => ass.Closed ||  ass.OutputInventory.ItemCount > 0).ToList();
-            if (freeAssemblers.Any())
+            var busyAssemblers = specialAssemblers.Where(ass => ass.Closed ||  ass.OutputInventory.ItemCount > 0).ToList();
+            if (busyAssemblers.Any())
                 return;
 
             Echo("------Auto build system-------");
@@ -1748,8 +1749,6 @@ namespace SpaceEngineers.BaseManagers
         {
             var needed = key.Value.Requested - key.Value.Current;
 
-          
-
             var bd = blueprintData.Where(k => k.Key.Contains(key.Key));
 
             if (!bd.Any())
@@ -1773,7 +1772,7 @@ namespace SpaceEngineers.BaseManagers
                 return;
 
             List<MyProductionItem> items = new List<MyProductionItem>();
-            debugPanel.WriteText("",false);
+
             foreach (var ass in availAss)
             {
                 items.Clear();
@@ -1787,11 +1786,7 @@ namespace SpaceEngineers.BaseManagers
                     if (needed < 0)
                         return;
                 }
-
-                foreach (var item in items)
-                    debugPanel.WriteText($"\n {item.BlueprintId} X {item.Amount}", true);
             }
-
 
             var count = needed / availAss.Count;
 
@@ -1807,8 +1802,6 @@ namespace SpaceEngineers.BaseManagers
                     ass.AddQueueItem(blueprint, amount);
                 }
             }
-
-
         }
 
         /// <summary>
