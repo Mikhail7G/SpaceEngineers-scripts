@@ -1161,12 +1161,12 @@ namespace SpaceEngineers.BaseManagers
 
                 for (int i = 0; i <= currentCargo; i++)
                 {
-                    var item = refs.GetItemAt(i);
+                    var item = refs.GetItemAt(0);
 
                     if (item == null)
                         continue;
 
-                    if (refs.TransferItemTo(availConts.First(), i, null, true))
+                    if (refs.TransferItemTo(availConts.First(), 0, null, true))
                     {
                         Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
                     }
@@ -1371,20 +1371,29 @@ namespace SpaceEngineers.BaseManagers
                     Echo($"No reacheable containers, check connection!");
                     continue;
                 }
-                var item = ass.GetItemAt(0);
+
+                var currentCargo = ass.ItemCount;
                 var targInv = availConts.First().Owner as IMyCargoContainer;
 
-                if (ass.TransferItemTo(availConts.First(), 0, null, true))
+
+                for (int i = 0; i <= currentCargo; i++)
                 {
-                    Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
-                }
-                else
-                {
-                    Echo($"Transer FAILED: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    var item = ass.GetItemAt(0);
+
+                    if (item == null)
+                        continue;
+
+                    if (ass.TransferItemTo(availConts.First(), 0, null, true))
+                    {
+                        Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    }
+                    else
+                    {
+                        Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    }
                 }
             }
-
-           // monitor.AddInstructions("");
+            // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1677,24 +1686,24 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void AssemblersClear()
         {
-            if (assemblerBlueprintGetter)
-                return;
+            //if (assemblerBlueprintGetter)
+            //    return;
 
-            if (!detectReqBuildComp)
-                return;
+            //if (!detectReqBuildComp)
+            //    return;
 
-            var loadedAssemblers = assemblers.Where(ass => !ass.Closed && !ass.IsProducing).ToList();
-            if (loadedAssemblers.Any())
-                assemblersDeadlockTick++;
+            //var loadedAssemblers = assemblers.Where(ass => !ass.Closed && !ass.IsProducing).ToList();
+            //if (loadedAssemblers.Any())
+            //    assemblersDeadlockTick++;
 
-            if (assemblersDeadlockTick > 1)
-            {
-                foreach (var ass in loadedAssemblers)
-                {
-                    ass.ClearQueue();
-                    assemblersDeadlockTick = 0;
-                }
-            }
+            //if (assemblersDeadlockTick > 1)
+            //{
+            //    foreach (var ass in loadedAssemblers)
+            //    {
+            //        ass.ClearQueue();
+            //        assemblersDeadlockTick = 0;
+            //    }
+            //}
         }
 
         /// <summary>
@@ -1705,14 +1714,7 @@ namespace SpaceEngineers.BaseManagers
             if (!useAutoBuildSystem)
                 return;
 
-            detectReqBuildComp = false;
-            needReplaceParts = true;
-
-            var desAss = specialAssemblers.Where(ass => ass.Mode == MyAssemblerMode.Disassembly);
-            if (desAss.Any())
-                return;
-
-            var freeAssemblers = specialAssemblers.Where(ass => ass.Closed || !ass.IsQueueEmpty || ass.OutputInventory.ItemCount > 0).ToList();
+            var freeAssemblers = specialAssemblers.Where(ass => ass.Closed ||  ass.OutputInventory.ItemCount > 0).ToList();
             if (freeAssemblers.Any())
                 return;
 
@@ -1722,7 +1724,7 @@ namespace SpaceEngineers.BaseManagers
             {
                 if (key.Value.Current < key.Value.Requested)
                 {
-                    AddItemToProduct(key);
+                    AddItemToProduct(key, specialAssemblers);
                     detectReqBuildComp = true;
                 }
             }
@@ -1731,7 +1733,7 @@ namespace SpaceEngineers.BaseManagers
             {
                 if (key.Value.Current < key.Value.Requested)
                 {
-                    AddItemToProduct(key);
+                    AddItemToProduct(key, specialAssemblers);
                     detectReqBuildComp = true;
                 }
             }
@@ -1742,18 +1744,17 @@ namespace SpaceEngineers.BaseManagers
         /// <summary>
         /// Добавить недостающий предмет на автосборку
         /// </summary>
-        private void AddItemToProduct(KeyValuePair<string,ItemBalanser> key)
+        private void AddItemToProduct(KeyValuePair<string,ItemBalanser> key, List<IMyAssembler> availAssemblers)
         {
             var needed = key.Value.Requested - key.Value.Current;
 
-            var freeAssemblers = specialAssemblers;
+          
 
             var bd = blueprintData.Where(k => k.Key.Contains(key.Key));
 
             if (!bd.Any())
             {
                 Echo($"WARNING no blueprint: {key.Key}");
-                nanobuildReady = false;
                 return;
             }
 
@@ -1767,9 +1768,30 @@ namespace SpaceEngineers.BaseManagers
                 return;
             }
 
-            var availAss = freeAssemblers.Where(ass => ass.CanUseBlueprint(blueprint)).ToList();
+            var availAss = availAssemblers.Where(ass => !ass.Closed && ass.CanUseBlueprint(blueprint)).ToList();
             if (!availAss.Any())
                 return;
+
+            List<MyProductionItem> items = new List<MyProductionItem>();
+            debugPanel.WriteText("",false);
+            foreach (var ass in availAss)
+            {
+                items.Clear();
+                ass.GetQueue(items);
+
+                var neededItems = items.Where(i => i.BlueprintId.Equals(blueprint)).ToList();
+
+                if(neededItems.Any())
+                {
+                    needed -= neededItems.Sum(i => i.Amount.ToIntSafe());
+                    if (needed < 0)
+                        return;
+                }
+
+                foreach (var item in items)
+                    debugPanel.WriteText($"\n {item.BlueprintId} X {item.Amount}", true);
+            }
+
 
             var count = needed / availAss.Count;
 
@@ -1875,11 +1897,13 @@ namespace SpaceEngineers.BaseManagers
                 return;
             }
 
-            string sysState = nanobuildReady == true ? $"\nBlock:{nanobotBuildModule.CustomName}\nWork: {useNanobotAutoBuild}" : "\nNanobuild failed!!! check PC!!";
+            //сообщение об ощибке модуля сборки
+            string sysState = nanobuildReady == true ? $"\nBlock:{nanobotBuildModule.CustomName}\nWorking" : "\nNanobuild failed!!! no PB??";
 
             nanobotDisplay?.WriteText("", false);
             nanobotDisplay?.WriteText("<<-----------Nanobot module----------->>", true);
-            nanobotDisplay?.WriteText(sysState, true);
+            nanobotDisplay?.WriteText($"\nBlock:{nanobotBuildModule.CustomName}\nWork: {useNanobotAutoBuild}" +
+                                        sysState, true);
 
             foreach (var comp in nanobotBuildQueue.OrderBy(c => c.Key.ToString()))
             {

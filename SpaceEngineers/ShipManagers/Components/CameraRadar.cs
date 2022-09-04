@@ -547,7 +547,6 @@ namespace SpaceEngineers.ShipManagers.Components
                             TargetSpeed = Vector3D.Zero;
                             TargetId = 0;
                             TargetInfo = Camera.Raycast(Vector3D.Zero);
-
                         }
 
                     }
