@@ -80,7 +80,7 @@ namespace SpaceEngineers.BaseManagers
         bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
 
-        bool detectReqBuildComp = false;
+        //bool detectReqBuildComp = false;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -198,6 +198,7 @@ namespace SpaceEngineers.BaseManagers
             monitor = new PerformanceMonitor(this, Me.GetSurface(1));
 
             GetIniData();
+            Load();
 
             if (autorun)
             {
@@ -217,6 +218,40 @@ namespace SpaceEngineers.BaseManagers
                 Commands(args);
 
             Update();
+        }
+
+        public void Save()
+        {
+            MyIni oreData = new MyIni();
+            Storage = null;
+
+            oreData.AddSection("Ores");
+
+            foreach (var dict in oresDict)
+            {
+                oreData.Set("Ores", dict.Key, dict.Value.Priority);
+            }
+
+            Storage = oreData.ToString();
+        }
+
+        public void Load()
+        {
+            MyIni oreData = new MyIni();
+
+            if (oreData.TryParse(Storage))
+            {
+                Echo("Load internal data OK");
+
+                List<MyIniKey> keys = new List<MyIniKey>();
+                oreData.GetKeys("Ores", keys);
+
+                foreach (var key in keys)
+                {
+                    oresDict.Add(key.Name, new OrePriority() { Priority = oreData.Get(key).ToInt32() });
+                }
+            }
+
         }
 
         public void Commands(string str)
@@ -362,6 +397,7 @@ namespace SpaceEngineers.BaseManagers
                 List<MyIniKey> keys = new List<MyIniKey>();
                 dataSystem.GetKeys("OrePriority", keys);
 
+                //INOP
                 foreach (var key in keys)
                 {
                     orePriority.Add(key.Name, dataSystem.Get(key).ToInt32());
@@ -495,6 +531,11 @@ namespace SpaceEngineers.BaseManagers
             {
                 //Echo($"Try find:{lcdInventoryIngnotsName}");
                 ingnotPanel = GridTerminalSystem.GetBlockWithName(lcdInventoryIngnotsName) as IMyTextPanel;
+                if (ingnotPanel != null)
+                {
+                    ingnotPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    ingnotPanel.FontSize = 1;
+                }
             }
             else
             {
@@ -505,6 +546,11 @@ namespace SpaceEngineers.BaseManagers
             {
                // Echo($"Try find:{lcdPowerSystemName}");
                 powerPanel = GridTerminalSystem.GetBlockWithName(lcdPowerSystemName) as IMyTextPanel;
+                if (powerPanel != null)
+                {
+                    powerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    powerPanel.FontSize = 1;
+                }
             }
             else
             {
@@ -515,6 +561,11 @@ namespace SpaceEngineers.BaseManagers
             {
                 //Echo($"Try find:{lcdPowerDetailedName}");
                 detailedPowerPanel = GridTerminalSystem.GetBlockWithName(lcdPowerDetailedName) as IMyTextPanel;
+                if (detailedPowerPanel != null)
+                {
+                    detailedPowerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    detailedPowerPanel.FontSize = 1;
+                }
             }
             else
             {
@@ -526,6 +577,11 @@ namespace SpaceEngineers.BaseManagers
             {
                 //Echo($"Try find:{lcdPartsName}");
                 partsPanel = GridTerminalSystem.GetBlockWithName(lcdPartsName) as IMyTextPanel;
+                if (partsPanel != null)
+                {
+                    partsPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    partsPanel.FontSize = 1;
+                }
             }
             else
             {
@@ -536,6 +592,11 @@ namespace SpaceEngineers.BaseManagers
             {
                // Echo($"Try find:{lcdNanobotName}");
                 nanobotDisplay = GridTerminalSystem.GetBlockWithName(lcdNanobotName) as IMyTextPanel;
+                if (nanobotDisplay != null)
+                {
+                    nanobotDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    nanobotDisplay.FontSize = 1;
+                }
             }
             else
             {
@@ -546,6 +607,11 @@ namespace SpaceEngineers.BaseManagers
             {
                // Echo($"Try find:{lcdRefinereyName}");
                 refinereysDisplay = GridTerminalSystem.GetBlockWithName(lcdRefinereyName) as IMyTextPanel;
+                if (refinereysDisplay != null)
+                {
+                    refinereysDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    refinereysDisplay.FontSize = 1;
+                }
             }
             else
             {
@@ -556,6 +622,11 @@ namespace SpaceEngineers.BaseManagers
             {
                // Echo($"Try find:{lcdInventoryOresName}");
                 oreDisplay = GridTerminalSystem.GetBlockWithName(lcdInventoryOresName) as IMyTextPanel;
+                if (oreDisplay != null)
+                {
+                    oreDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    oreDisplay.FontSize = 1;
+                }
             }
             else
             {
@@ -793,8 +864,7 @@ namespace SpaceEngineers.BaseManagers
 
                 foreach (var bp in refinereysItems)
                 {
-                    //string pbsName = bp.BlueprintId.SubtypeName.Substring(0,bp.BlueprintId.SubtypeName.LastIndexOf("OreToIngot"));
-                    refinereysDisplay?.WriteText($"\n{bp.BlueprintId.SubtypeName} X Def:{bp.Amount} / EFF:{bp.Amount * refs.Value}", true);
+                    refinereysDisplay?.WriteText($"\n{bp.BlueprintId.SubtypeName} X Ore:{bp.Amount}", true);
                 }
                 refinereysDisplay?.WriteText("\n----------", true);
 
@@ -1060,8 +1130,6 @@ namespace SpaceEngineers.BaseManagers
                         {
                             oresDict.Add(item.Type.SubtypeId, new OrePriority
                                                                   { Amount = item.Amount.ToIntSafe(),
-                                                                    Type = item.Type,
-                                                                    Name = item.Type.SubtypeId,
                                                                     Priority = 0 });
 
                            // dataSystem.Set("OrePriority", item.Type.SubtypeId, 0);
@@ -1713,7 +1781,10 @@ namespace SpaceEngineers.BaseManagers
         {
             if (!useAutoBuildSystem)
                 return;
-            
+
+            if (useNanobotAutoBuild)
+                return;
+
 
             var busyAssemblers = specialAssemblers.Where(ass => ass.Closed ||  ass.OutputInventory.ItemCount > 0).ToList();
             if (busyAssemblers.Any())
@@ -1800,6 +1871,8 @@ namespace SpaceEngineers.BaseManagers
                 {
                     VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
                     ass.AddQueueItem(blueprint, amount);
+
+                    Echo($"Item added: {blueprint.SubtypeId} x {amount} to \n{ass.CustomName}");
                 }
             }
         }
@@ -2022,9 +2095,7 @@ namespace SpaceEngineers.BaseManagers
 
         public class OrePriority
         {
-            public MyItemType Type { set; get; }
             public int Priority { set; get; } = 0;
-            public string Name { set; get; } = "";
             public int Amount { set; get; } = 0;
           
         }

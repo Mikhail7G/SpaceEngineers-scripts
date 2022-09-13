@@ -24,11 +24,15 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
         string missileTagResiever = "ch1R";//Получаем данные от системы целеуказания по радиоканалу
         string TurretGroupName = "Turrets";
 
+        string mainCocpit = "Main";
+
         IMyBroadcastListener listener;//слушаем эфир на получение данных о целях по радио
 
         IMyRadioAntenna antenna;
 
         IMyInteriorLight turretArmedStaLight;
+
+        IMyShipController control;
 
         Vector3D targetPosition;
         Vector3D targetSpeed;
@@ -55,13 +59,15 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
 
             antenna = GridTerminalSystem.GetBlockWithName(antennaName) as IMyRadioAntenna;
             turretArmedStaLight = GridTerminalSystem.GetBlockWithName(lightName) as IMyInteriorLight;
+            control = GridTerminalSystem.GetBlockWithName(mainCocpit) as IMyShipController;
 
 
-            var group = GridTerminalSystem.GetBlockGroupWithName("Turrets");
+            var group = GridTerminalSystem.GetBlockGroupWithName(TurretGroupName);
             turretController = new ShipTurretController(group, this);
             turretController.ArmedNotify += ArmedNotify;
 
             monitor = new PerformanceMonitor(this, Me.GetSurface(1));
+
 
         }
 
@@ -191,6 +197,8 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
             Vector3D targetPosition;
             Vector3D targetSpeed;
 
+            IMyShipController controller;
+
 
             Program mainProgram;
             List<IMyLargeTurretBase> turrets;
@@ -204,8 +212,13 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                 targetPosition = new Vector3D();
                 targetSpeed = new Vector3D();
 
+              
+
                 turrets = new List<IMyLargeTurretBase>();
                 mainProgram = mainProg;
+
+
+                controller = mainProgram.GridTerminalSystem.GetBlockWithName("Main") as IMyShipController;
 
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
                 if (group == null)
@@ -241,6 +254,14 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                     case "ZERORANGE":
                         DisabeFiring();
                         break;
+
+                    case "RESET":
+                        ResetRotation();
+                        break;
+
+                    case "DIST":
+                        SyncOnDistance(0);
+                        break;
                 }
             }
 
@@ -255,6 +276,34 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                 Armed = false;
                 ArmedNotify.Invoke();
                 targetPosition = new Vector3D(0,0,0);
+                ResetRotation();
+            }
+
+            void SyncOnDistance(float dist)
+            {
+                foreach (var turret in turrets)
+                {
+                    if (turret.Closed)
+                        continue;
+
+                    var dir = (controller.GetPosition() + controller.WorldMatrix.Forward * 800);
+
+                   // dir = VectorTransform(dir, turret.WorldMatrix.GetOrientation());
+
+                    float azimuth = (float)Math.Atan2(-dir.X, dir.Z);
+                    float elevation = (float)Math.Asin(dir.Y / dir.Length());
+
+                    turret.SetTarget(dir);
+                    //turret.SetManualAzimuthAndElevation((float)(azimuth * 0.017), (float)(elevation * 0.017));
+                    turret.SyncElevation();
+                    turret.SyncAzimuth();
+                }
+
+            }
+
+            public Vector3D VectorTransform(Vector3D vec, MatrixD orientation)
+            {
+                return new Vector3D(vec.Dot(orientation.Right), vec.Dot(orientation.Up), vec.Dot(orientation.Backward));
             }
 
             void EnableFiring()
@@ -269,6 +318,9 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
             {
                 foreach (var turret in turrets)
                 {
+                    if (turret.Closed)
+                        continue;
+
                     turret.Range = 1;
                 }
             }
@@ -284,10 +336,27 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                 targetSpeed = speed;
             }
 
+            public void ResetRotation()
+            {
+                foreach (var turret in turrets)
+                {
+                    if (turret.Closed)
+                        continue;
+
+                    turret.Shoot = false;
+                    turret.SetManualAzimuthAndElevation(0, 0);
+                    turret.SyncElevation();
+                    turret.SyncAzimuth();
+                }
+            }
+
             void RotateAndFire()
             {
-               mainProgram.Echo($"Armed:{Armed}");
-               
+                mainProgram.Echo($"Armed:{Armed}");
+
+                if (!Armed)
+                    return;
+
                 distanceToTargetSqr = Vector3D.DistanceSquared(mainProgram.Me.GetPosition(), targetPosition);
 
                 foreach (var turret in turrets)
@@ -295,26 +364,19 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                     if (turret.Closed)
                         continue;
 
-                    if (Armed == true)
+                    //Поворот на цель 
+                    turret.TrackTarget(targetPosition, targetSpeed);
+
+                    turret.SyncElevation();
+                    turret.SyncAzimuth();
+
+                    //Если радиуса хватает, то стрелять
+                    if (distanceToTargetSqr < turret.Range * turret.Range)
                     {
-                        //Поворот на цель 
-                        turret.TrackTarget(targetPosition, targetSpeed);
 
-                        turret.SyncElevation();
-                        turret.SyncAzimuth();
-
-                        //Если радиуса хватает, то стрелять
-                        if (distanceToTargetSqr < turret.Range * turret.Range)
+                        if (turret.IsAimed)
                         {
-
-                            if (turret.IsAimed)
-                            {
-                                turret.Shoot = true;
-                            }
-                            else
-                            {
-                                turret.Shoot = false;
-                            }
+                            turret.Shoot = true;
                         }
                         else
                         {
@@ -324,8 +386,8 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                     else
                     {
                         turret.Shoot = false;
-                        turret.ResetTargetingToDefault();
                     }
+ 
                 }
             }
 
