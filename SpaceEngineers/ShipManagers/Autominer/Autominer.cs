@@ -22,14 +22,14 @@ namespace SpaceEngineers.Autominer.Autominer
 {
     public sealed class Program : MyGridProgram
     {
-
+        PerformanceMonitor monitor;
         MovementCommander mover;
 
         Vector3D target = new Vector3D(10692.18, -13232.09, 17338.39);
 
         public Program()
         {
-
+            monitor = new PerformanceMonitor(this, Me.GetSurface(1));
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
             mover = new MovementCommander(this);
             mover.FlyTo(target);
@@ -43,22 +43,28 @@ namespace SpaceEngineers.Autominer.Autominer
             mover.Update();
             //if ((updateType & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
             //    ShipComplexMonitor.Command(args);
+
+            monitor.AddInstructions("");
+            monitor.EndOfFrameCalc();
+            monitor.Draw();
         }
 
         public class MovementCommander
         {
             IMyShipController shipController;
-            List<IMyThrust> thristers;
-
-            List<IMyThrust> UpThrusters;
-            List<IMyThrust> DownThrusters;
-            List<IMyThrust> LeftThrusters;
-            List<IMyThrust> RightThrusters;
-            List<IMyThrust> ForwardThrusters;
-            List<IMyThrust> BackwardThrusters;
+            
+            //Двигатели
+            List<IMyThrust> thrusters;
+            List<IMyThrust> upThrusters = new List<IMyThrust>();
+            List<IMyThrust> downThrusters = new List<IMyThrust>();
+            List<IMyThrust> leftThrusters = new List<IMyThrust>();
+            List<IMyThrust> rightThrusters = new List<IMyThrust>();
+            List<IMyThrust> forwardThrusters = new List<IMyThrust>();
+            List<IMyThrust> backwardThrusters = new List<IMyThrust>();
 
             Program program;
 
+            //Основные параметры
             public bool MoveToTarget { get; private set; }
             public bool PlanetDetected { get; private set; }
             public bool InGravity { get; private set; }
@@ -100,6 +106,7 @@ namespace SpaceEngineers.Autominer.Autominer
 
             Vector3D maxThrottle = new Vector3D();
 
+            //направление тяги двигателей
             Dictionary<Base6Directions.Direction, double> maxThrust = new Dictionary<Base6Directions.Direction, double>() { { Base6Directions.Direction.Backward, 0 }, { Base6Directions.Direction.Down, 0 }, { Base6Directions.Direction.Forward, 0 }, { Base6Directions.Direction.Left, 0 }, { Base6Directions.Direction.Right, 0 }, { Base6Directions.Direction.Up, 0 }, };
 
             public delegate void MoveFinishHandler();
@@ -109,20 +116,12 @@ namespace SpaceEngineers.Autominer.Autominer
             {
                 program = mainPrgoram;
 
-                UpThrusters = new List<IMyThrust>();
-                DownThrusters = new List<IMyThrust>();
-                LeftThrusters = new List<IMyThrust>();
-                RightThrusters = new List<IMyThrust>();
-                ForwardThrusters = new List<IMyThrust>();
-                BackwardThrusters = new List<IMyThrust>();
-
-
                 Init();
             }
 
             void Init()
             {
-                DesiredSpeed = 10;
+                DesiredSpeed = 50;
                 ForwardMiningSpeed = 0.5f;
 
                 ForwardConstThrust = false;
@@ -134,50 +133,50 @@ namespace SpaceEngineers.Autominer.Autominer
                                        .Where(c => c.IsFunctional)
                                        .Select(t => t as IMyShipController).FirstOrDefault();
 
-                thristers = blocks.Where(b => b is IMyThrust)
+                thrusters = blocks.Where(b => b is IMyThrust)
                                   .Where(c => c.IsFunctional)
                                   .Select(t => t as IMyThrust).ToList();
 
-                Matrix ThrLocM = new Matrix();
-                Matrix MainLocM = new Matrix();
+                Matrix engRot = new Matrix();
+                Matrix cocpitRot = new Matrix();
 
-                shipController.Orientation.GetMatrix(out MainLocM);
+                shipController.Orientation.GetMatrix(out cocpitRot);
 
-                for (int i = 0; i < thristers.Count; i++)
+                for (int i = 0; i < thrusters.Count; i++)
                 {
-                    IMyThrust Thrust = thristers[i];
-                    Thrust.Orientation.GetMatrix(out ThrLocM);
+                    IMyThrust Thrust = thrusters[i];
+                    Thrust.Orientation.GetMatrix(out engRot);
                     //Y
-                    if (ThrLocM.Backward == MainLocM.Up)
+                    if (engRot.Backward == cocpitRot.Up)
                     {
-                        UpThrusters.Add(Thrust);
+                        upThrusters.Add(Thrust);
                      
                     }
-                    else if (ThrLocM.Backward == MainLocM.Down)
+                    else if (engRot.Backward == cocpitRot.Down)
                     {
-                        DownThrusters.Add(Thrust);
+                        downThrusters.Add(Thrust);
                       
                     }
                     //X
-                    else if (ThrLocM.Backward == MainLocM.Left)
+                    else if (engRot.Backward == cocpitRot.Left)
                     {
-                        LeftThrusters.Add(Thrust);
+                        leftThrusters.Add(Thrust);
                      
                     }
-                    else if (ThrLocM.Backward == MainLocM.Right)
+                    else if (engRot.Backward == cocpitRot.Right)
                     {
-                        RightThrusters.Add(Thrust);
+                        rightThrusters.Add(Thrust);
                        
                     }
                     //Z
-                    else if (ThrLocM.Backward == MainLocM.Forward)
+                    else if (engRot.Backward == cocpitRot.Forward)
                     {
-                        ForwardThrusters.Add(Thrust);
+                        forwardThrusters.Add(Thrust);
                       
                     }
-                    else if (ThrLocM.Backward == MainLocM.Backward)
+                    else if (engRot.Backward == cocpitRot.Backward)
                     {
-                        BackwardThrusters.Add(Thrust);
+                        backwardThrusters.Add(Thrust);
                        
                     }
                 }
@@ -247,27 +246,45 @@ namespace SpaceEngineers.Autominer.Autominer
                 path = targetPos - position;
                 pathLen = (float)path.Length();
                 pathNormal = Vector3D.Normalize(path);
+
+                program.Echo(radius.ToString());
             }
 
             void RefreshEngines()
             {
+                //foreach (Base6Directions.Direction dir in maxThrust.Keys.ToList())
+                //{
+                //    maxThrust[dir] = 0;
+                //}
+                //foreach (IMyThrust thruster in thrusters)
+                //{
+                //    if (!thruster.IsWorking)
+                //    {
+                //        continue;
+                //    }
+                //    maxThrust[thruster.Orientation.Forward] += thruster.MaxEffectiveThrust;
+                //}
+
+                //Реверс по осям для определения силы торможения 
+                maxThrust[Base6Directions.Direction.Forward] = backwardThrusters.Sum(t => t.MaxEffectiveThrust);
+                maxThrust[Base6Directions.Direction.Backward] = forwardThrusters.Sum(t => t.MaxEffectiveThrust);
+
+                maxThrust[Base6Directions.Direction.Up] = downThrusters.Sum(t => t.MaxEffectiveThrust);
+                maxThrust[Base6Directions.Direction.Down] = upThrusters.Sum(t => t.MaxEffectiveThrust); 
+
+                maxThrust[Base6Directions.Direction.Left] = rightThrusters.Sum(t => t.MaxEffectiveThrust); 
+                maxThrust[Base6Directions.Direction.Right] = leftThrusters.Sum(t => t.MaxEffectiveThrust);
+
+
                 foreach (Base6Directions.Direction dir in maxThrust.Keys.ToList())
                 {
-                    maxThrust[dir] = 0;
-                }
-                foreach (IMyThrust thruster in thristers)
-                {
-                    if (!thruster.IsWorking)
-                    {
-                        continue;
-                    }
-                    maxThrust[thruster.Orientation.Forward] += thruster.MaxEffectiveThrust;
+                    program.Echo("\n" + dir +  maxThrust[dir].ToString());
                 }
             }
 
             public void ReleaseEngines()
             {
-                foreach (IMyThrust thruster in thristers)
+                foreach (IMyThrust thruster in thrusters)
                 {
                     thruster.ThrustOverride = 0;
                 }
@@ -317,10 +334,12 @@ namespace SpaceEngineers.Autominer.Autominer
                 force = mass * naturalGravity;
                 directVel = Vector3D.ProjectOnVector(ref linearVelocity, ref pathNormal);
                 directNormal = Vector3D.Normalize(directVel);
+
                 if (!directNormal.IsValid())
                 {
                     directNormal = Vector3D.Zero;
                 }
+
                 maxFrc = GetMaxThrust(pathNormal) - ((Vector3D.Dot(force, pathNormal) > 0) ? Vector3D.ProjectOnVector(ref force, ref pathNormal).Length() : 0.0);
                 maxVel = Math.Sqrt(2.0 * pathLen * maxFrc / massFix);
                 smooth = Math.Min(Math.Max((DesiredSpeed + 1.0f - directVel.Length()) / 2.0f, 0.0f), 1.0f);
@@ -344,29 +363,29 @@ namespace SpaceEngineers.Autominer.Autominer
 
             void FireThrusters()
             {
-                foreach (var tr in ForwardThrusters)
+                foreach (var tr in forwardThrusters)
                 {
                     tr.ThrustOverridePercentage = (forwardChange > 0) ? IDLE_POWER : Drain(ref forwardChange, tr.MaxEffectiveThrust);
                 }
-                foreach (var tr in BackwardThrusters)
+                foreach (var tr in backwardThrusters)
                 {
                     tr.ThrustOverridePercentage = (forwardChange < 0) ? IDLE_POWER : Drain(ref forwardChange, tr.MaxEffectiveThrust);
                 }
 
-                foreach (var tr in LeftThrusters)
+                foreach (var tr in leftThrusters)
                 {
                     tr.ThrustOverridePercentage = (leftChange > 0) ? IDLE_POWER : Drain(ref leftChange, tr.MaxEffectiveThrust);
                 }
-                foreach (var tr in RightThrusters)
+                foreach (var tr in rightThrusters)
                 {
                     tr.ThrustOverridePercentage = (leftChange < 0) ? IDLE_POWER : Drain(ref leftChange, tr.MaxEffectiveThrust);
                 }
 
-                foreach (var tr in UpThrusters)
+                foreach (var tr in upThrusters)
                 {
                     tr.ThrustOverridePercentage = (upChange > 0) ? IDLE_POWER : Drain(ref upChange, tr.MaxEffectiveThrust);
                 }
-                foreach (var tr in DownThrusters)
+                foreach (var tr in downThrusters)
                 {
                     tr.ThrustOverridePercentage = (upChange < 0) ? IDLE_POWER : Drain(ref upChange, tr.MaxEffectiveThrust);
                 }
@@ -478,6 +497,90 @@ namespace SpaceEngineers.Autominer.Autominer
             }
         }
 
+        public class PerformanceMonitor
+        {
+            public int TotalInstructions { get; private set; }
+            public int MaxInstructions { get; private set; }
+            public double UpdateTime { get; private set; }
+            public int CallPerTick { get; private set; }
+            public double AverageInstructionsPerTick { get; private set; }
+            public double AverageTimePerTick { get; private set; }
+
+            public double MaxInstructionsPerTick { get; private set; }
+
+            private double avrInst;
+            private double avrTime;
+
+            private Program mainProgram;
+
+            private IMyTextSurface mainDisplay;
+
+
+            public PerformanceMonitor(Program main)
+            {
+                mainProgram = main;
+                CallPerTick = 0;
+                AverageInstructionsPerTick = 0;
+                AverageTimePerTick = 0;
+                avrInst = 0;
+                avrTime = 0;
+
+            }
+
+            public PerformanceMonitor(Program main, IMyTextSurface display)
+            {
+                mainProgram = main;
+                CallPerTick = 0;
+                AverageInstructionsPerTick = 0;
+                AverageTimePerTick = 0;
+                avrInst = 0;
+                avrTime = 0;
+                mainDisplay = display;
+
+            }
+
+
+            public void AddInstructions(string methodName)
+            {
+                TotalInstructions = mainProgram.Runtime.CurrentInstructionCount;
+                MaxInstructions = mainProgram.Runtime.MaxInstructionCount;
+                avrInst += TotalInstructions;
+
+                UpdateTime = mainProgram.Runtime.LastRunTimeMs;
+                avrTime += UpdateTime;
+
+                CallPerTick++;
+
+                //var currMethodName = System.Reflection.MethodBase.GetCurrentMethod().Name;
+            }
+
+            public void EndOfFrameCalc()
+            {
+                AverageInstructionsPerTick = avrInst / CallPerTick;
+
+                if (MaxInstructionsPerTick < avrInst)
+                    MaxInstructionsPerTick = avrInst;
+
+
+
+                avrInst = 0;
+
+                AverageTimePerTick = avrTime / CallPerTick;
+                avrTime = 0;
+
+                CallPerTick = 0;
+
+            }
+
+            public void Draw()
+            {
+                mainDisplay.WriteText("", false);
+                mainDisplay.WriteText($"CUR ins: {TotalInstructions} / Max: {MaxInstructions}" +
+                                      $"\nAV inst: {AverageInstructionsPerTick} / {MaxInstructionsPerTick}" +
+                                      $"\nAV time:{UpdateTime}", true);
+            }
+
+        }
 
 
         ///END OF SCRIPT///////////////
