@@ -13,6 +13,8 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
+using static VRageMath.Base6Directions;
+using System.ComponentModel.DataAnnotations;
 
 namespace SpaceEngineers.ShipManagers.Components.TurretController
 
@@ -26,6 +28,11 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
 
         string mainCocpit = "Main";
 
+        string designatorTurretTag = "[d]";
+        string designatorDisplayName = "DesRadar";
+        float gyroMult = 5;
+        float ammoAcc = 1;
+
         IMyBroadcastListener listener;//слушаем эфир на получение данных о целях по радио
 
         IMyRadioAntenna antenna;
@@ -38,6 +45,7 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
         Vector3D targetSpeed;
 
         ShipTurretController turretController;
+        ShipGyroController gyroController;
         PerformanceMonitor monitor;
         MyIni dataSystem;
 
@@ -66,6 +74,14 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
             turretController = new ShipTurretController(group, this);
             turretController.ArmedNotify += ArmedNotify;
 
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocks(blocks);
+            gyroController = new ShipGyroController(blocks, this);
+            gyroController.DesignatorTagName = designatorTurretTag;
+            gyroController.DesignatorDisplayName = designatorDisplayName;
+            gyroController.GyroMult = gyroMult;
+            gyroController.AmmoAcc = ammoAcc;
+
             monitor = new PerformanceMonitor(this, Me.GetSurface(1));
 
 
@@ -88,6 +104,11 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                 lightName = dataSystem.Get("Names", "TurretBeacon").ToString();
                 missileTagResiever = dataSystem.Get("Names", "RadioChannel").ToString();
                 TurretGroupName = dataSystem.Get("Names", "TurretGroupName").ToString();
+
+                designatorTurretTag = dataSystem.Get("AutoAlingSystem", "DesignatorTurretTag").ToString();
+                designatorDisplayName = dataSystem.Get("AutoAlingSystem", "DesignatorDisplayName").ToString();
+                gyroMult = dataSystem.Get("AutoAlingSystem", "GyroMult").ToInt32();
+                ammoAcc = dataSystem.Get("AutoAlingSystem", "AmmoAcc").ToInt32();
             }
         }
 
@@ -105,6 +126,12 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                 dataSystem.Set("Names", "RadioChannel", "ch1R");
                 dataSystem.Set("Names", "TurretGroupName", "Turrets");
 
+                dataSystem.AddSection("AutoAlingSystem");
+                dataSystem.Set("AutoAlingSystem", "DesignatorTurretTag", "[d]");
+                dataSystem.Set("AutoAlingSystem", "DesignatorDisplayName", "DesRadar");
+                dataSystem.Set("AutoAlingSystem", "GyroMult", 5);
+                dataSystem.Set("AutoAlingSystem", "AmmoAcc", 1);
+
                 Me.CustomData = dataSystem.ToString();
             }
 
@@ -113,12 +140,12 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
 
         private void ArmedNotify()
         {
-            if(turretController.Armed)
+            if (turretController.Armed)
             {
                 if (turretArmedStaLight != null && !turretArmedStaLight.Closed)
                 {
                     turretArmedStaLight.Color = Color.Red;
-                }              
+                }
             }
             else
             {
@@ -136,7 +163,10 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
             Update();
 
             if ((updateType & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
+            {
                 turretController.Command(args);
+                gyroController.Command(args);
+            }
 
             monitor.AddInstructions("");
             monitor.EndOfFrameCalc();
@@ -146,15 +176,17 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
 
         void Update()
         {
-            SendTargetToController();
+           // SendTargetToController();
             turretController.UpdateTurrets();
+            gyroController.UpdateGyros();
         }
 
         void SendTargetToController()
         {
-            if(!targetPosition.IsZero())
+            if (!targetPosition.IsZero())
             {
                 turretController.SetTarget(targetPosition, targetSpeed);
+                gyroController.SetTarget(targetPosition, targetSpeed);
             }
         }
 
@@ -179,6 +211,8 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                     double.TryParse(str[3], out targetSpeed.X);
                     double.TryParse(str[4], out targetSpeed.Y);
                     double.TryParse(str[5], out targetSpeed.Z);
+
+                    SendTargetToController();
                 }
             }
         }
@@ -191,6 +225,8 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
         public class ShipTurretController
         {
             public bool Armed { set; get; }
+
+            string mainCocpit = "Main";
 
             double distanceToTargetSqr;
 
@@ -212,31 +248,56 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                 targetPosition = new Vector3D();
                 targetSpeed = new Vector3D();
 
-              
+
 
                 turrets = new List<IMyLargeTurretBase>();
                 mainProgram = mainProg;
 
 
-                controller = mainProgram.GridTerminalSystem.GetBlockWithName("Main") as IMyShipController;
+                controller = mainProgram.GridTerminalSystem.GetBlockWithName(mainCocpit) as IMyShipController;
+                string cocpitState = controller == null ? $"No cocpit with name: Main " : "Cocpit OK";
 
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
                 if (group == null)
                 {
 
-                }    
+                }
                 group?.GetBlocks(blocks);
 
-                turrets = blocks.Where(b => b is IMyLargeTurretBase).Select(b => b as IMyLargeTurretBase).ToList();
+                turrets = blocks.Where(b => (b is IMyLargeTurretBase)).Select(b => b as IMyLargeTurretBase).ToList();
 
                 mainProgram.Echo($"Total turrets: {turrets.Count}" +
-                                 $"\nArmed: {Armed}");
+                                 $"\nArmed: {Armed}" +
+                                 $"\n{cocpitState}");
+
+
 
             }
 
             public void Command(string command)
             {
                 string com = command.ToUpper();
+
+                if (com.Contains("DIST"))
+                {
+                    try
+                    {
+                        var dist = com.Split(':');
+
+                        if (dist.Any())
+                        {
+                            float syncDist = 1500;
+                            if (float.TryParse(dist[1], out syncDist))
+                            {
+                                SyncOnDistance(syncDist);
+                            }
+                        }
+                    }
+                    catch
+                    {
+
+                    }
+                }
 
                 switch (com)
                 {
@@ -259,9 +320,9 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                         ResetRotation();
                         break;
 
-                    case "DIST":
-                        SyncOnDistance(0);
-                        break;
+                        //case "DIST":
+                        //    SyncOnDistance(0);
+                        //    break;
                 }
             }
 
@@ -275,7 +336,7 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
             {
                 Armed = false;
                 ArmedNotify.Invoke();
-                targetPosition = new Vector3D(0,0,0);
+                targetPosition = new Vector3D(0, 0, 0);
                 ResetRotation();
             }
 
@@ -286,15 +347,18 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                     if (turret.Closed)
                         continue;
 
-                    var dir = (controller.GetPosition() + controller.WorldMatrix.Forward * 800);
 
-                   // dir = VectorTransform(dir, turret.WorldMatrix.GetOrientation());
+                    var dir = turret.GetPosition() - (controller.GetPosition() + controller.WorldMatrix.Forward * dist);
+                    // var dir = Vector3D.Normalize(controller.WorldMatrix.Forward * 800 - turret.GetPosition());
+
+                    dir = VectorTransform(dir, turret.WorldMatrix.GetOrientation());
 
                     float azimuth = (float)Math.Atan2(-dir.X, dir.Z);
                     float elevation = (float)Math.Asin(dir.Y / dir.Length());
 
-                    turret.SetTarget(dir);
-                    //turret.SetManualAzimuthAndElevation((float)(azimuth * 0.017), (float)(elevation * 0.017));
+
+                    turret.SetManualAzimuthAndElevation(-(float)(azimuth), -(float)(elevation));
+
                     turret.SyncElevation();
                     turret.SyncAzimuth();
                 }
@@ -330,7 +394,7 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                 RotateAndFire();
             }
 
-            public void SetTarget(Vector3D pos,Vector3D speed)
+            public void SetTarget(Vector3D pos, Vector3D speed)
             {
                 targetPosition = pos;
                 targetSpeed = speed;
@@ -387,9 +451,322 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                     {
                         turret.Shoot = false;
                     }
- 
+
                 }
             }
+
+           
+
+        }
+
+        public class ShipGyroController
+        {
+
+            public string DesignatorTagName = "[d]";
+            public string DesignatorDisplayName = "DesRadar";
+
+            string mainCocpit = "Main";
+
+            bool enableFollowing = false;
+            bool designatorMode = true;
+
+            public float GyroMult = 5;
+            public float AmmoAcc = 1;
+
+            float bulletSpeed = 5000;
+           
+            Vector3D targetPosition;
+            Vector3D targetSpeed;
+
+            Vector3D calcPosition;
+
+
+            IMyShipController controller;
+
+            IMyTextPanel designatorRadar;
+
+
+            Program mainProgram;
+            List<IMyGyro> gyros;
+            List<IMyLargeTurretBase> designators;
+
+            MyDetectedEntityInfo lastLockedTarget;
+            Dictionary<long, MyDetectedEntityInfo> detectedTargets;
+
+
+            public ShipGyroController(IMyBlockGroup group, Program mainProg)
+            {
+                mainProgram = mainProg;
+                gyros = new List<IMyGyro>();
+                designators = new List<IMyLargeTurretBase>();
+                detectedTargets = new Dictionary<long, MyDetectedEntityInfo>();
+
+                controller = mainProgram.GridTerminalSystem.GetBlockWithName(mainCocpit) as IMyShipController;
+                string cocpitState = controller == null ? $"No cocpit with name: Main " : "Cocpit OK";
+
+                List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+                if (group == null)
+                {
+
+                }
+                group?.GetBlocks(blocks);
+
+                gyros = blocks.Where(b => (b is IMyGyro)).Select(b => b as IMyGyro).ToList();
+
+                designators = blocks.Where(b => ((b is IMyLargeTurretBase) && (b.CustomName.Contains(DesignatorTagName)))).Select(b => b as IMyLargeTurretBase).ToList();
+
+                designatorRadar = blocks.Where(b => ((b is IMyTextPanel) && (b.CustomName.Contains(DesignatorDisplayName)))).Select(b => b as IMyTextPanel).FirstOrDefault();
+
+                if (designatorRadar != null) 
+                {
+                    designatorRadar.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    designatorRadar.FontSize = 1.1f;
+                }
+
+                mainProgram.Echo($"\n----Gyro controller-----" +
+                                 $"\nTotal gyros: {gyros.Count}" +
+                                 $"\n{cocpitState}");
+
+            }
+
+            public ShipGyroController(List<IMyTerminalBlock> blocks, Program mainProg)
+            {
+                mainProgram = mainProg;
+                gyros = new List<IMyGyro>();
+                designators = new List<IMyLargeTurretBase>();
+                detectedTargets = new Dictionary<long, MyDetectedEntityInfo>();
+
+                controller = mainProgram.GridTerminalSystem.GetBlockWithName(mainCocpit) as IMyShipController;
+                string cocpitState = controller == null ? $"No cocpit with name: Main " : "Cocpit OK";
+
+                gyros = blocks.Where(b => (b is IMyGyro)).Select(b => b as IMyGyro).ToList();
+
+                designators = blocks.Where(b => ((b is IMyLargeTurretBase) && (b.CustomName.Contains(DesignatorTagName)))).Select(b => b as IMyLargeTurretBase).ToList();
+
+                designatorRadar = blocks.Where(b => ((b is IMyTextPanel) && (b.CustomName.Contains(DesignatorDisplayName)))).Select(b => b as IMyTextPanel).FirstOrDefault();
+
+                if (designatorRadar != null)
+                {
+                    designatorRadar.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    designatorRadar.FontSize = 1.1f;
+                }
+
+                mainProgram.Echo($"\n----Gyro controller-----" +
+                                 $"\nTotal gyros: {gyros.Count}" +
+                                 $"\n{cocpitState}");
+
+            }
+
+            public void Command(string command)
+            {
+                string com = command.ToUpper();
+
+                if (com.Contains("RANGE"))
+                {
+                    try
+                    {
+                        var dist = com.Split(':');
+
+                        if (dist.Any())
+                        {
+                            if (float.TryParse(dist[1], out bulletSpeed))
+                            {
+                                LockTarget();
+                            }
+                        }
+                    }
+                    catch
+                    {
+
+                    }
+                }
+                switch (com)
+                {
+                    case "MODE":
+                        designatorMode = !designatorMode;
+                        break;
+                }
+            }
+
+            public void SetTarget(Vector3D pos, Vector3D speed)
+            {
+                if (!designatorMode)
+                {
+                    targetPosition = pos;
+                    targetSpeed = speed;
+                }
+            }
+
+            public void SetTarget(MyDetectedEntityInfo info)
+            {
+                targetPosition = info.Position;
+                targetSpeed = info.Velocity;
+            }
+
+            public void LockTarget()
+            {
+                if (designatorMode)
+                {
+                    if (detectedTargets.Any())
+                    {
+                        SetTarget(detectedTargets.First().Value);
+                        lastLockedTarget = detectedTargets.First().Value;
+                        enableFollowing = true;
+                        OverrideGyros();
+                    }
+                }
+                else
+                {
+                    if (!targetPosition.IsZero())
+                    {
+                        enableFollowing = true;
+                        OverrideGyros();
+                    }
+                }
+            }
+
+            public void UpdateGyros()
+            {
+                UpdateDesignators();
+
+                if (enableFollowing)
+                {
+                    calcPosition = GetPredictedTargetPosition(controller.GetPosition(), controller.GetShipVelocities().LinearVelocity, targetPosition, targetSpeed, bulletSpeed);
+                    SetGyro(Vector3D.Normalize(calcPosition - controller.GetPosition()).Cross(controller.WorldMatrix.Forward));
+
+                    MouseReset();
+                }
+
+            }
+
+            public void UpdateDesignators()
+            {
+                mainProgram.Echo($"Total designators: {designators.Count}" +
+                                 $"\nTrack: {enableFollowing}" +
+                                 $"\nDesignator mode: {designatorMode}");
+
+                designatorRadar?.WriteText("", false);
+
+                detectedTargets.Clear();
+
+                foreach (var des in designators)
+                {
+                    if (des.HasTarget)
+                    {
+                        var target = des.GetTargetedEntity();
+
+                        if (!detectedTargets.ContainsKey(target.EntityId))
+                        {
+                            detectedTargets.Add(target.EntityId, target);
+                        }
+                    }
+                }
+
+                if(enableFollowing)
+                {
+                    if(detectedTargets.ContainsKey(lastLockedTarget.EntityId))
+                    {
+                        lastLockedTarget = detectedTargets[lastLockedTarget.EntityId];
+                        SetTarget(lastLockedTarget);
+                    }
+                }
+
+
+                designatorRadar?.WriteText($"Passive radar trg:{detectedTargets.Count} locked:{enableFollowing}", true);
+
+                foreach (var entity in detectedTargets)
+                {
+                    var target = entity.Value;
+                    var dir = target.Position - controller.GetPosition();
+                    var dist = Vector3D.Distance(target.Position, controller.GetPosition());
+                    var fwdDir = Vector3D.Normalize(dir).Dot(controller.WorldMatrix.Forward);
+                    var speed = entity.Value.Velocity.Length();
+
+                    designatorRadar?.WriteText($"\n-----Target------" +
+                                               $"\nType:{target.Type}" +
+                                               $"\nSignature:{target.BoundingBox.Volume}" +
+                                               $"\nDir:{fwdDir}" +
+                                               $"\nDist:{dist}" +
+                                               $"\nSpeed:{speed}", true);
+                }
+            }
+
+
+            public void MouseReset()
+            {
+                if (controller.RotationIndicator != Vector2.Zero)
+                {
+                    ClearGyros();
+                }
+            }
+
+
+            public void OverrideGyros()
+            {
+                foreach (IMyGyro gyro in gyros)
+                {
+                    gyro.GyroOverride = true;
+                }
+            }
+
+            public void ClearGyros()
+            {
+                enableFollowing = false;
+
+                foreach (IMyGyro gyro in gyros)
+                {
+                    gyro.GyroOverride = false;
+                }
+            }
+
+            public Vector3D GetPredictedTargetPosition(Vector3D myPos, Vector3 mySpeed, Vector3D targetPos, Vector3D targetSpeed, float shotSpeed)
+            {
+
+                var dist = Vector3D.Distance(myPos, targetPos);
+
+                float newSpeed = (float)Math.Sqrt(2 * AmmoAcc * dist + shotSpeed * shotSpeed);
+
+                shotSpeed = newSpeed;
+
+                Vector3D predictedPosition = targetPos;
+                Vector3D dirToTarget = Vector3D.Normalize(predictedPosition - myPos);
+
+
+                Vector3 targetVelocity = targetSpeed;
+                targetVelocity -= mySpeed;
+                Vector3 targetVelOrth = Vector3.Dot(targetVelocity, dirToTarget) * dirToTarget;
+                Vector3 targetVelTang = targetVelocity - targetVelOrth;
+                Vector3 shotVelTang = targetVelTang;
+                float shotVelSpeed = shotVelTang.Length();
+
+                if (shotVelSpeed > shotSpeed)
+                {
+
+                    return Vector3.Normalize(targetSpeed) * shotSpeed;
+                }
+                else
+                {
+
+                    float shotSpeedOrth = (float)Math.Sqrt(shotSpeed * shotSpeed - shotVelSpeed * shotVelSpeed);
+                    Vector3 shotVelOrth = dirToTarget * shotSpeedOrth;
+                    float timeDiff = shotVelOrth.Length() - targetVelOrth.Length();
+                    var timeToCollision = timeDiff != 0 ? ((myPos - targetPos).Length()) / timeDiff : 0;
+                    Vector3 shotVel = shotVelOrth + shotVelTang;
+                    predictedPosition = timeToCollision > 0.01f ? myPos + (Vector3D)shotVel * timeToCollision : predictedPosition;
+                    return predictedPosition;
+                }
+            }
+
+            public void SetGyro(Vector3D axis)
+            {
+                foreach (IMyGyro gyro in gyros)
+                {
+                    gyro.Yaw = (float)axis.Dot(gyro.WorldMatrix.Up) * GyroMult;
+                    gyro.Pitch = (float)axis.Dot(gyro.WorldMatrix.Right) * GyroMult;
+                    gyro.Roll = (float)axis.Dot(gyro.WorldMatrix.Backward) * GyroMult;
+                }
+            }
+
 
         }
 
@@ -467,7 +844,7 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
 
                 avrInst = 0;
 
-                AverageTimePerTick = avrTime / CallPerTick;
+                AverageTimePerTick = mainProgram.Runtime.LastRunTimeMs;
                 avrTime = 0;
 
                 CallPerTick = 0;

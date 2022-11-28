@@ -12,72 +12,52 @@ using VRage.Collections;
 using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using Sandbox.ModAPI.Interfaces.Terminal;
+
+
 
 namespace SpaceEngineers.TurretTester
 {
     public sealed class Program : MyGridProgram
     {
-        string missileTagResiever = "ch1R";//Получаем данные от системы целеуказания по радиоканалу
-        IMyBroadcastListener listener;//слушаем эфир на получение данных о целях по радио
 
-        Vector3D targetPosition;
-        Vector3D targetSpeed;
-
-        IMyRadioAntenna antenna;
-
-        List<IMyLargeTurretBase> turrets;
-
+        IMyTextPanel panel;
 
         public Program()
         {
-            targetPosition = new Vector3D();
-            targetSpeed = new Vector3D();
-
-            turrets = new List<IMyLargeTurretBase>();
-
-            listener = IGC.RegisterBroadcastListener(missileTagResiever);
-            listener.SetMessageCallback(missileTagResiever);
-
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
-
-
-            antenna = GridTerminalSystem.GetBlockWithName("Ant") as IMyRadioAntenna;
-
-
-            var group = GridTerminalSystem.GetBlockGroupWithName("Turrets");
-            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-            group?.GetBlocks(blocks);
-
-            turrets = blocks.Where(b => b is IMyLargeTurretBase).Select(b => b as IMyLargeTurretBase).ToList();
+            
 
         }
 
         public void Main(string args)
         {
-            GetTargetByRadio();
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
 
+            panel = GridTerminalSystem.GetBlockWithName("LCD") as IMyTextPanel;
+            panel.WriteText($"", false);
 
+            GridTerminalSystem.GetBlocks(blocks);
 
-            foreach (var turret in turrets)
+            foreach(var block in blocks)
             {
+                Echo(block.BlockDefinition.ToString());
 
-                // turret.SetTarget(targetPosition);
-                turret.TrackTarget(targetPosition, targetSpeed);
+                List<ITerminalAction> actions = new List<ITerminalAction>();
+                block.GetActions(actions);
 
-                turret.SyncElevation();
-                turret.SyncAzimuth();
-
-                if (turret.IsAimed)
-                {
-                    turret.Shoot = true;
-                }
+                var dict = Me.GetProperty("WcPbAPI")?.As<IReadOnlyDictionary<string, Delegate>>().GetValue(Me);
+                if (dict == null) throw new Exception($"WcPbAPI failed to activate");
                 else
                 {
-                    turret.Shoot = false;
+                    panel.WriteText($"\n{block.Name}", true);
                 }
 
-
+                foreach (var act in actions)
+                {
+                   // panel.WriteText($"\n{act.GetType()}", true);
+                }
             }
+
         }
 
         public void Save()
@@ -88,25 +68,7 @@ namespace SpaceEngineers.TurretTester
 
       
 
-        public void GetTargetByRadio()
-        {
-            while (listener.HasPendingMessage)
-            {
-                MyIGCMessage mess = listener.AcceptMessage();
-                if (mess.Tag == missileTagResiever)
-                {
-                    string[] str = mess.Data.ToString().Split('|');
-                    ///координаты цели
-                    double.TryParse(str[0], out targetPosition.X);
-                    double.TryParse(str[1], out targetPosition.Y);
-                    double.TryParse(str[2], out targetPosition.Z);
-                    ///его вектор скорости
-                    double.TryParse(str[3], out targetSpeed.X);
-                    double.TryParse(str[4], out targetSpeed.Y);
-                    double.TryParse(str[5], out targetSpeed.Z);
-                }
-            }
-        }
+       
 
     }
 }

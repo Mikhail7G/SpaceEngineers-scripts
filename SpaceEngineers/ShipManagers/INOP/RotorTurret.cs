@@ -15,7 +15,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 
 
-namespace SpaceEngineers.ShipManagers.INOP
+namespace SpaceEngineers.ShipManagers.INOP.RotorTurret
 
 {
     public sealed class Program : MyGridProgram

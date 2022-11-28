@@ -13,6 +13,7 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
+using static VRage.Game.ObjectBuilders.Definitions.MyObjectBuilder_GameDefinition;
 
 
 namespace SpaceEngineers.AntiAirMissile
@@ -144,41 +145,100 @@ namespace SpaceEngineers.AntiAirMissile
 
         public void Main(string args)
         {
-            string[] arguments = args.Split('|');
-            if (arguments.Length > 0)
+            #region old
+            //string[] arguments = args.Split('|');
+            //if (arguments.Length > 0)
+            //{
+            //    string arg = arguments[0].ToUpper();
+            //    switch (arg)
+            //    {
+            //        case "FIRE"://стрельба залпом
+            //            FireAll();
+            //            DrawMissileInfo();
+            //            break;
+
+            //        case "FIREONCE"://стрельба по одной
+            //            FireOne();
+            //            DrawMissileInfo();
+            //            break;
+
+            //        case "BUILD"://поиск всех ракет по тэгам
+            //            FindMissile();
+            //            DrawMissileInfo();
+            //            break;
+
+            //        case "ENABLE"://запуск скрипта
+            //            Enable();
+            //            break;
+
+            //        case "DISABLE"://остановка скрипта
+            //            Disable();
+            //            break;
+
+            //        case "NEXT"://выбро след. ракеты
+            //            currentSelectedMissile++;
+            //            DrawMissileInfo();
+            //            break;
+            //    }
+            //}
+            #endregion
+
+
+            string arg = args.ToUpper();
+
+            if (arg.Contains("FIREID"))
             {
-                string arg = arguments[0].ToUpper();
-                switch (arg)
+                try
                 {
-                    case "FIRE"://стрельба залпом
-                        FireAll();
-                        DrawMissileInfo();
-                        break;
+                    var id = arg.Split(':');
 
-                    case "FIREONCE"://стрельба по одной
-                        FireOne();
-                        DrawMissileInfo();
-                        break;
+                    if (id.Any())
+                    {
+                        int missileId = 1;
+                        if (int.TryParse(id[1], out missileId))
+                        {
+                            FireIndex(missileId);
+                        }
+                    }
+                }
+                catch
+                {
 
-                    case "BUILD"://поиск всех ракет по тэгам
-                        FindMissile();
-                        DrawMissileInfo();
-                        break;
-
-                    case "ENABLE"://запуск скрипта
-                        Enable();
-                        break;
-
-                    case "DISABLE"://остановка скрипта
-                        Disable();
-                        break;
-
-                    case "NEXT"://выбро след. ракеты
-                        currentSelectedMissile++;
-                        DrawMissileInfo();
-                        break;
                 }
             }
+
+
+            switch (arg)
+            {
+                case "FIRE"://стрельба залпом
+                    FireAll();
+                    DrawMissileInfo();
+                    break;
+
+                case "FIREONCE"://стрельба по одной
+                    FireOne();
+                    DrawMissileInfo();
+                    break;
+
+                case "BUILD"://поиск всех ракет по тэгам
+                    FindMissile();
+                    DrawMissileInfo();
+                    break;
+
+                case "ENABLE"://запуск скрипта
+                    Enable();
+                    break;
+
+                case "DISABLE"://остановка скрипта
+                    Disable();
+                    break;
+
+                case "NEXT"://выбро след. ракеты
+                    currentSelectedMissile++;
+                    DrawMissileInfo();
+                    break;
+            }
+
 
             GetTargetByRadio();
             CalculateParametres();
@@ -482,6 +542,32 @@ namespace SpaceEngineers.AntiAirMissile
                     currentSelectedMissile = 0;
 
                     Enable();
+                }
+            }
+            else
+            {
+                FindMissile();
+            }
+        }
+
+        /// <summary>
+        /// Пуск ракет по индексам из названия группы
+        /// </summary>
+        public void FireIndex(int index)
+        {
+            if (missileList.Count > 0)
+            {
+                var selectedMissile =  missileList.Where(m => m.MissileName.Contains(index.ToString())).FirstOrDefault();
+
+                if (selectedMissile != null)
+                {
+                    if(selectedMissile.MissileReady())
+                    {
+                        missileInFlightList.Add(selectedMissile);
+                        missileList.Remove(selectedMissile);
+                        selectedMissile.MissileFire();
+                        Enable();
+                    }
                 }
             }
             else

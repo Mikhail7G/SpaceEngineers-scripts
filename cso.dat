@@ -1,0 +1,8 @@
+V1
+2:Update,k
+2:travelVec,d
+2:thruster,kI
+2:forwardAcc,i
+2:reverseAcc,W
+2:brakingDist,dP
+2:deltaSpeed,z

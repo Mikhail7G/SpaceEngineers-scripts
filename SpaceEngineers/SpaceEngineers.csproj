@@ -8,11 +8,6 @@
 
   <ItemGroup>
     <Compile Remove="AntiAirMissile\AntiAirMissiles.cs" />
-    <Compile Remove="ShipManagers\Autominer\Autominer.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="ShipManagers\Autominer\" />
   </ItemGroup>
 
   <ItemGroup>

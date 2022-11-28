@@ -23,7 +23,7 @@ namespace SpaceEngineers.ShipManagers.INOP
 
         /////////////////////////////////////////////////////////////
 
-        private Vector3D testTarget = new Vector3D(7364.16, -20008.05, 12525.12);
+        private Vector3D testTarget = new Vector3D(7100.46, -20224.03, 13174.07);
         private Vector3D convPosz = new Vector3D();
         private Vector3D dockPosz = new Vector3D();
         private ThrusterController Thruster;
