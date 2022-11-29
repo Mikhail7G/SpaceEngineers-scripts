@@ -32,7 +32,9 @@ namespace SpaceEngineers.Autominer.Autominer
             monitor = new PerformanceMonitor(this, Me.GetSurface(1));
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
             mover = new MovementCommander(this);
+
             mover.FlyTo(target);
+           // mover.ForwardMove(0.5f);
 
         }
 
@@ -72,7 +74,7 @@ namespace SpaceEngineers.Autominer.Autominer
 
             public float DesiredSpeed { get; set; }
             public float ForwardMiningSpeed { get; set; }
-            float pathLen;
+            public float PathLen { get; private set; }
             float mass;
             float forwardChange, upChange, leftChange;
             const float IDLE_POWER = 0.0000001f;
@@ -199,13 +201,19 @@ namespace SpaceEngineers.Autominer.Autominer
                 {
                     targetPos = pos;
                     MoveToTarget = true;
-                   // targetPos = shipController.GetPosition() + shipController.WorldMatrix.Forward * 100;
                 }
+            }
+
+            public void ForwardMove(float speed)
+            {
+                ForwardMiningSpeed = speed;
+                targetPos = shipController.GetPosition() + shipController.WorldMatrix.Forward * 100;
+                MoveToTarget = true;
+                ForwardConstThrust = true;
             }
 
             void GetShipParams()
             {
-
                 gridForwardVect = shipController.WorldMatrix.Forward;
                 gridUpVect = shipController.WorldMatrix.Up;
                 gridLeftVect = shipController.WorldMatrix.Left;
@@ -219,7 +227,7 @@ namespace SpaceEngineers.Autominer.Autominer
 
                 mass = shipController.CalculateShipMass().PhysicalMass;
 
-                position = shipController.CenterOfMass;
+                position = shipController.GetPosition();
                 orientation = shipController.WorldMatrix.GetOrientation();
                 radius = shipController.CubeGrid.WorldVolume.Radius;
                 linearVelocity = shipController.GetShipVelocities().LinearVelocity;
@@ -242,29 +250,18 @@ namespace SpaceEngineers.Autominer.Autominer
                     gravityUpVector = upVector;
                 }
 
-
                 path = targetPos - position;
-                pathLen = (float)path.Length();
+                PathLen = (float)path.Length();
                 pathNormal = Vector3D.Normalize(path);
 
-                program.Echo(radius.ToString());
+
+                var size = shipController.CubeGrid.GridSize;
+
+                program.Echo(size.ToString());
             }
 
             void RefreshEngines()
             {
-                //foreach (Base6Directions.Direction dir in maxThrust.Keys.ToList())
-                //{
-                //    maxThrust[dir] = 0;
-                //}
-                //foreach (IMyThrust thruster in thrusters)
-                //{
-                //    if (!thruster.IsWorking)
-                //    {
-                //        continue;
-                //    }
-                //    maxThrust[thruster.Orientation.Forward] += thruster.MaxEffectiveThrust;
-                //}
-
                 //Реверс по осям для определения силы торможения 
                 maxThrust[Base6Directions.Direction.Forward] = backwardThrusters.Sum(t => t.MaxEffectiveThrust);
                 maxThrust[Base6Directions.Direction.Backward] = forwardThrusters.Sum(t => t.MaxEffectiveThrust);
@@ -274,12 +271,6 @@ namespace SpaceEngineers.Autominer.Autominer
 
                 maxThrust[Base6Directions.Direction.Left] = rightThrusters.Sum(t => t.MaxEffectiveThrust); 
                 maxThrust[Base6Directions.Direction.Right] = leftThrusters.Sum(t => t.MaxEffectiveThrust);
-
-
-                foreach (Base6Directions.Direction dir in maxThrust.Keys.ToList())
-                {
-                    program.Echo("\n" + dir +  maxThrust[dir].ToString());
-                }
             }
 
             public void ReleaseEngines()
@@ -313,12 +304,12 @@ namespace SpaceEngineers.Autominer.Autominer
 
             void ThrusterTick()
             {
-                if (pathLen == 0.0f)
+                if (PathLen == 0.0f)
                 {
                     return;
                 }
 
-                if (pathLen < 0.1f)
+                if (PathLen < 0.1f)
                 {
                     MovingFinishedNotify?.Invoke();
                     ReleaseEngines();
@@ -341,11 +332,11 @@ namespace SpaceEngineers.Autominer.Autominer
                 }
 
                 maxFrc = GetMaxThrust(pathNormal) - ((Vector3D.Dot(force, pathNormal) > 0) ? Vector3D.ProjectOnVector(ref force, ref pathNormal).Length() : 0.0);
-                maxVel = Math.Sqrt(2.0 * pathLen * maxFrc / massFix);
+                maxVel = Math.Sqrt(2.0 * PathLen * maxFrc / massFix);
                 smooth = Math.Min(Math.Max((DesiredSpeed + 1.0f - directVel.Length()) / 2.0f, 0.0f), 1.0f);
                 maxAcc = 1.0f + (maxFrc / massFix) * smooth * smooth * (3.0f - 2.0f * smooth);
                 ttt = Math.Max(TIME_STEP, Math.Abs(maxVel / maxAcc));
-                force += massFix * -2.0 * (pathNormal * pathLen / ttt / ttt - directNormal * directVel.Length() / ttt);
+                force += massFix * -2.0 * (pathNormal * PathLen / ttt / ttt - directNormal * directVel.Length() / ttt);
                 indirectVel = Vector3D.ProjectOnPlane(ref linearVelocity, ref pathNormal);
                 force += massFix * indirectVel / TIME_STEP;
 
