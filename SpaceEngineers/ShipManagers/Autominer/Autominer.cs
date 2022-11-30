@@ -17,6 +17,7 @@ using VRage.Game.ModAPI.Ingame.Utilities;
 using System.Diagnostics.Metrics;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Replication;
+using System.Drawing;
 
 namespace SpaceEngineers.Autominer.Autominer
 {
@@ -25,6 +26,10 @@ namespace SpaceEngineers.Autominer.Autominer
         PerformanceMonitor monitor;
         MovementCommander mover;
 
+        //TMP vars
+        int state = 0;
+        float miningDist = 80;
+        Vector3D initMiningPos = new Vector3D();
         Vector3D target = new Vector3D(10692.18, -13232.09, 17338.39);
 
         public Program()
@@ -33,22 +38,88 @@ namespace SpaceEngineers.Autominer.Autominer
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
             mover = new MovementCommander(this);
 
-            mover.FlyTo(target);
+            mover.MovingFinishedNotify += Mover_MovingFinishedNotify;
+
+           // mover.FlyTo(target, 50);
            // mover.ForwardMove(0.5f);
 
         }
 
+        private void Mover_MovingFinishedNotify()
+        {
+            if (state == 0)
+            {
+                state = 1;
+                return;
+            }
+
+            if (state == 1)
+            {
+                state = 2;
+                return;
+            }
+
+        }
 
         public void Main(string args, UpdateType updateType)
         {
+            if ((updateType & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
+                Command(args);
+
+            if ((updateType & UpdateType.Update1) != 0)
+            {
+
+                if (mover.MoveToTarget && mover.FlyMode == MovementCommander.FlyType.ForwardConst)
+                {
+                    var dist = (initMiningPos - mover.GetPosition()).Length();
+
+                    if (dist >= miningDist)
+                    {
+                        mover.FullStop();
+                        mover.FlyTo(initMiningPos, 5);
+                    }
+                }
+
+                if(!mover.MoveToTarget && state==1)
+                {
+                    var left = mover.GetShipLocalDir(Base6Directions.Direction.Left, 15);
+                    mover.FlyTo(left, 5);
+                    state = 2;
+                }
+
+                if (!mover.MoveToTarget && state == 2)
+                {
+                    mover.ForwardMove(0.5f);
+                    initMiningPos = mover.GetPosition();
+                    state = 0;
+                }
+
+
+
+
+            }
+            Echo(state.ToString());
 
             mover.Update();
-            //if ((updateType & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
-            //    ShipComplexMonitor.Command(args);
 
             monitor.AddInstructions("");
             monitor.EndOfFrameCalc();
             monitor.Draw();
+        }
+
+        public void Command(string commands)
+        {
+            string comm = commands.ToUpper();
+
+            switch(comm)
+            {
+                case "MINE":
+                    mover.ForwardMove(0.5f);
+                    initMiningPos = mover.GetPosition();
+                    state = 0;
+                    break;
+            }
+
         }
 
         public class MovementCommander
@@ -66,12 +137,12 @@ namespace SpaceEngineers.Autominer.Autominer
 
             Program program;
 
+            public FlyType FlyMode { get; private set; }
             //Основные параметры
             public bool MoveToTarget { get; private set; }
             public bool PlanetDetected { get; private set; }
             public bool InGravity { get; private set; }
-            public bool ForwardConstThrust { get; private set; }
-
+ 
             public float DesiredSpeed { get; set; }
             public float ForwardMiningSpeed { get; set; }
             public float PathLen { get; private set; }
@@ -114,6 +185,12 @@ namespace SpaceEngineers.Autominer.Autominer
             public delegate void MoveFinishHandler();
             public event MoveFinishHandler MovingFinishedNotify;
 
+            public enum FlyType
+            {
+                Normal,
+                ForwardConst
+            };
+
             public MovementCommander(Program mainPrgoram)
             {
                 program = mainPrgoram;
@@ -125,8 +202,6 @@ namespace SpaceEngineers.Autominer.Autominer
             {
                 DesiredSpeed = 50;
                 ForwardMiningSpeed = 0.5f;
-
-                ForwardConstThrust = false;
 
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
                 program.GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == program.Me.CubeGrid);
@@ -182,7 +257,6 @@ namespace SpaceEngineers.Autominer.Autominer
                        
                     }
                 }
-
             }
 
             public void Update()
@@ -195,21 +269,69 @@ namespace SpaceEngineers.Autominer.Autominer
                 }
             }
 
-            public void FlyTo(Vector3D pos)
+            public void FlyTo(Vector3D pos, float speed)
             {
                 if (!pos.IsZero())
                 {
                     targetPos = pos;
+                    DesiredSpeed = speed;
                     MoveToTarget = true;
+                    FlyMode = FlyType.Normal;
                 }
             }
 
+            public Vector3D GetPosition()
+            {
+                return shipController.GetPosition();
+            }
+
+            public Vector3D GetTargetPosition()
+            {
+                return targetPos;
+            }
+
+
+            public Vector3D GetShipLocalDir(Base6Directions.Direction dir, float distance)
+            {
+                switch(dir)
+                {
+                    case Base6Directions.Direction.Up:
+                        return shipController.GetPosition() + shipController.WorldMatrix.Up * distance;
+
+                    case Base6Directions.Direction.Down:
+                        return shipController.GetPosition() + shipController.WorldMatrix.Down * distance;
+
+                    case Base6Directions.Direction.Left:
+                        return shipController.GetPosition() + shipController.WorldMatrix.Left * distance;
+
+                    case Base6Directions.Direction.Right:
+                        return shipController.GetPosition() + shipController.WorldMatrix.Right * distance;
+
+                    case Base6Directions.Direction.Forward:
+                        return shipController.GetPosition() + shipController.WorldMatrix.Forward * distance;
+
+                    case Base6Directions.Direction.Backward:
+                        return shipController.GetPosition() + shipController.WorldMatrix.Backward * distance;
+
+                }
+                return Vector3D.Zero;
+            }
+
+
             public void ForwardMove(float speed)
             {
+                MoveToTarget = true;
                 ForwardMiningSpeed = speed;
                 targetPos = shipController.GetPosition() + shipController.WorldMatrix.Forward * 100;
-                MoveToTarget = true;
-                ForwardConstThrust = true;
+                FlyMode = FlyType.ForwardConst;
+            }
+
+            public void FullStop()
+            {
+                MoveToTarget = false;
+                FlyMode = FlyType.Normal;
+
+                ReleaseEngines();
             }
 
             void GetShipParams()
@@ -254,10 +376,9 @@ namespace SpaceEngineers.Autominer.Autominer
                 PathLen = (float)path.Length();
                 pathNormal = Vector3D.Normalize(path);
 
-
                 var size = shipController.CubeGrid.GridSize;
 
-                program.Echo(size.ToString());
+              
             }
 
             void RefreshEngines()
@@ -344,7 +465,8 @@ namespace SpaceEngineers.Autominer.Autominer
                 upChange = (float)Vector3D.Dot(force, gridUpVect);
                 leftChange = (float)Vector3D.Dot(force, gridLeftVect);
 
-                if (ForwardConstThrust)
+
+                if (FlyMode == FlyType.ForwardConst)
                 {
                     forwardChange = -(float)((ForwardMiningSpeed - directVel.Length()) * mass);
                 };
