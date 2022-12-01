@@ -28,7 +28,8 @@ namespace SpaceEngineers.Autominer.Autominer
 
         //TMP vars
         int state = 0;
-        float miningDist = 80;
+        int nextDriftState = 0;
+        float miningDist = 50;
         Vector3D initMiningPos = new Vector3D();
         Vector3D target = new Vector3D(10692.18, -13232.09, 17338.39);
 
@@ -47,7 +48,7 @@ namespace SpaceEngineers.Autominer.Autominer
 
         private void Mover_MovingFinishedNotify()
         {
-            if (state == 0)
+            if (state == 0)//drift
             {
                 state = 1;
                 return;
@@ -82,8 +83,34 @@ namespace SpaceEngineers.Autominer.Autominer
 
                 if (!mover.MoveToTarget && state == 1)
                 {
-                    var left = mover.GetShipLocalDir(Base6Directions.Direction.Left, 15);
-                    mover.FlyTo(left, 5);
+                    Vector3D dir = new Vector3D();
+
+                    switch(nextDriftState)
+                    {
+                        case 0:
+                            dir = mover.GetShipLocalDir(Base6Directions.Direction.Left, 28);
+                            nextDriftState = 1;
+                            break;
+                        case 1:
+                            dir = mover.GetShipLocalDir(Base6Directions.Direction.Down, 28);
+                            nextDriftState = 2;
+                            break;
+                        case 2:
+                            dir = mover.GetShipLocalDir(Base6Directions.Direction.Right, 28);
+                            nextDriftState = 3;
+                            break;
+                        case 3:
+                            mover.FullStop();
+                            nextDriftState = 0;
+                            state = -1;
+                            return;
+                        //dir = mover.GetShipLocalDir(Base6Directions.Direction.Up, 28);
+                        //nextDriftState = 4;
+                        //break;
+
+                    }
+
+                    mover.FlyTo(dir, 5);
                     state = 2;
                 }
 
@@ -467,7 +494,7 @@ namespace SpaceEngineers.Autominer.Autominer
                 {
                     if (InGravity)
                     {
-
+                        forwardChange = (float)((float)((forwadSpeedComponent - ForwardMiningSpeed) * mass) - forwardVector.Dot(-naturalGravity) * mass);
                     }
                     else
                     {
