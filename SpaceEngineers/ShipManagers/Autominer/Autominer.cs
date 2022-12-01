@@ -40,8 +40,8 @@ namespace SpaceEngineers.Autominer.Autominer
 
             mover.MovingFinishedNotify += Mover_MovingFinishedNotify;
 
-           // mover.FlyTo(target, 50);
-           // mover.ForwardMove(0.5f);
+            // mover.FlyTo(target, 50);
+            // mover.ForwardMove(0.5f);
 
         }
 
@@ -80,7 +80,7 @@ namespace SpaceEngineers.Autominer.Autominer
                     }
                 }
 
-                if(!mover.MoveToTarget && state==1)
+                if (!mover.MoveToTarget && state == 1)
                 {
                     var left = mover.GetShipLocalDir(Base6Directions.Direction.Left, 15);
                     mover.FlyTo(left, 5);
@@ -111,7 +111,7 @@ namespace SpaceEngineers.Autominer.Autominer
         {
             string comm = commands.ToUpper();
 
-            switch(comm)
+            switch (comm)
             {
                 case "MINE":
                     mover.ForwardMove(0.5f);
@@ -125,7 +125,7 @@ namespace SpaceEngineers.Autominer.Autominer
         public class MovementCommander
         {
             IMyShipController shipController;
-            
+
             //Двигатели
             List<IMyThrust> thrusters;
             List<IMyThrust> upThrusters = new List<IMyThrust>();
@@ -142,7 +142,7 @@ namespace SpaceEngineers.Autominer.Autominer
             public bool MoveToTarget { get; private set; }
             public bool PlanetDetected { get; private set; }
             public bool InGravity { get; private set; }
- 
+
             public float DesiredSpeed { get; set; }
             public float ForwardMiningSpeed { get; set; }
             public float PathLen { get; private set; }
@@ -153,6 +153,7 @@ namespace SpaceEngineers.Autominer.Autominer
             double elevationVelocity;
             double distanceToGround;
             double radius;
+            double forwadSpeedComponent;
             const double TICK_TIME = 0.16666f;
 
             Vector3D position = new Vector3D();
@@ -227,34 +228,28 @@ namespace SpaceEngineers.Autominer.Autominer
                     if (engRot.Backward == cocpitRot.Up)
                     {
                         upThrusters.Add(Thrust);
-                     
                     }
                     else if (engRot.Backward == cocpitRot.Down)
                     {
                         downThrusters.Add(Thrust);
-                      
                     }
                     //X
                     else if (engRot.Backward == cocpitRot.Left)
                     {
                         leftThrusters.Add(Thrust);
-                     
                     }
                     else if (engRot.Backward == cocpitRot.Right)
                     {
                         rightThrusters.Add(Thrust);
-                       
                     }
                     //Z
                     else if (engRot.Backward == cocpitRot.Forward)
                     {
                         forwardThrusters.Add(Thrust);
-                      
                     }
                     else if (engRot.Backward == cocpitRot.Backward)
                     {
                         backwardThrusters.Add(Thrust);
-                       
                     }
                 }
             }
@@ -293,7 +288,7 @@ namespace SpaceEngineers.Autominer.Autominer
 
             public Vector3D GetShipLocalDir(Base6Directions.Direction dir, float distance)
             {
-                switch(dir)
+                switch (dir)
                 {
                     case Base6Directions.Direction.Up:
                         return shipController.GetPosition() + shipController.WorldMatrix.Up * distance;
@@ -355,6 +350,8 @@ namespace SpaceEngineers.Autominer.Autominer
                 linearVelocity = shipController.GetShipVelocities().LinearVelocity;
                 elevationVelocity = Vector3D.Dot(linearVelocity, upVector);
 
+                forwadSpeedComponent = linearVelocity.Dot(forwardVector);
+
                 PlanetDetected = shipController.TryGetPlanetPosition(out planetCenter);
                 naturalGravity = shipController.GetNaturalGravity();
                 InGravity = naturalGravity.Length() >= 0.5;
@@ -378,7 +375,7 @@ namespace SpaceEngineers.Autominer.Autominer
 
                 var size = shipController.CubeGrid.GridSize;
 
-              
+
             }
 
             void RefreshEngines()
@@ -388,9 +385,9 @@ namespace SpaceEngineers.Autominer.Autominer
                 maxThrust[Base6Directions.Direction.Backward] = forwardThrusters.Sum(t => t.MaxEffectiveThrust);
 
                 maxThrust[Base6Directions.Direction.Up] = downThrusters.Sum(t => t.MaxEffectiveThrust);
-                maxThrust[Base6Directions.Direction.Down] = upThrusters.Sum(t => t.MaxEffectiveThrust); 
+                maxThrust[Base6Directions.Direction.Down] = upThrusters.Sum(t => t.MaxEffectiveThrust);
 
-                maxThrust[Base6Directions.Direction.Left] = rightThrusters.Sum(t => t.MaxEffectiveThrust); 
+                maxThrust[Base6Directions.Direction.Left] = rightThrusters.Sum(t => t.MaxEffectiveThrust);
                 maxThrust[Base6Directions.Direction.Right] = leftThrusters.Sum(t => t.MaxEffectiveThrust);
             }
 
@@ -468,8 +465,16 @@ namespace SpaceEngineers.Autominer.Autominer
 
                 if (FlyMode == FlyType.ForwardConst)
                 {
-                    forwardChange = -(float)((ForwardMiningSpeed - directVel.Length()) * mass);
-                };
+                    if (InGravity)
+                    {
+
+                    }
+                    else
+                    {
+                        forwardChange = (float)((forwadSpeedComponent - ForwardMiningSpeed) * mass);
+                    }
+
+                }
 
                 FireThrusters();
             }
