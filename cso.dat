@@ -6,3 +6,12 @@ V1
 2:reverseAcc,W
 2:brakingDist,dP
 2:deltaSpeed,z
+2:Autominer,l
+2:SpaceEngineers,j
+2:s252624655,r
+2:t252624655,p
+1:1,SpaceEngineers,j_.l_.l_,r_,p_
+2:GetPlanetElevation,W2
+2:GetShipLocalDir,iZ
+2:dir,n
+2:distance,p7
