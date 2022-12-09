@@ -432,11 +432,11 @@ namespace SpaceEngineers.ShipManagers.Components.CameraRadar
                 if (cameras.Any())
                     avrCamDist = cameras.Select(c => c as IMyCameraBlock).Sum(cam => cam.AvailableScanRange) / cameras.Count;
 
-                //mainProgram.Echo("----Radar vorking normally----");
-                //mainProgram.Echo($"Total cameras: {cameras?.Count}" +
-                //                 $"\nOBS cam dist: {observerCamera?.AvailableScanRange}" +
-                //                 $"\nAvr cams range: {avrCamDist}" +
-                //                 $"\nScan distanse: {ScanDistance} m");
+                mainProgram.Echo("----Radar vorking normally----");
+                mainProgram.Echo($"Total cameras: {cameras?.Count}" +
+                                 $"\nOBS cam dist: {observerCamera?.AvailableScanRange}" +
+                                 $"\nAvr cams range: {avrCamDist}" +
+                                 $"\nScan distanse: {ScanDistance} m");
 
 
                 if (!TargetInfo.IsEmpty())
@@ -482,7 +482,16 @@ namespace SpaceEngineers.ShipManagers.Components.CameraRadar
                             HitInvert = Vector3D.Transform(HitPos, invMatrix);
 
                             HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
-                            CalculatedPosition = TargetInfo.HitPosition.Value;
+                            //  CalculatedPosition = TargetInfo.HitPosition.Value;
+
+                            if (PrecisionFollowing)
+                            {
+                                CalculatedPosition = TargetPos + HitPos;
+                            }
+                            else
+                            {
+                                CalculatedPosition = TargetPos;
+                            }
 
                             DistanceToTarget = TargetInfo.HitPosition.Value - Camera.GetPosition();
 
@@ -502,7 +511,7 @@ namespace SpaceEngineers.ShipManagers.Components.CameraRadar
                     if (CameraSelect(CalculatedTargetPos))
                     {
                         var currentTarget = Camera.Raycast(CalculatedTargetPos);
-                        //TargetInfo = Camera.Raycast(CalculatedTargetPos);
+
                         if (!currentTarget.IsEmpty())
                         {
                             if (TargetInfo.EntityId == currentTarget.EntityId)
@@ -537,11 +546,11 @@ namespace SpaceEngineers.ShipManagers.Components.CameraRadar
                         }
                         else
                         {
+                            TargetInfo = Camera.Raycast(Vector3D.Zero);
                             HitPos = Vector3D.Zero;
                             TargetPos = Vector3D.Zero;
                             TargetSpeed = Vector3D.Zero;
                             TargetId = 0;
-                            TargetInfo = Camera.Raycast(Vector3D.Zero);
                         }
 
                     }
@@ -554,23 +563,22 @@ namespace SpaceEngineers.ShipManagers.Components.CameraRadar
                     tickLimit = (DistanceToTarget.Length() + 10) / 2000 * 60 / cameras.Count;
                     CalculatedTargetPos = CalculatedPosition + (TargetSpeed * ((int)tickLimit + LOCClosedTime) / 60);
 
-                    if (TargetInfo.IsEmpty())
-                    {
-                        mainProgram.Echo("Stopped AT TR LOST");
-
-                        TrackTarget = false;
-                        LOCClosed = false;
-                        LOCClosedTime = 0;
-                    }
-
                     if (scanTick > tickLimit)
                     {
                         scanTick = 0;
                         TryFollowTarget();
                     }
 
+
+                    if (TargetInfo.IsEmpty())
+                    {
+                        TrackTarget = false;
+                        LOCClosed = false;
+                        LOCClosedTime = 0;
+                    }
+
                     scanTick++;
-                }
+                }             
             }
 
             private void SetCameras()
