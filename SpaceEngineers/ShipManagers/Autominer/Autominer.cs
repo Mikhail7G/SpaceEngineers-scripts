@@ -18,6 +18,7 @@ using System.Diagnostics.Metrics;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Replication;
 using System.Drawing;
+using Sandbox.Game.WorldEnvironment.Modules;
 
 namespace SpaceEngineers.Autominer.Autominer
 {
@@ -31,7 +32,10 @@ namespace SpaceEngineers.Autominer.Autominer
         int nextDriftState = 0;
         float miningDist = 50;
         float shaftDrift = 17;
+        float miningSpeed = 0.5f;
+        float miningDepth = 0;
         Vector3D initMiningPos = new Vector3D();
+        
 
 
         public Program()
@@ -70,9 +74,9 @@ namespace SpaceEngineers.Autominer.Autominer
 
                 if (mover.MoveToTarget && mover.FlyMode == MovementCommander.FlyType.ForwardConst)
                 {
-                    var dist = (initMiningPos - mover.GetPosition()).Length();
+                    miningDepth = (float)(initMiningPos - mover.GetPosition()).Length();
 
-                    if (dist >= miningDist)
+                    if (miningDepth >= miningDist)
                     {
                         mover.FullStop();
                         mover.FlyTo(initMiningPos, 5);
@@ -110,15 +114,18 @@ namespace SpaceEngineers.Autominer.Autominer
 
                 if (!mover.MoveToTarget && state == 2)
                 {
-                    mover.ForwardMove(0.5f);
+                    mover.ForwardMove(miningSpeed);
                     initMiningPos = mover.GetPosition();
                     state = 0;
                 }
             }
 
             Echo($"Drill dist: {miningDist} m" +
+                 $"\nCurrent depth: {miningDepth}" +
+                 $"\nMining speed: {miningSpeed}" +
                  $"\nShaft drift: {shaftDrift} m" +
-                 $"\nRadio alt: {mover.GetPlanetElevation()} m");
+                 $"\nRadio alt: {mover.GetPlanetElevation()} m" +
+                 $"\nState: {state}");
 
             mover.Update();
 
@@ -131,10 +138,77 @@ namespace SpaceEngineers.Autominer.Autominer
         {
             string comm = commands.ToUpper();
 
+            if (comm.Contains("SETMINEDEPTH"))
+            {
+                try
+                {
+                    var str = comm.Split(':');
+
+                    if (str.Any())
+                    {
+                        int depth = 1;
+                        if (int.TryParse(str[1], out depth))
+                        {
+                            miningDist = depth;
+                            return;
+                        }
+                    }
+                }
+                catch
+                {
+
+                }
+            }
+
+            if (comm.Contains("SETSHAFTDRIFT"))
+            {
+                try
+                {
+                    var str = comm.Split(':');
+
+                    if (str.Any())
+                    {
+                        int drift = 1;
+                        if (int.TryParse(str[1], out drift))
+                        {
+                            shaftDrift = drift;
+                            return;
+                        }
+                    }
+                }
+                catch
+                {
+
+                }
+            }
+
+            if (comm.Contains("SETMINESPEED"))
+            {
+                try
+                {
+                    var str = comm.Split(':');
+
+                    if (str.Any())
+                    {
+                        int speed = 1;
+                        if (int.TryParse(str[1], out speed))
+                        {
+                            miningSpeed = speed;
+                            return;
+                        }
+                    }
+                }
+                catch
+                {
+
+                }
+            }
+
+
             switch (comm)
             {
                 case "MINE":
-                    mover.ForwardMove(0.5f);
+                    mover.ForwardMove(miningSpeed);
                     initMiningPos = mover.GetPosition();
                     state = 0;
                     break;
@@ -160,6 +234,8 @@ namespace SpaceEngineers.Autominer.Autominer
             List<IMyThrust> rightThrusters = new List<IMyThrust>();
             List<IMyThrust> forwardThrusters = new List<IMyThrust>();
             List<IMyThrust> backwardThrusters = new List<IMyThrust>();
+
+            List<IMyGyro> gyros = new List<IMyGyro>();
 
             Program program;
 
@@ -240,6 +316,10 @@ namespace SpaceEngineers.Autominer.Autominer
                 thrusters = blocks.Where(b => b is IMyThrust)
                                   .Where(c => c.IsFunctional)
                                   .Select(t => t as IMyThrust).ToList();
+
+                gyros = blocks.Where(b => b is IMyGyro)
+                                  .Where(c => c.IsFunctional)
+                                  .Select(t => t as IMyGyro).ToList();
 
                 Matrix engRot = new Matrix();
                 Matrix cocpitRot = new Matrix();
@@ -346,7 +426,7 @@ namespace SpaceEngineers.Autominer.Autominer
             {
                 MoveToTarget = true;
                 ForwardMiningSpeed = speed;
-                targetPos = shipController.GetPosition() + shipController.WorldMatrix.Forward * 100;
+                targetPos = shipController.GetPosition() + shipController.WorldMatrix.Forward * 1000;
                 FlyMode = FlyType.ForwardConst;
             }
 

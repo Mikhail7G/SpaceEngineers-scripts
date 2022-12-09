@@ -363,3 +363,4 @@ MigrationBackup/
 FodyWeavers.xsd
 /SpaceEngineers/ShipManagers/MoverTester.cs
 /SpaceEngineers/ShipManagers/INOP/Surprise.cs
+/SpaceEngineers/ShipManagers/INOP/CameraRadar.cs

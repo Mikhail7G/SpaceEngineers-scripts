@@ -14,7 +14,7 @@ using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 
-namespace SpaceEngineers.ShipManagers.Components
+namespace SpaceEngineers.ShipManagers.Components.CameraRadar
 {
     public sealed class Program : MyGridProgram
     {
@@ -91,7 +91,7 @@ namespace SpaceEngineers.ShipManagers.Components
             {
                 Radar.RadarUpdate();
             }
-               
+
             //SendMessageRadio();
             RadarSound();
 
@@ -222,7 +222,7 @@ namespace SpaceEngineers.ShipManagers.Components
 
                 IGC.SendBroadcastMessage(missileTagSender, sendingSignal, TransmissionDistance.TransmissionDistanceMax);
             }
-           
+
         }
 
         public class CameraRadar
@@ -344,7 +344,7 @@ namespace SpaceEngineers.ShipManagers.Components
                 lcdInfo = mainProgram.GridTerminalSystem.GetBlockWithName(LcdTargetStatus) as IMyTextPanel;
                 observerCamera = mainProgram.GridTerminalSystem.GetBlockWithName(ObserverCameraName) as IMyCameraBlock;
 
-                if (lcd != null) 
+                if (lcd != null)
                 {
                     lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
                     lcd.FontSize = 1.5f;
@@ -432,11 +432,11 @@ namespace SpaceEngineers.ShipManagers.Components
                 if (cameras.Any())
                     avrCamDist = cameras.Select(c => c as IMyCameraBlock).Sum(cam => cam.AvailableScanRange) / cameras.Count;
 
-                mainProgram.Echo("----Radar vorking normally----");
-                mainProgram.Echo($"Total cameras: {cameras?.Count}" +
-                                 $"\nOBS cam dist: {observerCamera?.AvailableScanRange}" +
-                                 $"\nAvr cams range: {avrCamDist}" +
-                                 $"\nScan distanse: {ScanDistance} m");
+                //mainProgram.Echo("----Radar vorking normally----");
+                //mainProgram.Echo($"Total cameras: {cameras?.Count}" +
+                //                 $"\nOBS cam dist: {observerCamera?.AvailableScanRange}" +
+                //                 $"\nAvr cams range: {avrCamDist}" +
+                //                 $"\nScan distanse: {ScanDistance} m");
 
 
                 if (!TargetInfo.IsEmpty())
@@ -478,20 +478,18 @@ namespace SpaceEngineers.ShipManagers.Components
                             TargetSpeed = TargetInfo.Velocity;
                             TargetId = TargetInfo.EntityId;
 
-                            //MatrixD invMatrix = MatrixD.Invert(TargetInfo.Orientation);
-                            //HitInvert = Vector3D.Transform(HitPos, invMatrix);
-                            //HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
+                            MatrixD invMatrix = MatrixD.Invert(TargetInfo.Orientation);
+                            HitInvert = Vector3D.Transform(HitPos, invMatrix);
 
+                            HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
                             CalculatedPosition = TargetInfo.HitPosition.Value;
-                           
 
                             DistanceToTarget = TargetInfo.HitPosition.Value - Camera.GetPosition();
 
-                            RadarNotify.Invoke();
+                            RadarNotify?.Invoke();
                         }
                         else
                         {
-                           
                         }
                     }
                 }
@@ -517,8 +515,6 @@ namespace SpaceEngineers.ShipManagers.Components
                                 TargetSpeed = TargetInfo.Velocity;
                                 TargetId = TargetInfo.EntityId;
 
-                                MatrixD invMatrix = MatrixD.Invert(TargetInfo.Orientation);
-                                HitInvert = Vector3D.Transform(HitPos, invMatrix);
                                 HitPos = Vector3D.Transform(HitInvert, TargetInfo.Orientation);
 
                                 if (PrecisionFollowing)
@@ -530,14 +526,13 @@ namespace SpaceEngineers.ShipManagers.Components
                                     CalculatedPosition = TargetPos;
                                 }
                                 DistanceToTarget = TargetPos - Camera.GetPosition();
-
-                                RadarNotify.Invoke();
+                                RadarNotify?.Invoke();
                             }
                             else
                             {
                                 LOCClosed = true;
                                 LOCClosedTime++;
-                                //проверка на LOC
+                                //ппроверка на LOC
                             }
                         }
                         else
@@ -557,20 +552,21 @@ namespace SpaceEngineers.ShipManagers.Components
                 if (TrackTarget)
                 {
                     tickLimit = (DistanceToTarget.Length() + 10) / 2000 * 60 / cameras.Count;
-                    CalculatedTargetPos = CalculatedPosition + TargetSpeed * ((int)tickLimit + LOCClosedTime) / 60;
+                    CalculatedTargetPos = CalculatedPosition + (TargetSpeed * ((int)tickLimit + LOCClosedTime) / 60);
+
+                    if (TargetInfo.IsEmpty())
+                    {
+                        mainProgram.Echo("Stopped AT TR LOST");
+
+                        TrackTarget = false;
+                        LOCClosed = false;
+                        LOCClosedTime = 0;
+                    }
 
                     if (scanTick > tickLimit)
                     {
                         scanTick = 0;
                         TryFollowTarget();
-                    }
-
-                    if (TargetInfo.IsEmpty())
-                    {
-                        TrackTarget = false;
-                        LOCClosed = false;
-                        LOCClosedTime = 0;
-                        scanTick = 0;
                     }
 
                     scanTick++;
