@@ -441,12 +441,12 @@ namespace SpaceEngineers.ShipManagers.Components.CameraRadar
 
                 if (!TargetInfo.IsEmpty())
                 {
-                    lcd?.WriteText($"Distance: {DistanceToTarget.Length()}" +
-                               $"\nSpeed: {TargetSpeed.Length()}" +
+                    lcd?.WriteText($"Distance: {Math.Round((double)DistanceToTarget.Length(),1)}" +
+                               $"\nSpeed: {Math.Round((double)TargetSpeed.Length(),1)}" +
                                $"\nTracked: {TrackTarget}" +
                                $"\nPrecision: {PrecisionFollowing}" +
                                $"\nLOC closed: {LOCClosed}" +
-                               $"\nLOC time: {LOCClosedTime}", false);
+                               $"\nLOC time: {Math.Round((double)LOCClosedTime,2)}", false);
                 }
                 else
                 {
@@ -454,11 +454,11 @@ namespace SpaceEngineers.ShipManagers.Components.CameraRadar
                 }
 
                 lcdInfo?.WriteText($"Camera: {Camera.CustomName}" +
-                                   $"\nAvailDist: {Camera.AvailableScanRange}" +
+                                   $"\nAvailDist: {Math.Round((double)Camera.AvailableScanRange,1)}" +
                                    $"\nTotalCameras: {cameras.Count}" +
                                    $"\n/AvailCams: {CurrentAviableCameras}" +
                                    $"\nOBScam: {observerCamera.AvailableScanRange}" +
-                                   $"\nTick:{tickLimit}", false);
+                                   $"\nTick:{Math.Round((double)tickLimit,4)}", false);
 
             }
 

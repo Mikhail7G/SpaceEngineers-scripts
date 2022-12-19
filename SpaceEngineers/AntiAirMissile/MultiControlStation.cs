@@ -237,6 +237,16 @@ namespace SpaceEngineers.AntiAirMissile
                     currentSelectedMissile++;
                     DrawMissileInfo();
                     break;
+
+                case "FIRESMALL"://стрельба по одной малой ракетой
+                    FireSmall();
+                    DrawMissileInfo();
+                    break;
+
+                case "FIRELARGE"://стрельба по одной большой ракетой
+                    FireLarge();
+                    DrawMissileInfo();
+                    break;
             }
 
 
@@ -562,6 +572,58 @@ namespace SpaceEngineers.AntiAirMissile
                 if (selectedMissile != null)
                 {
                     if(selectedMissile.MissileReady())
+                    {
+                        missileInFlightList.Add(selectedMissile);
+                        missileList.Remove(selectedMissile);
+                        selectedMissile.MissileFire();
+                        Enable();
+                    }
+                }
+            }
+            else
+            {
+                FindMissile();
+            }
+        }
+
+        /// <summary>
+        /// Запуск ракет на малой сетке
+        /// </summary>
+        public void FireSmall()
+        {
+            if (missileList.Count > 0)
+            {
+                var selectedMissile = missileList.Where(m => m.RemotControl.CubeGrid.GridSizeEnum == MyCubeSize.Small).FirstOrDefault();
+
+                if (selectedMissile != null)
+                {
+                    if (selectedMissile.MissileReady())
+                    {
+                        missileInFlightList.Add(selectedMissile);
+                        missileList.Remove(selectedMissile);
+                        selectedMissile.MissileFire();
+                        Enable();
+                    }
+                }
+            }
+            else
+            {
+                FindMissile();
+            }
+        }
+
+        /// <summary>
+        /// Запуск ракет на большой сетке
+        /// </summary>
+        public void FireLarge()
+        {
+            if (missileList.Count > 0)
+            {
+                var selectedMissile = missileList.Where(m => m.RemotControl.CubeGrid.GridSizeEnum == MyCubeSize.Large).FirstOrDefault();
+
+                if (selectedMissile != null)
+                {
+                    if (selectedMissile.MissileReady())
                     {
                         missileInFlightList.Add(selectedMissile);
                         missileList.Remove(selectedMissile);

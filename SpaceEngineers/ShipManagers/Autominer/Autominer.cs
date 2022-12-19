@@ -31,11 +31,17 @@ namespace SpaceEngineers.Autominer.Autominer
         int state = 0;
         int nextDriftState = 0;
         float miningDist = 50;
-        float shaftDrift = 17;
+        float shaftSize = 17;
         float miningSpeed = 0.5f;
         float miningDepth = 0;
+
         Vector3D initMiningPos = new Vector3D();
-        
+        Vector3D initShaftPos = new Vector3D();
+
+        float leftShaftDrift = 0;
+        float upShaftDrift = 0;
+        float maxShafts = 1;
+
 
 
         public Program()
@@ -71,61 +77,19 @@ namespace SpaceEngineers.Autominer.Autominer
 
             if ((updateType & UpdateType.Update1) != 0)
             {
-
-                if (mover.MoveToTarget && mover.FlyMode == MovementCommander.FlyType.ForwardConst)
-                {
-                    miningDepth = (float)(initMiningPos - mover.GetPosition()).Length();
-
-                    if (miningDepth >= miningDist)
-                    {
-                        mover.FullStop();
-                        mover.FlyTo(initMiningPos, 5);
-                    }
-                }
-
-                if (!mover.MoveToTarget && state == 1)
-                {
-                    Vector3D dir = new Vector3D();
-
-                    switch(nextDriftState)
-                    {
-                        case 0:
-                            dir = mover.GetShipLocalDir(Base6Directions.Direction.Left, shaftDrift);
-                            nextDriftState = 1;
-                            break;
-                        case 1:
-                            dir = mover.GetShipLocalDir(Base6Directions.Direction.Down, shaftDrift);
-                            nextDriftState = 2;
-                            break;
-                        case 2:
-                            dir = mover.GetShipLocalDir(Base6Directions.Direction.Right, shaftDrift);
-                            nextDriftState = 3;
-                            break;
-                        case 3:
-                            mover.FullStop();
-                            nextDriftState = 0;
-                            state = -1;
-                            return;
-                    }
-
-                    mover.FlyTo(dir, 5);
-                    state = 2;
-                }
-
-                if (!mover.MoveToTarget && state == 2)
-                {
-                    mover.ForwardMove(miningSpeed);
-                    initMiningPos = mover.GetPosition();
-                    state = 0;
-                }
+                //DriftingMiner();
+                NormalMiner();
             }
 
             Echo($"Drill dist: {miningDist} m" +
                  $"\nCurrent depth: {miningDepth}" +
                  $"\nMining speed: {miningSpeed}" +
-                 $"\nShaft drift: {shaftDrift} m" +
+                 $"\nShaft size: {shaftSize} m" +
                  $"\nRadio alt: {mover.GetPlanetElevation()} m" +
-                 $"\nState: {state}");
+                 $"\nState: {state}" +
+                 $"\nShafts:{maxShafts} ^2" +
+                 $"\nLeftDrift:{leftShaftDrift}" +
+                 $"\nUpDrift:{upShaftDrift}");
 
             mover.Update();
 
@@ -133,6 +97,106 @@ namespace SpaceEngineers.Autominer.Autominer
             monitor.EndOfFrameCalc();
             monitor.Draw();
         }
+
+        public void DriftingMiner()
+        {
+            if (mover.MoveToTarget && mover.FlyMode == MovementCommander.FlyType.ForwardConst)
+            {
+                miningDepth = (float)(initMiningPos - mover.GetPosition()).Length();
+
+                if (miningDepth >= miningDist)
+                {
+                    mover.FullStop();
+                    mover.FlyTo(initMiningPos, 5);
+                }
+            }
+
+            if (!mover.MoveToTarget && state == 1)
+            {
+                Vector3D dir = new Vector3D();
+
+                switch (nextDriftState)
+                {
+                    case 0:
+                        dir = mover.GetShipLocalDrift(Base6Directions.Direction.Left, shaftSize);
+                        nextDriftState = 1;
+                        break;
+                    case 1:
+                        dir = mover.GetShipLocalDrift(Base6Directions.Direction.Down, shaftSize);
+                        nextDriftState = 2;
+                        break;
+                    case 2:
+                        dir = mover.GetShipLocalDrift(Base6Directions.Direction.Right, shaftSize);
+                        nextDriftState = 3;
+                        break;
+                    case 3:
+                        mover.FullStop();
+                        nextDriftState = 0;
+                        state = -1;
+                        return;
+                }
+
+                mover.FlyTo(dir, 5);
+                state = 2;
+            }
+
+            if (!mover.MoveToTarget && state == 2)
+            {
+                mover.ForwardMove(miningSpeed);
+                initMiningPos = mover.GetPosition();
+                state = 0;
+            }
+        }
+
+        public void NormalMiner()
+        {
+            if (mover.MoveToTarget && mover.FlyMode == MovementCommander.FlyType.ForwardConst)
+            {
+                miningDepth = (float)(initShaftPos - mover.GetPosition()).Length();
+
+                if (miningDepth >= miningDist)
+                {
+                    mover.FullStop();
+                    mover.FlyTo(initShaftPos, 5);
+                }
+            }
+
+            if (!mover.MoveToTarget && state == 1)
+            {
+                var dir = new Vector3D();
+                dir = mover.GetShipGlobalDrift(initMiningPos, 0, upShaftDrift * shaftSize, leftShaftDrift * shaftSize);
+
+                mover.FlyTo(dir, 5);
+                state = 2;
+                NextShaft();
+            }
+
+            if (!mover.MoveToTarget && state == 2) 
+            {
+                mover.ForwardMove(miningSpeed);
+                initShaftPos = mover.GetPosition();
+                state = 0;
+            }
+        }
+
+        public void NextShaft()
+        {
+            leftShaftDrift -= 1;
+
+            if (Math.Abs(leftShaftDrift) > maxShafts)
+            {
+                leftShaftDrift = 1 * maxShafts;
+                upShaftDrift -= 1;
+
+                if (Math.Abs(upShaftDrift) > maxShafts)
+                {
+                    mover.FullStop();
+                    nextDriftState = 0;
+                    state = -1;
+                }
+            }
+        }
+      
 
         public void Command(string commands)
         {
@@ -171,7 +235,7 @@ namespace SpaceEngineers.Autominer.Autominer
                         int drift = 1;
                         if (int.TryParse(str[1], out drift))
                         {
-                            shaftDrift = drift;
+                            shaftSize = drift;
                             return;
                         }
                     }
@@ -204,13 +268,38 @@ namespace SpaceEngineers.Autominer.Autominer
                 }
             }
 
+            if (comm.Contains("SETMSHAFTSQUARE"))
+            {
+                try
+                {
+                    var str = comm.Split(':');
+
+                    if (str.Any())
+                    {
+                        int square = 1;
+                        if (int.TryParse(str[1], out square))
+                        {
+                            maxShafts = square;
+                            return;
+                        }
+                    }
+                }
+                catch
+                {
+
+                }
+            }
+
 
             switch (comm)
             {
                 case "MINE":
                     mover.ForwardMove(miningSpeed);
                     initMiningPos = mover.GetPosition();
+                    initShaftPos = initMiningPos;
                     state = 0;
+                    upShaftDrift = 1 * maxShafts;
+                    leftShaftDrift = 1 * maxShafts;
                     break;
 
                 case "STOP":
@@ -244,7 +333,7 @@ namespace SpaceEngineers.Autominer.Autominer
             public bool MoveToTarget { get; private set; }
             public bool PlanetDetected { get; private set; }
             public bool InGravity { get; private set; }
-
+            public float StoppingAccuracyDistance { get; set; }
             public float DesiredSpeed { get; set; }
             public float ForwardMiningSpeed { get; set; }
             public float PathLen { get; private set; }
@@ -305,6 +394,7 @@ namespace SpaceEngineers.Autominer.Autominer
             {
                 DesiredSpeed = 50;
                 ForwardMiningSpeed = 0.5f;
+                StoppingAccuracyDistance = 0.1f;
 
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
                 program.GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == program.Me.CubeGrid);
@@ -370,6 +460,9 @@ namespace SpaceEngineers.Autominer.Autominer
                 }
             }
 
+            /// <summary>
+            /// Полет к заданной точке с заданной скоростью
+            /// </summary>
             public void FlyTo(Vector3D pos, float speed)
             {
                 if (!pos.IsZero())
@@ -381,11 +474,17 @@ namespace SpaceEngineers.Autominer.Autominer
                 }
             }
 
+            /// <summary>
+            /// Текущая позиция грида
+            /// </summary>
             public Vector3D GetPosition()
             {
                 return shipController.GetPosition();
             }
 
+            /// <summary>
+            /// Целевая позиция грида
+            /// </summary>
             public Vector3D GetTargetPosition()
             {
                 return targetPos;
@@ -396,7 +495,10 @@ namespace SpaceEngineers.Autominer.Autominer
                 return shipController.TryGetPlanetElevation(MyPlanetElevation.Surface, out distanceToGround) ? distanceToGround : 0;
             }
 
-            public Vector3D GetShipLocalDir(Base6Directions.Direction dir, float distance)
+            /// <summary>
+            /// Локальное движение грида по заданным направлениям, направление и на сколько сдвинуть грид
+            /// </summary>
+            public Vector3D GetShipLocalDrift(Base6Directions.Direction dir, float distance)
             {
                 switch (dir)
                 {
@@ -421,7 +523,17 @@ namespace SpaceEngineers.Autominer.Autominer
                 return Vector3D.Zero;
             }
 
+            /// <summary>
+            /// Локальное движение грида по заданным направлениям, направление и на сколько сдвинуть грид
+            /// </summary>
+            public Vector3D GetShipGlobalDrift(Vector3D pos, float fwd,float up,float left)
+            {
+                return pos + shipController.WorldMatrix.Forward * fwd + shipController.WorldMatrix.Up * up + shipController.WorldMatrix.Left * left;
+            }
 
+            /// <summary>
+            /// Движение грида впперед с постоянной скоростью
+            /// </summary>
             public void ForwardMove(float speed)
             {
                 MoveToTarget = true;
@@ -430,6 +542,9 @@ namespace SpaceEngineers.Autominer.Autominer
                 FlyMode = FlyType.ForwardConst;
             }
 
+            /// <summary>
+            /// Остановка грида
+            /// </summary>
             public void FullStop()
             {
                 MoveToTarget = false;
@@ -498,7 +613,7 @@ namespace SpaceEngineers.Autominer.Autominer
                 maxThrust[Base6Directions.Direction.Right] = leftThrusters.Sum(t => t.MaxEffectiveThrust);
             }
 
-            public void ReleaseEngines()
+            void ReleaseEngines()
             {
                 foreach (IMyThrust thruster in thrusters)
                 {
@@ -534,7 +649,7 @@ namespace SpaceEngineers.Autominer.Autominer
                     return;
                 }
 
-                if (PathLen < 0.1f)
+                if (PathLen < StoppingAccuracyDistance)
                 {
                     MovingFinishedNotify?.Invoke();
                     ReleaseEngines();

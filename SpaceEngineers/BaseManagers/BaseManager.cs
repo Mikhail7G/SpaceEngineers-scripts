@@ -1039,7 +1039,7 @@ namespace SpaceEngineers.BaseManagers
 
                 if (refs.InputInventory.ItemCount == 0)
                 {
-
+                    //тут загрузка руды 
                 }
                 else
                 {
@@ -1068,88 +1068,6 @@ namespace SpaceEngineers.BaseManagers
 
             }
 
-            //foreach (var refs in refinereys)
-            //{
-            //    if (!refs.Closed)
-            //    {
-            //        refs.UseConveyorSystem = false;
-
-            //        if (refs.InputInventory.ItemCount == 0)
-            //        {
-            //            //Балансировка руды по приоритетам,сачала та, что быстро плавится
-            //            foreach (var inv in oreInventory)
-            //            {
-            //                var count = inv.ItemCount;
-
-            //                for (int i = 0; i <= count; i++)
-            //                {
-            //                    var item = inv.GetItemAt(i);
-
-            //                    if (item == null)
-            //                        continue;
-
-            //                    var lowPriorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
-
-            //                    if (!lowPriorItem)
-            //                    {
-            //                        if (inv.TransferItemTo(refs.InputInventory, i, null, true))
-            //                        {
-            //                            break;
-            //                        }
-            //                    }
-            //                }
-            //            }
-
-            //            //Если осталась только низкоприоитетная руда
-            //            if (refs.InputInventory.ItemCount == 0)
-            //            {
-            //                oreInventory.FirstOrDefault().TransferItemTo(refs.InputInventory, 0, null, true);
-            //            }
-            //        }
-            //        else
-            //        {
-            //            var load = (double)refs.InputInventory.CurrentVolume * 100 / (double)refs.InputInventory.MaxVolume;
-            //            if (load < refinereyReloadPrecentage)
-            //            {
-            //                var refsItem = refs.InputInventory.GetItemAt(0);
-
-            //                if (refsItem != null)
-            //                {
-            //                    foreach (var inv in oreInventory)
-            //                    {
-            //                        var targItem = inv.FindItem(refsItem.Value.Type);
-
-            //                        if (targItem.HasValue)
-            //                        {
-            //                            if (!inv.TransferItemTo(refs.InputInventory, targItem.Value, null))
-            //                            {
-            //                                break;
-            //                            }
-            //                        }
-            //                        //var count = inv.ItemCount;
-
-            //                        //for (int i = 0; i <= count; i++)
-            //                        //{
-            //                        //    var item = inv.GetItemAt(i);
-
-            //                        //    if (item == null)
-            //                        //        continue;
-
-            //                        //    if (item.Value.Type.SubtypeId == refsItem.Value.Type.SubtypeId)
-            //                        //    {
-            //                        //        if (!inv.TransferItemTo(refs.InputInventory, i, null, true))
-            //                        //        {
-            //                        //            break;
-            //                        //        }
-            //                        //    }
-            //                        //}
-            //                    }
-            //                }
-            //            }
-            //        }
-            //    }
-            //}
-            // monitor.AddInstructions("");
         }
 
 
@@ -1515,7 +1433,6 @@ namespace SpaceEngineers.BaseManagers
 
                 var currentCargo = ass.ItemCount;
                 var targInv = availConts.First().Owner as IMyCargoContainer;
-
 
                 for (int i = 0; i <= currentCargo; i++)
                 {
