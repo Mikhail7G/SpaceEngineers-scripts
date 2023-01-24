@@ -23,3 +23,6 @@ V1
 2:busyAssemblers,N
 2:ass,M
 2:key,a
+2:AddItemsToDisassemble,rQ
+2:counter,u
+2:trashInventory,Y

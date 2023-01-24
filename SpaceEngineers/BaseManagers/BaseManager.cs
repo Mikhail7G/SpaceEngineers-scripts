@@ -83,7 +83,7 @@ namespace IngameScript
         bool trashItems = false;
 
         //bool detectReqBuildComp = false;
-        int maxItemToDisassemble = 2;
+        int maxItemToDisassemble = 5;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -465,7 +465,8 @@ namespace IngameScript
                 useNanobotAutoBuild = dataSystem.Get("Operations", "UseNanobotAutoBuild").ToBoolean();
                 useRefinereysOperations = dataSystem.Get("Operations", "UseRefinereyOperations").ToBoolean();
                 useRefinereyPriorty = dataSystem.Get("Operations", "UseRefinereyPriortty").ToBoolean();
-                reactorPayloadLimitter = dataSystem.Get("Operations", "ReactorFuelLimitter").ToBoolean();
+                reactorPayloadLimitter = dataSystem.Get("Operations", "ReactorFuelLimitter").ToBoolean(); 
+                trashItems = dataSystem.Get("Operations", "RecycleFromTrash").ToBoolean();
 
                 //Containers 
                 oreStorageName = dataSystem.Get("ContainerNames", "oreStorageName").ToString();
@@ -539,6 +540,7 @@ namespace IngameScript
                 dataSystem.Set("Operations", "UseRefinereyOperations", false);
                 dataSystem.Set("Operations", "UseRefinereyPriortty", false);
                 dataSystem.Set("Operations", "ReactorFuelLimitter", false);
+                dataSystem.Set("Operations", "RecycleFromTrash", false);
 
                 dataSystem.AddSection("DisplaysNames");
                 dataSystem.Set("DisplaysNames", "lcdInventoryOresName", "LCD Ore");
@@ -586,6 +588,7 @@ namespace IngameScript
             dataSystem.Set("Operations", "UseRefinereyOperations", useRefinereysOperations);
             dataSystem.Set("Operations", "UseRefinereyPriortty", useRefinereyPriorty);
             dataSystem.Set("Operations", "ReactorFuelLimitter", reactorPayloadLimitter);
+            dataSystem.Set("Operations", "RecycleFromTrash", trashItems);
 
             dataSystem.Set("DisplaysNames", "lcdInventoryOresName", lcdInventoryOresName);
             dataSystem.Set("DisplaysNames", "lcdInventoryIngnotsName", lcdInventoryIngnotsName);
@@ -1839,12 +1842,8 @@ namespace IngameScript
             //if (useNanobotAutoBuild)
             //    return;
 
-            assemblersMode = assemblerMode.Idle;
-
-            var busyAssemblers = specialAssemblers.Where(ass => ass.Closed || ass.OutputInventory.ItemCount > 0).ToList();
-            if (busyAssemblers.Any())
-                return;
-
+            var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed).ToList();
+           
             Echo("------Auto build system-------");
 
             var reqItems = partsDictionary.Where(k => k.Value.Current < k.Value.Requested);
@@ -1854,29 +1853,43 @@ namespace IngameScript
             {
                 foreach (var key in reqItems)
                 {
-                    AddItemToProduct(key, specialAssemblers);
+                    AddItemToProduct(key, freeAssemblers);
                 }
+            }
+            else
+            {
+                return;
             }
 
             if (reqIngnotsItem.Any())
             {
                 foreach (var key in reqIngnotsItem)
                 {
-                    AddItemToProduct(key, specialAssemblers);
+                    AddItemToProduct(key, freeAssemblers);
                 }
             }
+            else
+            {
+                return;
+            }
 
-           
-
+            if (freeAssemblers.Any())
+            {
+                SetAssemblerMode(freeAssemblers, MyAssemblerMode.Assembly);
+            }
+            else
+            {
+                return;
+            }
 
         }//PartsAutoBuild()
 
         /// <summary>
         /// Смена режимов сборщиков
         /// </summary>
-        void SetSpecialAssemblerMode(MyAssemblerMode mode)
+        void SetAssemblerMode(List<IMyAssembler> assemblers , MyAssemblerMode mode)
         {
-            foreach (var ass in specialAssemblers)
+            foreach (var ass in assemblers)
             {
                 if (!ass.Closed)
                 {
@@ -1886,19 +1899,9 @@ namespace IngameScript
 
         }
 
-        void ClearSpecialAssemblersQueue()
-        {
-            foreach (var ass in specialAssemblers)
-            {
-                if (!ass.Closed)
-                {
-                    ass.ClearQueue();
-                }
-            }
-        }
 
         /// <summary>
-        /// Добавить недостающий предмет на автосборку IEnumerable<KeyValuePair<string,ItemBalanser>> key
+        /// Добавить недостающий предмет на автосборку
         /// </summary>
         private void AddItemToProduct(KeyValuePair<string, ItemBalanser> key, List<IMyAssembler> availAssemblers)
         {
@@ -1927,12 +1930,15 @@ namespace IngameScript
                 return;
 
             List<MyProductionItem> items = new List<MyProductionItem>();
+            List<MyInventoryItem> prodItems = new List<MyInventoryItem>();
 
             foreach (var ass in availAss)
             {
                 items.Clear();
                 ass.GetQueue(items);
+                ass.OutputInventory.GetItems(prodItems);
 
+                var itemsInOutInv = prodItems.Where(item => item.Type.SubtypeId.Contains(key.Key)).ToList();
                 var neededItems = items.Where(i => i.BlueprintId.Equals(blueprint)).ToList();
 
                 if (neededItems.Any())
@@ -1941,8 +1947,16 @@ namespace IngameScript
                     if (needed < 0)
                         return;
                 }
-            }
 
+                if(itemsInOutInv.Any())
+                {
+                    needed -= itemsInOutInv.Sum(i => i.Amount.ToIntSafe());
+                    if (needed < 0)
+                        return;
+                }
+
+            }
+           
             var count = needed / availAss.Count;
 
             if (count < 1)
@@ -1981,7 +1995,7 @@ namespace IngameScript
             if (nanobotBuildQueue.Any())
             {
                 AddNanobotPartsToProduct();
-                SetSpecialAssemblerMode(MyAssemblerMode.Assembly);
+                SetAssemblerMode(specialAssemblers, MyAssemblerMode.Assembly);
             }
 
             //  monitor.AddInstructions("");
@@ -2188,16 +2202,16 @@ namespace IngameScript
                                            .Select(i => i.GetInventory(0))
                                            .Where(i => i.ItemCount > 0).ToList();
 
-            var busyAssemblers = specialAssemblers.Where(ass => ass.Closed || !ass.IsQueueEmpty).ToList();
+            var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed && ass.OutputInventory.ItemCount == 0 && ass.IsQueueEmpty).ToList();
 
-            if (!trashInventory.Any())
+            if(freeAssemblers.Any())
+            {
+                SetAssemblerMode(freeAssemblers, MyAssemblerMode.Disassembly);
+            }
+            else
+            {
                 return;
-
-            if (busyAssemblers.Any())
-                return;
-
-            SetSpecialAssemblerMode(MyAssemblerMode.Disassembly);
-            ClearSpecialAssemblersQueue();
+            }
 
             List<MyInventoryItem> items = new List<MyInventoryItem>();
 
@@ -2212,8 +2226,6 @@ namespace IngameScript
 
                         if (counter >= maxItemToDisassemble)
                             return;
-
-                        counter++;
 
                         var bd = blueprintData.Where(k => k.Key.Contains(item.Type.SubtypeId));
 
@@ -2233,9 +2245,9 @@ namespace IngameScript
                             return;
                         }
 
-                        var availAss = specialAssemblers.Where(ass => !ass.Closed && ass.CanUseBlueprint(blueprint)).ToList();
+                        var availAss = freeAssemblers.Where(ass => !ass.Closed && ass.CanUseBlueprint(blueprint)).ToList();
                         if (!availAss.Any())
-                            return;
+                            continue;
 
                         var count = (int)item.Amount / availAss.Count;
 
@@ -2253,6 +2265,8 @@ namespace IngameScript
                                 Echo($"Item added: {blueprint.SubtypeId} x {amount} to \n{ass.CustomName}");
                             }
                         }
+
+                        counter++;
                     }
                 }
             }
