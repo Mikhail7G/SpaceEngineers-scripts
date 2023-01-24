@@ -1,30 +1,31 @@
-﻿using System;
-using System.Text;
+﻿using Sandbox.Game.EntityComponents;
+using Sandbox.ModAPI.Ingame;
+using Sandbox.ModAPI.Interfaces;
+using SpaceEngineers.Game.ModAPI.Ingame;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using VRageMath;
-using VRage.Game;
-using Sandbox.ModAPI.Interfaces;
-using Sandbox.ModAPI.Ingame;
-using Sandbox.Game.EntityComponents;
-using VRage.Game.Components;
-using VRage.Collections;
-using VRage.Game.ObjectBuilders.Definitions;
-using VRage.Game.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
-using VRage.Game.ModAPI.Ingame.Utilities;
+using System.Collections.Immutable;
 using System.Linq;
-using System.Diagnostics;
-using System.Net.Http.Headers;
+using System.Text;
+using VRage;
+using VRage.Collections;
+using VRage.Game;
+using VRage.Game.Components;
+using VRage.Game.GUI.TextPanel;
+using VRage.Game.ModAPI.Ingame;
+using VRage.Game.ModAPI.Ingame.Utilities;
+using VRage.Game.ObjectBuilders.Definitions;
+using VRageMath;
 
-
-namespace SpaceEngineers.BaseManagers
+namespace IngameScript
 {
     public sealed class Program : MyGridProgram
     {
         string oreStorageName = "Ore";
         string ingnotStorageName = "Ingnot";
         string componentsStorageName = "Parts";
+        string disassembleStorageName = "Trash";
 
         string lcdInventoryOresName = "LCD Ore";
         string lcdInventoryIngnotsName = "LCD Inventory";
@@ -79,8 +80,10 @@ namespace SpaceEngineers.BaseManagers
         bool useRefinereysOperations = false;
         bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
+        bool trashItems = false;
 
         //bool detectReqBuildComp = false;
+        int maxItemToDisassemble = 2;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -92,7 +95,7 @@ namespace SpaceEngineers.BaseManagers
         int freePartsStorageVolume = 0;
 
         int currentTick = 0;
-       //int assemblersDeadlockTick = 0;
+        //int assemblersDeadlockTick = 0;
 
         int refinereyReloadPrecentage = 70;
         int maxVolumeContainerPercentage = 95;
@@ -123,7 +126,7 @@ namespace SpaceEngineers.BaseManagers
 
         Dictionary<string, string> blueprintData;
 
-       // List<string> orePriority;
+        // List<string> orePriority;
         Dictionary<string, int> orePriority;
 
         //Печки
@@ -153,6 +156,17 @@ namespace SpaceEngineers.BaseManagers
         //Имя и количество компонентов для автостройки
         System.Text.RegularExpressions.Regex ProdItemFullRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
+        /// <summary>
+        /// Режим работы сборщиков 0-нет задач,1-сборка,2-разборка
+        /// </summary>
+        enum assemblerMode
+        {
+            Idle = 0,
+            Assembly = 1,
+            Disassembly = 2,
+        }
+
+        assemblerMode assemblersMode;
 
         /// <summary>
         /// Инициализация компонентов 1 раз при создании объекта
@@ -192,7 +206,8 @@ namespace SpaceEngineers.BaseManagers
             ingnotItems = new List<MyInventoryItem>();
             refinereyEfectivity = new Dictionary<IMyRefinery, float>();
             orePriority = new Dictionary<string, int>();
-            
+
+            assemblersMode = assemblerMode.Idle;
 
             dataSystem = new MyIni();
             monitor = new PerformanceMonitor(this, Me.GetSurface(1));
@@ -205,6 +220,7 @@ namespace SpaceEngineers.BaseManagers
                 Runtime.UpdateFrequency = UpdateFrequency.Update100;
                 Echo($"Script autostart in prog");
             }
+
 
         }
 
@@ -261,7 +277,7 @@ namespace SpaceEngineers.BaseManagers
             }
 
 
-            
+
 
 
             //Ores as Ingots
@@ -363,6 +379,10 @@ namespace SpaceEngineers.BaseManagers
                 case "BUILD":
                     SwitchAutoBuildMode();
                     break;
+
+                case "TRASH":
+                    SwitchTrashItems();
+                    break;
             }
         }
 
@@ -408,7 +428,7 @@ namespace SpaceEngineers.BaseManagers
                 case 5:
                     LoadRefinereys();
                     RefinereysPrintData();
-                    AssemblersClear();
+                    AddItemsToDisassemble();
                     break;
             }
 
@@ -451,6 +471,7 @@ namespace SpaceEngineers.BaseManagers
                 oreStorageName = dataSystem.Get("ContainerNames", "oreStorageName").ToString();
                 ingnotStorageName = dataSystem.Get("ContainerNames", "ingnotStorageName").ToString();
                 componentsStorageName = dataSystem.Get("ContainerNames", "componentsStorageName").ToString();
+                disassembleStorageName = dataSystem.Get("ContainerNames", "disassembleStorageName").ToString();
 
                 //Displays 
                 lcdInventoryOresName = dataSystem.Get("DisplaysNames", "lcdInventoryOresName").ToString();
@@ -505,7 +526,7 @@ namespace SpaceEngineers.BaseManagers
             if (data.Length == 0)
             {
                 Echo("Custom data empty!");
-           
+
                 dataSystem.AddSection("Operations");
                 dataSystem.Set("Operations", "Autorun", false);
                 dataSystem.Set("Operations", "ReplaceIngnots", false);
@@ -533,6 +554,7 @@ namespace SpaceEngineers.BaseManagers
                 dataSystem.Set("ContainerNames", "oreStorageName", "Ore");
                 dataSystem.Set("ContainerNames", "ingnotStorageName", "Ingnot");
                 dataSystem.Set("ContainerNames", "componentsStorageName", "Parts");
+                dataSystem.Set("ContainerNames", "disassembleStorageName", "Trash");
 
                 dataSystem.AddSection("TagsNames");
                 dataSystem.Set("TagsNames", "assemblersSpecialOperationsTagName", "[sp]");
@@ -577,6 +599,7 @@ namespace SpaceEngineers.BaseManagers
             dataSystem.Set("ContainerNames", "oreStorageName", oreStorageName);
             dataSystem.Set("ContainerNames", "ingnotStorageName", ingnotStorageName);
             dataSystem.Set("ContainerNames", "componentsStorageName", componentsStorageName);
+            dataSystem.Set("ContainerNames", "disassembleStorageName", "Trash");
 
             dataSystem.Set("TagsNames", "assemblersSpecialOperationsTagName", assemblersSpecialOperationsName);
             dataSystem.Set("TagsNames", "assemblersBlueprintLeanerName", assemblersBlueprintLeanerName);
@@ -612,12 +635,12 @@ namespace SpaceEngineers.BaseManagers
             }
             else
             {
-               // Echo($"Ingnot LCDs found:{lcdInventoryIngnotsName}");
+                // Echo($"Ingnot LCDs found:{lcdInventoryIngnotsName}");
             }
 
             if ((powerPanel == null) || (powerPanel.Closed))
             {
-               // Echo($"Try find:{lcdPowerSystemName}");
+                // Echo($"Try find:{lcdPowerSystemName}");
                 powerPanel = GridTerminalSystem.GetBlockWithName(lcdPowerSystemName) as IMyTextPanel;
                 if (powerPanel != null)
                 {
@@ -663,7 +686,7 @@ namespace SpaceEngineers.BaseManagers
 
             if ((nanobotDisplay == null) || (nanobotDisplay.Closed))
             {
-               // Echo($"Try find:{lcdNanobotName}");
+                // Echo($"Try find:{lcdNanobotName}");
                 nanobotDisplay = GridTerminalSystem.GetBlockWithName(lcdNanobotName) as IMyTextPanel;
                 if (nanobotDisplay != null)
                 {
@@ -673,12 +696,12 @@ namespace SpaceEngineers.BaseManagers
             }
             else
             {
-               // Echo($"NANOBOT LCDs found:{lcdNanobotName}");
+                // Echo($"NANOBOT LCDs found:{lcdNanobotName}");
             }
 
             if ((refinereysDisplay == null) || (refinereysDisplay.Closed))
             {
-               // Echo($"Try find:{lcdRefinereyName}");
+                // Echo($"Try find:{lcdRefinereyName}");
                 refinereysDisplay = GridTerminalSystem.GetBlockWithName(lcdRefinereyName) as IMyTextPanel;
                 if (refinereysDisplay != null)
                 {
@@ -693,7 +716,7 @@ namespace SpaceEngineers.BaseManagers
 
             if ((oreDisplay == null) || (oreDisplay.Closed))
             {
-               // Echo($"Try find:{lcdInventoryOresName}");
+                // Echo($"Try find:{lcdInventoryOresName}");
                 oreDisplay = GridTerminalSystem.GetBlockWithName(lcdInventoryOresName) as IMyTextPanel;
                 if (oreDisplay != null)
                 {
@@ -703,7 +726,7 @@ namespace SpaceEngineers.BaseManagers
             }
             else
             {
-               // Echo($"Ores LCDs found:{lcdInventoryOresName}");
+                // Echo($"Ores LCDs found:{lcdInventoryOresName}");
             }
 
         }
@@ -796,7 +819,7 @@ namespace SpaceEngineers.BaseManagers
             Echo($"Generators:{generators.Count}");
             Echo($"Gas tanks:{gasTanks.Count}");
 
-           
+
             if (nanobotBuildModule != null)
             {
                 string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
@@ -813,6 +836,7 @@ namespace SpaceEngineers.BaseManagers
             Echo($"Get ore frm outer: {getOreFromTransports}");
             Echo($"Refinerey ops: {useRefinereysOperations}");
             Echo($"Scan blueprints: {assemblerBlueprintGetter}");
+            Echo($"Disasseble: {trashItems}");
 
             Echo(">>>-------------------------------<<<");
         }
@@ -829,7 +853,7 @@ namespace SpaceEngineers.BaseManagers
 
             refinereys = blocks.Where(b => b is IMyRefinery)
                                .Where(r => r.IsFunctional)
-                               .Where(b=>b.CubeGrid==Me.CubeGrid)
+                               .Where(b => b.CubeGrid == Me.CubeGrid)
                                .Select(t => t as IMyRefinery).ToList();
 
             assemblers = blocks.Where(b => b is IMyAssembler)
@@ -867,7 +891,7 @@ namespace SpaceEngineers.BaseManagers
         public void SwitchNanobotMode()
         {
             useNanobotAutoBuild = !useNanobotAutoBuild;
-            if(useNanobotAutoBuild)
+            if (useNanobotAutoBuild)
             {
                 if (nanobotBuildModule != null)
                     nanobotBuildModule.SetValueBool("OnOff", true);
@@ -897,6 +921,11 @@ namespace SpaceEngineers.BaseManagers
         public void SwitchAutoBuildMode()
         {
             useAutoBuildSystem = !useAutoBuildSystem;
+        }
+
+        public void SwitchTrashItems()
+        {
+            trashItems = !trashItems;
         }
 
 
@@ -930,7 +959,7 @@ namespace SpaceEngineers.BaseManagers
             {
                 double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
                 double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
-               
+
                 refs.Key.GetQueue(refinereysItems);
                 refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
                                              $"\nEffectivity: {refs.Value} Load: {loadInput} / {loadOuptut} %", true);
@@ -944,7 +973,7 @@ namespace SpaceEngineers.BaseManagers
             }
             refinereysItems.Clear();
 
-           // monitor.AddInstructions("");
+            // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -963,57 +992,57 @@ namespace SpaceEngineers.BaseManagers
                                                .Select(i => i.GetInventory(0))
                                                .Where(i => !i.IsFull).ToList();
 
-           
-
-                //foreach (var oreInv in oreInventory)
-                //{
-                //    var count = oreInv.ItemCount;
-
-                //    for (int i = 0; i <= count; i++)
-                //    {
-                //        var item = oreInv.GetItemAt(i);
-
-                //        if (item == null)
-                //            continue;
-
-                //        var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
-                //        //if (!priorItem)
 
 
-                //    }
-                //}
+            //foreach (var oreInv in oreInventory)
+            //{
+            //    var count = oreInv.ItemCount;
 
-                //if (detectNewOre)
-                //{
-                //    foreach (var refs in refinereys)
-                //    {
-                //        var count = refs.InputInventory.ItemCount;
+            //    for (int i = 0; i <= count; i++)
+            //    {
+            //        var item = oreInv.GetItemAt(i);
 
-                //        for (var i = 0; i <= count; i++)
-                //        {
-                //            var item = refs.InputInventory.GetItemAt(i);
+            //        if (item == null)
+            //            continue;
 
-                //            if (item == null)
-                //                continue;
+            //        var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
+            //        //if (!priorItem)
 
-                //            var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
 
-                //            if (priorItem)
-                //            {
-                //                foreach(var targInv in targetOreInventory)
-                //                {
-                //                    if (refs.InputInventory.TransferItemTo(targInv, i, null, true))
-                //                        break;
-                //                }
+            //    }
+            //}
 
-                //            }
+            //if (detectNewOre)
+            //{
+            //    foreach (var refs in refinereys)
+            //    {
+            //        var count = refs.InputInventory.ItemCount;
 
-                //        }
-                //    }
-                //}
+            //        for (var i = 0; i <= count; i++)
+            //        {
+            //            var item = refs.InputInventory.GetItemAt(i);
 
-                // monitor.AddInstructions("");
-            }
+            //            if (item == null)
+            //                continue;
+
+            //            var priorItem = orePriority.ContainsKey(item.Value.Type.SubtypeId);
+
+            //            if (priorItem)
+            //            {
+            //                foreach(var targInv in targetOreInventory)
+            //                {
+            //                    if (refs.InputInventory.TransferItemTo(targInv, i, null, true))
+            //                        break;
+            //                }
+
+            //            }
+
+            //        }
+            //    }
+            //}
+
+            // monitor.AddInstructions("");
+        }
 
         /// <summary>
         /// INOP
@@ -1030,7 +1059,7 @@ namespace SpaceEngineers.BaseManagers
             if (!oreInventory.Any())
                 return;
 
-            foreach(var refs in refinereys)
+            foreach (var refs in refinereys)
             {
                 if (refs.Closed)
                     continue;
@@ -1076,7 +1105,7 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void DisplayOres()
         {
-           
+
             if (!useRefinereysOperations)
                 return;
 
@@ -1087,8 +1116,8 @@ namespace SpaceEngineers.BaseManagers
             if (!oreInventory.Any())
             {
                 oreDisplay?.WriteText("", false);
-                oreDisplay?.WriteText($"<<-----------Ores----------->>{oreItems.Count} x {oreItems.Capacity}" +
-                                      $"Use prior:{useRefinereyPriorty} INOP" +
+                oreDisplay?.WriteText($"<<-----------Ores----------->>" +
+                                      $"\nUse prior:{useRefinereyPriorty} INOP" +
                                       $"\nContainers:{oreInventory.Count}" +
                                       $"\nVolume: {0} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
@@ -1109,7 +1138,7 @@ namespace SpaceEngineers.BaseManagers
             {
                 inv.GetItems(oreItems);
 
-                foreach(var item in oreItems)
+                foreach (var item in oreItems)
                 {
                     if (item.Type.TypeId == "MyObjectBuilder_Ore")
                     {
@@ -1120,11 +1149,13 @@ namespace SpaceEngineers.BaseManagers
                         else
                         {
                             oresDict.Add(item.Type.SubtypeId, new OrePriority
-                                                                  { Amount = item.Amount.ToIntSafe(),
-                                                                    Priority = 0 });
+                            {
+                                Amount = item.Amount.ToIntSafe(),
+                                Priority = 0
+                            });
 
-                           // dataSystem.Set("OrePriority", item.Type.SubtypeId, 0);
-                          //  ReloadData();
+                            // dataSystem.Set("OrePriority", item.Type.SubtypeId, 0);
+                            //  ReloadData();
                         }
                     }
                 }
@@ -1160,10 +1191,10 @@ namespace SpaceEngineers.BaseManagers
                     }
                 }
             }
-            
+
 
             oreDisplay?.WriteText("", false);
-            oreDisplay?.WriteText($"<<-----------Ores----------->>{oreItems.Count} x {oreItems.Capacity}" +
+            oreDisplay?.WriteText($"<<-----------Ores----------->>" +
                                   $"\nUse prior:{useRefinereyPriorty}" +
                                   $"\nContainers:{oreInventory.Count}" +
                                   $"\nVolume: {precentageVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
@@ -1235,7 +1266,7 @@ namespace SpaceEngineers.BaseManagers
                     }
                 }
             }
-           // monitor.AddInstructions("");
+            // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1248,14 +1279,14 @@ namespace SpaceEngineers.BaseManagers
                 return;
             }
 
-            foreach(var dict in ingotsDict.ToList())
+            foreach (var dict in ingotsDict.ToList())
             {
                 dict.Value.Current = 0;
             }
-         
+
             totalIngnotStorageVolume = 0;
             freeIngnotStorageVolume = 0;
-           // ingnotsDict.Clear();
+            // ingnotsDict.Clear();
             partsIngotAndOresDictionary.Clear();
 
             var ingnotInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingnotStorageName))
@@ -1264,7 +1295,7 @@ namespace SpaceEngineers.BaseManagers
             freeIngnotStorageVolume = ingnotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalIngnotStorageVolume = ingnotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
 
-            double precentageVolume = Math.Round(((double)freeIngnotStorageVolume / (double)totalIngnotStorageVolume) * 100,1);
+            double precentageVolume = Math.Round(((double)freeIngnotStorageVolume / (double)totalIngnotStorageVolume) * 100, 1);
 
             foreach (var inventory in ingnotInventorys)
             {
@@ -1388,10 +1419,10 @@ namespace SpaceEngineers.BaseManagers
                     }
 
                 }
- 
+
             }
 
-           // monitor.AddInstructions("");
+            // monitor.AddInstructions("");
         }
 
 
@@ -1407,20 +1438,43 @@ namespace SpaceEngineers.BaseManagers
                                             .Select(i => i.GetInventory(0))
                                             .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-            var assInventory = assemblers.Where(a => !a.Closed)
+            var assInventory = assemblers.Where(a => !a.Closed && a.Mode == MyAssemblerMode.Assembly)
                                          .Select(i => i.GetInventory(1))
                                          .Where(i => i.ItemCount > 0);
 
+            ///
+            var disAssInventory = assemblers.Where(a => !a.Closed && a.Mode == MyAssemblerMode.Disassembly)
+                                            .Select(i => i.GetInventory(0))
+                                            .Where(i => i.ItemCount > 0);
+
+            var targetOreInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingnotStorageName))
+                                               .Select(i => i.GetInventory(0))
+                                               .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
             Echo("------Replace parts starting------");
 
-            if ((!targetInventory.Any()) || (!assInventory.Any()))
+            if ((!assInventory.Any()) && (!disAssInventory.Any()))
             {
                 Echo("------No items to transfer-----");
                 return;
             }
 
-            Echo($"Total parts conts:{targetInventory.Count()}");
+            if (!targetInventory.Any())
+            {
+                Echo("------No items container-----");
+                return;
+            }
 
+            if (!targetOreInventory.Any())
+            {
+                Echo("------No ores container-----");
+                return;
+            }
+
+            Echo($"Total parts conts:{targetInventory.Count()}");
+            Echo($"Total ores conts:{targetOreInventory.Count()}");
+
+            //Режим сборки
             foreach (var ass in assInventory)
             {
                 var availConts = targetInventory.Where(inv => inv.IsConnectedTo(ass));
@@ -1451,6 +1505,41 @@ namespace SpaceEngineers.BaseManagers
                     }
                 }
             }
+            //
+
+            //очистка ассемблеров в режиме разбора
+            foreach (var ass in disAssInventory)
+            {
+                var availConts = targetOreInventory.Where(inv => inv.IsConnectedTo(ass));
+
+                if (!availConts.Any())
+                {
+                    Echo($"No reacheable containers, check connection!");
+                    continue;
+                }
+
+                var currentCargo = ass.ItemCount;
+                var targInv = availConts.First().Owner as IMyCargoContainer;
+
+                for (int i = 0; i <= currentCargo; i++)
+                {
+                    var item = ass.GetItemAt(0);
+
+                    if (item == null)
+                        continue;
+
+                    if (ass.TransferItemTo(availConts.First(), 0, null, true))
+                    {
+                        Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    }
+                    else
+                    {
+                        Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    }
+                }
+            }
+            //
+
             // monitor.AddInstructions("");
         }
 
@@ -1461,16 +1550,16 @@ namespace SpaceEngineers.BaseManagers
         {
             if (partsPanel == null)
                 return;
-     
+
 
             totalPartsStorageVolume = 0;
             freePartsStorageVolume = 0;
-          
-            foreach(var dict in partsDictionary)
+
+            foreach (var dict in partsDictionary)
             {
                 dict.Value.Current = 0;
             }
-            foreach(var dict in ammoDictionary)
+            foreach (var dict in ammoDictionary)
             {
                 dict.Value.Current = 0;
             }
@@ -1633,7 +1722,7 @@ namespace SpaceEngineers.BaseManagers
                     partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
-           // monitor.AddInstructions("");
+            // monitor.AddInstructions("");
         }//DisplayParts()
 
         /// <summary>
@@ -1662,7 +1751,7 @@ namespace SpaceEngineers.BaseManagers
 
             PowerSystemDetailed();
 
-           // monitor.AddInstructions("");
+            // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1719,7 +1808,7 @@ namespace SpaceEngineers.BaseManagers
                 }
             }
 
-           // monitor.AddInstructions("");
+            // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1727,7 +1816,7 @@ namespace SpaceEngineers.BaseManagers
         /// </summary>
         public void PrintPowerStatus()
         {
-            powerPanel?.WriteText("", false); 
+            powerPanel?.WriteText("", false);
             powerPanel?.WriteText("<--------Power status--------->", true);
             powerPanel?.WriteText($"\nBatteryStatus:" +
                                    $"\nPower Load: {powerLoadPercentage} %" +
@@ -1740,31 +1829,6 @@ namespace SpaceEngineers.BaseManagers
 
 
         /// <summary>
-        /// Очистка сборщиков в случае если простой более нескольких циклов
-        /// </summary>
-        public void AssemblersClear()
-        {
-            //if (assemblerBlueprintGetter)
-            //    return;
-
-            //if (!detectReqBuildComp)
-            //    return;
-
-            //var loadedAssemblers = assemblers.Where(ass => !ass.Closed && !ass.IsProducing).ToList();
-            //if (loadedAssemblers.Any())
-            //    assemblersDeadlockTick++;
-
-            //if (assemblersDeadlockTick > 1)
-            //{
-            //    foreach (var ass in loadedAssemblers)
-            //    {
-            //        ass.ClearQueue();
-            //        assemblersDeadlockTick = 0;
-            //    }
-            //}
-        }
-
-        /// <summary>
         /// Сислема заказа производства недостающих компонентов
         /// </summary>
         public void PartsAutoBuild()
@@ -1775,38 +1839,68 @@ namespace SpaceEngineers.BaseManagers
             //if (useNanobotAutoBuild)
             //    return;
 
+            assemblersMode = assemblerMode.Idle;
 
-            var busyAssemblers = specialAssemblers.Where(ass => ass.Closed ||  ass.OutputInventory.ItemCount > 0).ToList();
+            var busyAssemblers = specialAssemblers.Where(ass => ass.Closed || ass.OutputInventory.ItemCount > 0).ToList();
             if (busyAssemblers.Any())
                 return;
 
             Echo("------Auto build system-------");
 
-            foreach(var key in partsDictionary)
+            var reqItems = partsDictionary.Where(k => k.Value.Current < k.Value.Requested);
+            var reqIngnotsItem = buildedIngnotsDictionary.Where(k => k.Value.Current < k.Value.Requested);
+
+            if (reqItems.Any())
             {
-                if (key.Value.Current < key.Value.Requested)
+                foreach (var key in reqItems)
                 {
                     AddItemToProduct(key, specialAssemblers);
-                   // detectReqBuildComp = true;
                 }
             }
 
-            foreach (var key in buildedIngnotsDictionary)
+            if (reqIngnotsItem.Any())
             {
-                if (key.Value.Current < key.Value.Requested)
+                foreach (var key in reqIngnotsItem)
                 {
                     AddItemToProduct(key, specialAssemblers);
-                   // detectReqBuildComp = true;
                 }
             }
 
-           // monitor.AddInstructions("");
+           
+
+
         }//PartsAutoBuild()
 
         /// <summary>
-        /// Добавить недостающий предмет на автосборку
+        /// Смена режимов сборщиков
         /// </summary>
-        private void AddItemToProduct(KeyValuePair<string,ItemBalanser> key, List<IMyAssembler> availAssemblers)
+        void SetSpecialAssemblerMode(MyAssemblerMode mode)
+        {
+            foreach (var ass in specialAssemblers)
+            {
+                if (!ass.Closed)
+                {
+                    ass.Mode = mode;
+                }
+            }
+
+        }
+
+        void ClearSpecialAssemblersQueue()
+        {
+            foreach (var ass in specialAssemblers)
+            {
+                if (!ass.Closed)
+                {
+                    ass.ClearQueue();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Добавить недостающий предмет на автосборку IEnumerable<KeyValuePair<string,ItemBalanser>> key
+        /// </summary>
+        private void AddItemToProduct(KeyValuePair<string, ItemBalanser> key, List<IMyAssembler> availAssemblers)
         {
             var needed = key.Value.Requested - key.Value.Current;
 
@@ -1841,7 +1935,7 @@ namespace SpaceEngineers.BaseManagers
 
                 var neededItems = items.Where(i => i.BlueprintId.Equals(blueprint)).ToList();
 
-                if(neededItems.Any())
+                if (neededItems.Any())
                 {
                     needed -= neededItems.Sum(i => i.Amount.ToIntSafe());
                     if (needed < 0)
@@ -1885,19 +1979,22 @@ namespace SpaceEngineers.BaseManagers
             Echo($"Nanobot total components:{nanobotBuildQueue.Count}");
 
             if (nanobotBuildQueue.Any())
+            {
                 AddNanobotPartsToProduct();
+                SetSpecialAssemblerMode(MyAssemblerMode.Assembly);
+            }
 
-          //  monitor.AddInstructions("");
+            //  monitor.AddInstructions("");
         }
 
         public void AddNanobotPartsToProduct()
         {
-           
+
             nanobuildReady = true;
 
             foreach (var ass in specialAssemblers)
             {
-                if(!ass.IsProducing)
+                if (!ass.IsProducing)
                 {
                     ass.ClearQueue();
                 }
@@ -1936,7 +2033,7 @@ namespace SpaceEngineers.BaseManagers
                 if (count < 1)
                     count = 1;
 
-                foreach(var ass in availAss)
+                foreach (var ass in availAss)
                 {
                     VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
                     ass.AddQueueItem(blueprint, amount);
@@ -1966,7 +2063,7 @@ namespace SpaceEngineers.BaseManagers
                 nanobotDisplay?.WriteText($"\n{comp.Key.SubtypeName} X {comp.Value}", true);
             }
 
-          //  monitor.AddInstructions("");
+            //  monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1993,14 +2090,14 @@ namespace SpaceEngineers.BaseManagers
                 SpecialAssemblerLastName = ass.CustomName;
                 ass.CustomName = assemblersBlueprintLeanerName + "Assembler ready to copy bps";
                 ass.ClearQueue();
-               // ass.SetValueBool("OnOff", false);
+                // ass.SetValueBool("OnOff", false);
                 ass.Enabled = false;
             }
             else
             {
                 ass.CustomName = SpecialAssemblerLastName;
                 ass.ClearQueue();
-               // ass.SetValueBool("OnOff", true);
+                // ass.SetValueBool("OnOff", true);
                 ass.Enabled = true;
             }
         }
@@ -2056,7 +2153,7 @@ namespace SpaceEngineers.BaseManagers
 
             if (assInv.TransferItemTo(targetInventory.First(), 0, null, true))
                 ass.Enabled = false;
-               // ass.SetValueBool("OnOff", false);
+            // ass.SetValueBool("OnOff", false);
 
             if (!blueprintData.ContainsKey(lastDetectedConstructItem.Value.Type.SubtypeId))
             {
@@ -2074,8 +2171,93 @@ namespace SpaceEngineers.BaseManagers
             }
 
             ReloadData();
-          //  monitor.AddInstructions("");
+            //  monitor.AddInstructions("");
         }
+
+        /// <summary>
+        /// Запуск очистки контейнеров с мусором
+        /// </summary>
+        public void AddItemsToDisassemble()
+        {
+            if (!trashItems)
+                return;
+
+            int counter = 0;
+
+            var trashInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(disassembleStorageName)))
+                                           .Select(i => i.GetInventory(0))
+                                           .Where(i => i.ItemCount > 0).ToList();
+
+            var busyAssemblers = specialAssemblers.Where(ass => ass.Closed || !ass.IsQueueEmpty).ToList();
+
+            if (!trashInventory.Any())
+                return;
+
+            if (busyAssemblers.Any())
+                return;
+
+            SetSpecialAssemblerMode(MyAssemblerMode.Disassembly);
+            ClearSpecialAssemblersQueue();
+
+            List<MyInventoryItem> items = new List<MyInventoryItem>();
+
+            foreach (var inventory in trashInventory)
+            {
+                inventory.GetItems(items);
+
+                foreach (var item in items)
+                {
+                    if (item.Type.TypeId == "MyObjectBuilder_Component")
+                    {
+
+                        if (counter >= maxItemToDisassemble)
+                            return;
+
+                        counter++;
+
+                        var bd = blueprintData.Where(k => k.Key.Contains(item.Type.SubtypeId));
+
+                        if (!bd.Any())
+                        {
+                            Echo($"WARNING no blueprint: {item.Type.SubtypeId}");
+                            return;
+                        }
+
+                        string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Value;
+
+                        MyDefinitionId blueprint;
+
+                        if (!MyDefinitionId.TryParse(name, out blueprint))
+                        {
+                            Echo($"WARNING cant parse: {name}");
+                            return;
+                        }
+
+                        var availAss = specialAssemblers.Where(ass => !ass.Closed && ass.CanUseBlueprint(blueprint)).ToList();
+                        if (!availAss.Any())
+                            return;
+
+                        var count = (int)item.Amount / availAss.Count;
+
+                        if (count < 1)
+                        {
+                            availAss[0].AddQueueItem(blueprint, (VRage.MyFixedPoint)1);
+                        }
+                        else
+                        {
+                            foreach (var ass in availAss)
+                            {
+                                VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
+                                ass.AddQueueItem(blueprint, amount);
+
+                                Echo($"Item added: {blueprint.SubtypeId} x {amount} to \n{ass.CustomName}");
+                            }
+                        }
+                    }
+                }
+            }
+
+        }//AddItemsToDisassemble
 
         public class ItemBalanser
         {
@@ -2087,7 +2269,7 @@ namespace SpaceEngineers.BaseManagers
         {
             public int Priority { set; get; } = 0;
             public int Amount { set; get; } = 0;
-          
+
         }
 
         public class PerformanceMonitor
@@ -2154,11 +2336,11 @@ namespace SpaceEngineers.BaseManagers
                 if (MaxInstructionsPerTick < avrInst)
                     MaxInstructionsPerTick = avrInst;
 
-              
+
 
                 avrInst = 0;
 
-                AverageTimePerTick = avrTime /  CallPerTick;
+                AverageTimePerTick = avrTime / CallPerTick;
                 avrTime = 0;
 
                 CallPerTick = 0;
@@ -2174,97 +2356,8 @@ namespace SpaceEngineers.BaseManagers
             }
 
         }
-        
+
 
         ///END OF SCRIPT///////////////
     }
-
 }
-
-//[Blueprints]
-//AluminiumPlate = AluminiumPlate
-//BulletproofGlass = BulletproofGlass
-//CementMixItem = CementMixItem
-//Computer = ComputerComponent
-//Construction = ConstructionComponent
-//CopperPlate = CopperPlate
-//Detector = DetectorComponent
-//Display = Display
-//Explosives = ExplosivesComponent
-//Girder = GirderComponent
-//GravityGenerator = GravityGeneratorComponent
-//InteriorPlate = InteriorPlate
-//LargeTube = LargeTube
-//Medical = MedicalComponent
-//MediumCopperTube = MediumCopperTube
-//MetalGrid = MetalGrid
-//Motor = MotorComponent
-//PowerCell = PowerCell
-//RadioCommunication = RadioCommunicationComponent
-//Reactor = ReactorComponent
-//ShieldComponent = ShieldComponentBP
-//SmallCopperTube = SmallCopperTube
-//SmallTube = SmallTube
-//SolarCell = SolarCell
-//SteelBolt = SteelBolt
-//SteelPlate = SteelPlate
-//Superconductor = Superconductor
-//Thrust = ThrustComponent
-//AluminiumFanBlade = AluminiumFanBlade
-//BallBearing = BallBearing
-//CeramicPlate = CeramicPlate
-//Chain = Chain
-//CopperZincPlate = CopperZincPlate
-//DenseSteelPlate = DenseSteelPlate
-//LargeCopperTube = LargeCopperTube
-//Neutronium = Neutronium
-//PolyCarbonatePlate = PolyCarbonatePlate
-//PulseCannonConstructionBoxS = PulseCannonConstructionComponentS
-//Reinforced_Mesh = Reinforced_Mesh
-//ReinforcedPlate = ReinforcedPlate
-//LaserConstructionBoxS = SmallLaserConstructionComponentS
-//SteelPulley = SteelPulley
-//SteelSpring = SteelSpring
-//StrongCopperPlate = StrongCopperPlate
-//AdvancedReactorBundle = AdvancedReactorBundle
-//Cutters = Cutters
-//DiamondTooling = DiamondTooling
-//Filter = Filter
-//KC_Component = KC_Component
-//LaserConstructionBoxL = LaserConstructionComponent
-//Octocore = OctocoreComponent
-//PulseCannonConstructionBoxL = PulseCannonConstructionComponent
-//TitaniumAlloyPlate = TitaniumAlloyPlate
-//TitaniumPlate = TitaniumPlate
-//StrongTitanPlate = TitanPlate
-//TungstenAlloyPlate = TungstenAlloyPlate
-//dcZincPlate = ZincPlate
-//AdvancedThrustModule = AdvancedThrustModule
-//ArcReactorcomponent = ArcReactorcomponent
-//CryoPump = CryoPump
-//K-Crystal_Interface = K-Crystal_Interface
-//largehydrogeninjector = largehydrogeninjector
-//Nadium_Radioactive = Radioactive_Nadium_Ingot
-//Trinium = Trinium
-//Xenucore = XenucoreComponent
-//Dynamite = Dynamite
-//RTG_Plutonium238 = Plutonium238_RTG_BPDef
-//BareBrassWire = BareBrassWire
-//BrazingRod = BrazingRod
-//CapacitorBank = CapacitorBankComponent
-//CoolingHeatsink = CoolingHeatsinkComponent
-//Diode = Diode
-//EnergyCristal = EnergyCristal
-//FocusPrysm = FocusPrysmComponent
-//HeatSink-T2 = HeatSink-T2
-//LeadAcidCell = LeadAcidCell
-//LiIonCell = LiIonCell
-//LithiumPowerCell = LithiumPowerCell
-//PowerCoupler = PowerCouplerComponent
-//PWMCircuit = PWMCircuitComponent
-//Resistor = Resistor
-//SafetyBypass = SafetyBypassComponent
-//Sensor = Sensor
-//ShieldFrequencyModule = ShieldFrequencyModuleComponent
-//Transistor = Transistor
-//WarpCell = WarpCell

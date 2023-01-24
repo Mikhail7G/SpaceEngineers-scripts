@@ -12,6 +12,7 @@ using VRage.Collections;
 using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using static SpaceEngineers.ShipManagers.INOP.Nanodrill.Program;
 
 namespace SpaceEngineers.ShipManagers.DisplayTester
 {
@@ -19,46 +20,79 @@ namespace SpaceEngineers.ShipManagers.DisplayTester
     {
 
         /////////////////////////////////////////////////////////////
-        IMyTextPanel debugPanel;
 
+        string guidanceBlockNameLarge = "LB_Torpedo_Payload_GuidanceBlock_Large";
+
+        List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+        List<IMyTerminalBlock> guidances = new List<IMyTerminalBlock>();
 
         public Program()
         {
-           
+           GetGuidances();
 
         }
 
-        public void Main(string args)
+        public void Main(string args, UpdateType updateType)
         {
-            debugPanel = GridTerminalSystem.GetBlockWithName("LCDText") as IMyTextPanel;
-            TextWrite();
-            //BuilderWrite();
+
+            if ((updateType & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
+                Commands(args);
+
         }
 
-        public void TextWrite()
+        void Commands(string args)
         {
-            debugPanel?.WriteText("", false);
+            string com = args.ToUpper();
 
-            for(int i=0;i<500;i++)
+            switch (com)
             {
-                debugPanel?.WriteText("\n"+i.ToString(), true);
+                case "LOCK":
+                    LockTarget();
+                    break;
+
+                case "FIRE":
+                    FireOnce();
+                    break;
             }
-            debugPanel?.WriteText("\nINSTR:" + Runtime.CurrentInstructionCount.ToString(), true);
         }
 
-        public void BuilderWrite()
+        void LockTarget()
         {
-            StringBuilder build = new StringBuilder();
-            debugPanel?.WriteText("", false);
-
-            for (int i = 0; i < 500; i++)
+            foreach(var guidance in guidances)
             {
-                // debugPanel?.WriteText("\n" + i.ToString(), true);
-                build.AppendLine(i.ToString());
+                if (guidance.Closed)
+                    continue;
+
+                guidance.ApplyAction("Adn.ActionLockOnTarget");
             }
-            debugPanel?.WriteText(build, true);
-            debugPanel?.WriteText("\nINSTR:" + Runtime.CurrentInstructionCount.ToString(), true);
         }
+
+        void FireOnce()
+        {
+            GetGuidances();
+
+            if (guidances.Any())
+            {
+                guidances[0].ApplyAction("Adn.ActionLaunchMissile");
+            }
+        }
+
+        void GetGuidances()
+        {
+            blocks.Clear();
+            guidances.Clear();
+
+            GridTerminalSystem.GetBlocks(blocks);
+
+            if (Me.CubeGrid.GridSizeEnum == MyCubeSize.Large)
+            {
+                guidances = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == guidanceBlockNameLarge).ToList();
+            }
+
+            Echo($"Guidances:{guidances.Count}");
+        }
+
+
 
 
 

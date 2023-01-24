@@ -15,3 +15,11 @@ V1
 2:GetShipLocalDir,iZ
 2:dir,n
 2:distance,p7
+2:MissileFire,h
+2:batt,R
+2:ReplaceParts,iX
+2:targetInventory,f
+2:PartsAutoBuild,w
+2:busyAssemblers,N
+2:ass,M
+2:key,a

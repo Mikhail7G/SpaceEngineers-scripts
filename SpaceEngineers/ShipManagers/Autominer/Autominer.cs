@@ -87,9 +87,9 @@ namespace SpaceEngineers.Autominer.Autominer
                  $"\nShaft size: {shaftSize} m" +
                  $"\nRadio alt: {mover.GetPlanetElevation()} m" +
                  $"\nState: {state}" +
-                 $"\nShafts:{maxShafts} ^2" +
-                 $"\nLeftDrift:{leftShaftDrift}" +
-                 $"\nUpDrift:{upShaftDrift}");
+                 $"\nShafts: {maxShafts * 2 + maxShafts} X {maxShafts * 2 + maxShafts} " +
+                 $"\nNext:\nLeftDrift: {leftShaftDrift}" +
+                 $"\nUpDrift: {upShaftDrift}");
 
             mover.Update();
 
@@ -177,23 +177,29 @@ namespace SpaceEngineers.Autominer.Autominer
                 initShaftPos = mover.GetPosition();
                 state = 0;
             }
+
+            if (!mover.MoveToTarget && state == 3)
+            {
+                mover.FlyTo(initMiningPos, 5);
+                state = -1;
+            }
         }
 
         public void NextShaft()
         {
             leftShaftDrift -= 1;
 
+            if (Math.Abs(upShaftDrift) > maxShafts)
+            {
+                mover.FullStop();
+                state = 3;
+                return;
+            }
+
             if (Math.Abs(leftShaftDrift) > maxShafts)
             {
                 leftShaftDrift = 1 * maxShafts;
                 upShaftDrift -= 1;
-
-                if (Math.Abs(upShaftDrift) > maxShafts)
-                {
-                    mover.FullStop();
-                    nextDriftState = 0;
-                    state = -1;
-                }
             }
         }
       
@@ -294,10 +300,10 @@ namespace SpaceEngineers.Autominer.Autominer
             switch (comm)
             {
                 case "MINE":
-                    mover.ForwardMove(miningSpeed);
+                   // mover.ForwardMove(miningSpeed);
                     initMiningPos = mover.GetPosition();
                     initShaftPos = initMiningPos;
-                    state = 0;
+                    state = 1;
                     upShaftDrift = 1 * maxShafts;
                     leftShaftDrift = 1 * maxShafts;
                     break;

@@ -561,17 +561,22 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
             {
                 string com = command.ToUpper();
 
-                if (com.Contains("RANGE"))
+                if (com.Contains("BULLETSPEED"))
                 {
                     try
                     {
-                        var dist = com.Split(':');
-
-                        if (dist.Any())
+                        var str = com.Split(':');
+                        
+                        if (str.Any())
                         {
-                            if (float.TryParse(dist[1], out bulletSpeed))
+                            if (float.TryParse(str[1], out bulletSpeed))//скорость снарядов
                             {
                                 LockTarget();
+                            }
+
+                            if (float.TryParse(str[2], out AmmoAcc))//есть ли у них ускорение
+                            {
+                              
                             }
                         }
                     }
@@ -645,7 +650,6 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                                  $"\nTrack: {enableFollowing}" +
                                  $"\nDesignator mode: {designatorMode}");
 
-                designatorRadar?.WriteText("", false);
 
                 detectedTargets.Clear();
 
@@ -671,23 +675,31 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                     }
                 }
 
-
+                designatorRadar?.WriteText("", false);
                 designatorRadar?.WriteText($"Passive radar trg:{detectedTargets.Count} locked:{enableFollowing}", true);
 
                 foreach (var entity in detectedTargets)
                 {
                     var target = entity.Value;
-                    var dir = target.Position - controller.GetPosition();
+                    var dir = controller.GetPosition() - target.Position;
                     var dist = Vector3D.Distance(target.Position, controller.GetPosition());
                     var fwdDir = Vector3D.Normalize(dir).Dot(controller.WorldMatrix.Forward);
                     var speed = entity.Value.Velocity.Length();
 
+                    dir = VectorTransform(dir, controller.WorldMatrix.GetOrientation());
+
+                    double azimuth = (float)Math.Atan2(-dir.X, dir.Z) * 180 / 3.14f;
+                    double elevation = (float)Math.Asin(dir.Y / dir.Length()) * 180 / 3.14f;
+
+                    string azLoc = azimuth > 0 ? "R" : "L";
+                    string elLoc = elevation > 0 ? "D" : "U";
+
                     designatorRadar?.WriteText($"\n-----Target------" +
                                                $"\nType:{target.Type}" +
-                                               $"\nSignature:{target.BoundingBox.Volume}" +
-                                               $"\nDir:{fwdDir}" +
-                                               $"\nDist:{dist}" +
-                                               $"\nSpeed:{speed}", true);
+                                               $"\nAz:{Math.Round(azimuth, 2)} {azLoc} El:{Math.Round(elevation, 2)} {elLoc}" +
+                                               $"\nDir:{Math.Round(fwdDir,2)}" +
+                                               $"\nDist:{Math.Round(dist,1)}" +
+                                               $"\nSpeed:{Math.Round(speed,1)}", true);
                 }
             }
 
@@ -765,6 +777,11 @@ namespace SpaceEngineers.ShipManagers.Components.TurretController
                     gyro.Pitch = (float)axis.Dot(gyro.WorldMatrix.Right) * GyroMult;
                     gyro.Roll = (float)axis.Dot(gyro.WorldMatrix.Backward) * GyroMult;
                 }
+            }
+
+            public Vector3D VectorTransform(Vector3D vec, MatrixD orientation)
+            {
+                return new Vector3D(vec.Dot(orientation.Right), vec.Dot(orientation.Up), vec.Dot(orientation.Backward));
             }
 
 

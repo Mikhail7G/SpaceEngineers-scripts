@@ -657,6 +657,7 @@ namespace SpaceEngineers.AntiAirMissile
             public IMyRemoteControl RemotControl;//дистанционный контроль
             public IMyShipMergeBlock MergeBlock;//блок соеденителя
             public IMySensorBlock SensorBlock;
+            public IMyRadioAntenna RadioAnt;
 
             public double FinalApproachDistance { set; get; } = 1000;//дистанция финального наведения на цель
             public float TotalBatteryPower { set; get; } = 0;//заряд батарей
@@ -721,6 +722,8 @@ namespace SpaceEngineers.AntiAirMissile
                 MergeBlock = groupBlocks.FirstOrDefault(b => b is IMyShipMergeBlock) as IMyShipMergeBlock;
                 SensorBlock = groupBlocks.FirstOrDefault(b => b is IMySensorBlock) as IMySensorBlock;
 
+                RadioAnt = groupBlocks.FirstOrDefault(b => b is IMyRadioAntenna) as IMyRadioAntenna;
+
                 if (RemotControl != null)
                 {
 
@@ -761,6 +764,17 @@ namespace SpaceEngineers.AntiAirMissile
                     truster.Enabled = false;
                 }
 
+                foreach (var gyro in Gyros)
+                {
+                    // gyro.SetValueBool("Override", true);
+                    gyro.Enabled = false;
+                    gyro.GyroOverride = false;
+                }
+
+                if (RadioAnt != null)
+                {
+                    RadioAnt.Enabled = false;
+                }
 
                 if (SensorBlock != null)
                 {
@@ -951,7 +965,8 @@ namespace SpaceEngineers.AntiAirMissile
 
                     foreach (var gyro in Gyros)
                     {
-                       // gyro.SetValueBool("Override", true);
+                        // gyro.SetValueBool("Override", true);
+                        gyro.Enabled = true;
                         gyro.GyroOverride = true;
                     }
 
@@ -966,12 +981,17 @@ namespace SpaceEngineers.AntiAirMissile
                         head.IsArmed = true;
                     }
 
-                    if(SensorBlock!=null)
+                    if (SensorBlock != null)
                     {
                         SensorBlock.Enabled = true;
                     }
 
-                   // MergeBlock.SetValueBool("OnOff", false);
+                    if (RadioAnt != null)
+                    {
+                        RadioAnt.Enabled = true;
+                    }
+
+                    // MergeBlock.SetValueBool("OnOff", false);
                     MergeBlock.Enabled = false;
                 }
             }
