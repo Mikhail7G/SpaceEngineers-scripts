@@ -112,13 +112,14 @@ namespace IngameScript.BaseManager.BaseNew
         string SpecialAssemblerLastName = "";
 
         //словарь готовых компонентов и словарь запросов на автосборку компонентов
-        Dictionary<string, OrePriority> oresDict;
+        Dictionary<string, int> partsIngotAndOresDictionary;
+
         Dictionary<string, ItemBalanser> ingotsDict;
         Dictionary<string, ItemBalanser> partsDictionary;
-        Dictionary<string, int> partsIngotAndOresDictionary;
         Dictionary<string, ItemBalanser> ammoDictionary;
         Dictionary<string, ItemBalanser> buildedIngnotsDictionary;
-        Dictionary<string, int> reactorFuelLimitter;
+
+        Dictionary<string, OrePriority> oresDict;
 
         Dictionary<string, string> blueprintData;
 
@@ -181,7 +182,6 @@ namespace IngameScript.BaseManager.BaseNew
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
             ammoDictionary = new Dictionary<string, ItemBalanser>();
             buildedIngnotsDictionary = new Dictionary<string, ItemBalanser>();
-            reactorFuelLimitter = new Dictionary<string, int>();
 
             blueprintData = new Dictionary<string, string>();
 
@@ -355,8 +355,15 @@ namespace IngameScript.BaseManager.BaseNew
                     break;
                 case 1:
                     DisplayOres();
+                    RefinereysPrintData();
+                    break;
+                case 2:
+                    DisplayIngnots();
+                    break;
+                case 3:
                     DisplayParts();
                     break;
+
             }
 
             currentTick++;
@@ -532,7 +539,6 @@ namespace IngameScript.BaseManager.BaseNew
             Me.CustomData = dataSystem.ToString();
         }
 
-
         /// <summary>
         /// Поиск необходимых дисплеев, можно без них
         /// </summary>
@@ -623,8 +629,6 @@ namespace IngameScript.BaseManager.BaseNew
             }
 
         }
-
-       
 
         /// <summary>
         /// Печатаем текст в терминал блока
@@ -808,6 +812,51 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
+        /// Вывод информации о заполнении печек и наличию модов
+        /// </summary>
+        public void RefinereysPrintData()
+        {
+            if (refinereysDisplay == null)
+                return;
+
+            foreach (var refs in refinereys.Where(refs => (!refs.Closed) && (refs is IMyUpgradableBlock)))
+            {
+                var upgradeBlock = refs as IMyUpgradableBlock;
+                upgradeBlock?.GetUpgrades(out refsUpgradeList);
+
+                if (refinereyEfectivity.ContainsKey(refs))
+                {
+                    refinereyEfectivity[refs] = refsUpgradeList["Effectiveness"];
+                }
+                else
+                {
+                    refinereyEfectivity.Add(refs, refsUpgradeList["Effectiveness"]);
+                }
+            }
+
+            refinereysDisplay?.WriteText("", false);
+            refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
+
+            foreach (var refs in refinereyEfectivity)
+            {
+                double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
+                double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
+
+                refs.Key.GetQueue(refinereysItems);
+                refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
+                                             $"\nEffectivity: {refs.Value} Load: {loadInput} / {loadOuptut} %", true);
+
+                foreach (var bp in refinereysItems)
+                {
+                    refinereysDisplay?.WriteText($"\n{bp.BlueprintId.SubtypeName} X Ore:{bp.Amount}", true);
+                }
+                refinereysDisplay?.WriteText("\n----------", true);
+
+            }
+            refinereysItems.Clear();
+        }
+
+        /// <summary>
         /// Вывод информации о компонентах на дисплей
         /// </summary>
         public void DisplayParts()
@@ -985,7 +1034,77 @@ namespace IngameScript.BaseManager.BaseNew
                 return;
             }
 
+            foreach (var dict in ingotsDict.ToList())
+            {
+                dict.Value.Current = 0;
+            }
 
+            partsIngotAndOresDictionary.Clear();
+            totalIngnotStorageVolume = 0;
+            freeIngnotStorageVolume = 0;
+
+            var ingnotInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingnotStorageName))
+                                             .Select(i => i.GetInventory(0));
+
+            freeIngnotStorageVolume = ingnotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalIngnotStorageVolume = ingnotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
+
+            double precentageVolume = Math.Round(((double)freeIngnotStorageVolume / (double)totalIngnotStorageVolume) * 100, 1);
+
+            //Проверка контейнеров
+            foreach (var inventory in ingnotInventorys)
+            {
+                inventory.GetItems(ingnotItems);
+
+                foreach (var item in ingnotItems)
+                {
+                    if (item.Type.TypeId == "MyObjectBuilder_Ingot")//слитки 
+                    {
+                        if (ingotsDict.ContainsKey(item.Type.SubtypeId))
+                        {
+                            ingotsDict[item.Type.SubtypeId].Current += item.Amount.ToIntSafe();
+                        }
+                        else
+                        {
+                            ingotsDict.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
+                        }
+                    }
+
+                    if (item.Type.TypeId == "MyObjectBuilder_Ore")//построенная руда  
+                    {
+                        if (partsIngotAndOresDictionary.ContainsKey(item.Type.SubtypeId))
+                        {
+                            partsIngotAndOresDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+                        }
+                        else
+                        {
+                            partsIngotAndOresDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                        }
+                    }
+
+                }
+                ingnotItems.Clear();
+            }//
+
+            //Вывод на дисплей
+            ingnotPanel?.WriteText("", false);
+            ingnotPanel?.WriteText($"<<-----------Ingnots----------->>" +
+                                   $"\nContainers:{ingnotInventorys.Count()}" +
+                                   $"\nVolume: {precentageVolume} % {freeIngnotStorageVolume} / {totalIngnotStorageVolume} T", true);
+
+            ingnotPanel?.WriteText("\n<<-----------Ingnots----------->>", true);
+
+            foreach (var dict in ingotsDict.OrderBy(k => k.Key))
+            {
+                ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} ", true);
+            }
+
+            ingnotPanel?.WriteText("\n<<-----------Ores----------->>", true);
+
+            foreach (var dict in partsIngotAndOresDictionary.OrderBy(k => k.Key))
+            {
+                ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
+            }
         }
 
         /// <summary>
