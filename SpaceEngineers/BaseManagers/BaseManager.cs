@@ -1437,18 +1437,18 @@ namespace IngameScript
             if (!needReplaceParts)
                 return;
 
-            var targetInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
+            var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
                                             .Select(i => i.GetInventory(0))
                                             .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-            var assInventory = assemblers.Where(a => !a.Closed && a.Mode == MyAssemblerMode.Assembly)
+            var assInventory = assemblers.Where(a => !a.Closed)
                                          .Select(i => i.GetInventory(1))
                                          .Where(i => i.ItemCount > 0);
 
-            ///
-            var disAssInventory = assemblers.Where(a => !a.Closed && a.Mode == MyAssemblerMode.Disassembly)
-                                            .Select(i => i.GetInventory(0))
-                                            .Where(i => i.ItemCount > 0);
+
+            var assInputInventory = assemblers.Where(a => !a.Closed)
+                                              .Select(i => i.GetInventory(0))
+                                              .Where(i => i.ItemCount > 0);
 
             var targetOreInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingnotStorageName))
                                                .Select(i => i.GetInventory(0))
@@ -1456,13 +1456,13 @@ namespace IngameScript
 
             Echo("------Replace parts starting------");
 
-            if ((!assInventory.Any()) && (!disAssInventory.Any()))
+            if ((!assInventory.Any()) && (!assInputInventory.Any()))
             {
                 Echo("------No items to transfer-----");
                 return;
             }
 
-            if (!targetInventory.Any())
+            if (!targetItemInventory.Any())
             {
                 Echo("------No items container-----");
                 return;
@@ -1474,13 +1474,38 @@ namespace IngameScript
                 return;
             }
 
-            Echo($"Total parts conts:{targetInventory.Count()}");
+            Echo($"Total parts conts:{targetItemInventory.Count()}");
             Echo($"Total ores conts:{targetOreInventory.Count()}");
 
-            //Режим сборки
-            foreach (var ass in assInventory)
+            switch(assemblersMode)
             {
-                var availConts = targetInventory.Where(inv => inv.IsConnectedTo(ass));
+                case assemblerMode.Idle:
+
+                    if (assemblers.Where(ass => ass.IsQueueEmpty).Any())
+                    {
+                        TransferItems(assInventory, targetItemInventory);
+                        TransferItems(assInputInventory, targetOreInventory);
+                    }
+                    break;
+
+                case assemblerMode.Assembly:
+                    TransferItems(assInventory, targetItemInventory);
+                    break;
+
+                case assemblerMode.Disassembly:
+                    TransferItems(assInputInventory, targetOreInventory);
+                    break;
+
+            }
+
+           
+        }
+
+        public void TransferItems(IEnumerable<IMyInventory> from,IEnumerable<IMyInventory> to)
+        {
+            foreach (var inventory in from)
+            {
+                var availConts = to.Where(i => i.IsConnectedTo(inventory));
 
                 if (!availConts.Any())
                 {
@@ -1488,17 +1513,17 @@ namespace IngameScript
                     continue;
                 }
 
-                var currentCargo = ass.ItemCount;
+                var currentCargo = inventory.ItemCount;
                 var targInv = availConts.First().Owner as IMyCargoContainer;
 
                 for (int i = 0; i <= currentCargo; i++)
                 {
-                    var item = ass.GetItemAt(0);
+                    var item = inventory.GetItemAt(0);
 
                     if (item == null)
                         continue;
 
-                    if (ass.TransferItemTo(availConts.First(), 0, null, true))
+                    if (inventory.TransferItemTo(availConts.First(), 0, null, true))
                     {
                         Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
                     }
@@ -1508,42 +1533,6 @@ namespace IngameScript
                     }
                 }
             }
-            //
-
-            //очистка ассемблеров в режиме разбора
-            foreach (var ass in disAssInventory)
-            {
-                var availConts = targetOreInventory.Where(inv => inv.IsConnectedTo(ass));
-
-                if (!availConts.Any())
-                {
-                    Echo($"No reacheable containers, check connection!");
-                    continue;
-                }
-
-                var currentCargo = ass.ItemCount;
-                var targInv = availConts.First().Owner as IMyCargoContainer;
-
-                for (int i = 0; i <= currentCargo; i++)
-                {
-                    var item = ass.GetItemAt(0);
-
-                    if (item == null)
-                        continue;
-
-                    if (ass.TransferItemTo(availConts.First(), 0, null, true))
-                    {
-                        Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
-                    }
-                    else
-                    {
-                        Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
-                    }
-                }
-            }
-            //
-
-            // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1841,6 +1830,7 @@ namespace IngameScript
 
             //if (useNanobotAutoBuild)
             //    return;
+            assemblersMode = assemblerMode.Idle;
 
             var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed).ToList();
            
@@ -1849,37 +1839,20 @@ namespace IngameScript
             var reqItems = partsDictionary.Where(k => k.Value.Current < k.Value.Requested);
             var reqIngnotsItem = buildedIngnotsDictionary.Where(k => k.Value.Current < k.Value.Requested);
 
-            if (reqItems.Any())
+            if (reqItems.Any() || reqIngnotsItem.Any())
             {
+                assemblersMode = assemblerMode.Assembly;
+                SetAssemblerMode(freeAssemblers, MyAssemblerMode.Assembly);
+
                 foreach (var key in reqItems)
                 {
                     AddItemToProduct(key, freeAssemblers);
                 }
-            }
-            else
-            {
-                return;
-            }
 
-            if (reqIngnotsItem.Any())
-            {
                 foreach (var key in reqIngnotsItem)
                 {
                     AddItemToProduct(key, freeAssemblers);
                 }
-            }
-            else
-            {
-                return;
-            }
-
-            if (freeAssemblers.Any())
-            {
-                SetAssemblerMode(freeAssemblers, MyAssemblerMode.Assembly);
-            }
-            else
-            {
-                return;
             }
 
         }//PartsAutoBuild()
@@ -1935,6 +1908,8 @@ namespace IngameScript
             foreach (var ass in availAss)
             {
                 items.Clear();
+                prodItems.Clear();
+
                 ass.GetQueue(items);
                 ass.OutputInventory.GetItems(prodItems);
 
@@ -2251,6 +2226,9 @@ namespace IngameScript
 
                         var count = (int)item.Amount / availAss.Count;
 
+                        if (count == 0)
+                            return;
+
                         if (count < 1)
                         {
                             availAss[0].AddQueueItem(blueprint, (VRage.MyFixedPoint)1);
@@ -2265,8 +2243,8 @@ namespace IngameScript
                                 Echo($"Item added: {blueprint.SubtypeId} x {amount} to \n{ass.CustomName}");
                             }
                         }
-
                         counter++;
+
                     }
                 }
             }
