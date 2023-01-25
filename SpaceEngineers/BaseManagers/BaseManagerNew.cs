@@ -890,20 +890,12 @@ namespace IngameScript.BaseManager.BaseNew
             if (!useRefinereysOperations)
                 return;
 
-            var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName)))
+            string containerNames = deepScan == true ? "" : oreStorageName;
+
+            var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName) || c.CustomName.Contains(containerNames)))
                                          .Select(i => i.GetInventory(0))
                                          .Where(i => i.ItemCount > 0);
-
-            //Если нет контейнеров с рудой и включен глубокий поиск, руда ищеится во всех контейнерах
-            if (!oreInventory.Any() && deepScan)
-            {
-                string containerNames = deepScan == true ? "" : oreStorageName;
-
-                oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName) || c.CustomName.Contains(containerNames)))
-                                             .Select(i => i.GetInventory(0))
-                                             .Where(i => i.ItemCount > 0);
-                
-            }
+            
             if (!oreInventory.Any())
                 return;
 
@@ -940,6 +932,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 if (refs.InputInventory.ItemCount == 0)
                 {
+                    //Если конкретные приоритеты, то ищем только приоритетную руду
                     if (customData)
                     {
                         foreach (var prior in refinereyPriority)
@@ -953,9 +946,9 @@ namespace IngameScript.BaseManager.BaseNew
                         }
                     }
                     else
-                    {
+                    {   //Сортировка по уменьшению приоритета
                         var oreList = oreDictionary.Where(o => o.Value.Amount > 0)
-                                                   .OrderBy(k => k.Value.Priority);
+                                                   .OrderByDescending(k => k.Value.Priority);
 
                         if (!oreList.Any())
                             continue;
@@ -984,7 +977,7 @@ namespace IngameScript.BaseManager.BaseNew
                     }
                 }
                 else
-                {
+                {   //Догрузка руды в печи
                     var load = (double)refs.InputInventory.CurrentVolume * 100 / (double)refs.InputInventory.MaxVolume;
                     if (load < refinereyReloadPrecentage)
                     {
