@@ -914,15 +914,59 @@ namespace IngameScript.BaseManager.BaseNew
 
                 refs.UseConveyorSystem = false;
 
+                bool customData = false;
+                KeyValuePair<string, OrePriority> ore = new KeyValuePair<string, OrePriority>();
+                List<int> refinereyPriority = new List<int>();
+
+                //Считывание даты для приоритетов конкретных руд
+                if (refs.CustomData.Length > 1)
+                {
+                    var refPriors = refs.CustomData.Split(' ');
+
+                    foreach(var str in refPriors)
+                    {
+                        int pr = 0;
+                        if (int.TryParse(str, out pr))
+                        {
+                            refinereyPriority.Add(pr);
+                            customData = true;
+                        }
+                        else
+                        {
+                            Echo($"Failed to parse CD on {refs?.CustomName}");
+                        }
+                    }
+                }
+
                 if (refs.InputInventory.ItemCount == 0)
                 {
-                    var oreList = oreDictionary.Where(o => o.Value.Amount > 0)
-                                               .OrderBy(k => k.Value.Priority);
+                    if (customData)
+                    {
+                        foreach (var prior in refinereyPriority)
+                        {
+                            var oreList = oreDictionary.Where(o => o.Value.Amount > 0 && o.Value.Priority == prior);
 
-                    if (!oreList.Any())
+                            if (!oreList.Any())
+                                continue;
+
+                            ore = oreList.FirstOrDefault();
+                        }
+                    }
+                    else
+                    {
+                        var oreList = oreDictionary.Where(o => o.Value.Amount > 0)
+                                                   .OrderBy(k => k.Value.Priority);
+
+                        if (!oreList.Any())
+                            continue;
+
+                        ore = oreList.FirstOrDefault();
+                    }
+
+                    if (ore.Equals(default(KeyValuePair<string,OrePriority>)))
+                    {
                         continue;
-
-                    var ore = oreList.FirstOrDefault();               
+                    }
 
                     //тут загрузка руды пустой печи
                     foreach (var inv in oreInventory)
@@ -964,9 +1008,7 @@ namespace IngameScript.BaseManager.BaseNew
                         }
                     }
                 }
-
             }
-
         }
 
         /// <summary>
