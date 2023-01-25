@@ -1,4 +1,5 @@
-﻿using Sandbox.Game.EntityComponents;
+﻿using Sandbox.Game;
+using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI.Ingame;
 using Sandbox.ModAPI.Interfaces;
 using SpaceEngineers.Game.ModAPI.Ingame;
@@ -24,7 +25,7 @@ namespace IngameScript.BaseManager.BaseNew
     {
         string oreStorageName = "Ore";
         string ingotStorageName = "Ingot";
-        string componentsStorageName = "Parts";
+        string componentsStorageName = "Part";
         string ammoStorageName = "Ammo";
 
         string lcdInventoryOresName = "LCD Ore";
@@ -80,6 +81,7 @@ namespace IngameScript.BaseManager.BaseNew
         bool useRefinereysOperations = false;
         bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
+        bool deepScan = false;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -118,15 +120,13 @@ namespace IngameScript.BaseManager.BaseNew
         bool assemblerBlueprintGetter = false;
         string SpecialAssemblerLastName = "";
 
-        //словарь готовых компонентов и словарь запросов на автосборку компонентов
-        Dictionary<string, int> partsIngotAndOresDictionary;
-
+        //Словари компонентов по типам
         Dictionary<string, ItemBalanser> ingotsDict;
         Dictionary<string, ItemBalanser> partsDictionary;
         Dictionary<string, ItemBalanser> ammoDictionary;
-        Dictionary<string, ItemBalanser> buildedIngnotsDictionary;
+        Dictionary<string, ItemBalanser> buildedIngotsDictionary;
 
-        Dictionary<string, OrePriority> oresDict;
+        Dictionary<string, OrePriority> oreDictionary;
 
         Dictionary<string, string> blueprintData;
 
@@ -143,7 +143,6 @@ namespace IngameScript.BaseManager.BaseNew
 
         StringBuilder partsDisplayData;
         StringBuilder oreDisplayData;
-
 
         //Поиск чертежей
         MyProductionItem lastDetectedBlueprintItem;
@@ -182,13 +181,12 @@ namespace IngameScript.BaseManager.BaseNew
             partsDisplayData = new StringBuilder();
             oreDisplayData = new StringBuilder();
 
-            oresDict = new Dictionary<string, OrePriority>();
+            oreDictionary = new Dictionary<string, OrePriority>();
             ingotsDict = new Dictionary<string, ItemBalanser>();
             partsDictionary = new Dictionary<string, ItemBalanser>();
-            partsIngotAndOresDictionary = new Dictionary<string, int>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
             ammoDictionary = new Dictionary<string, ItemBalanser>();
-            buildedIngnotsDictionary = new Dictionary<string, ItemBalanser>();
+            buildedIngotsDictionary = new Dictionary<string, ItemBalanser>();
 
             blueprintData = new Dictionary<string, string>();
 
@@ -210,8 +208,6 @@ namespace IngameScript.BaseManager.BaseNew
                 Runtime.UpdateFrequency = UpdateFrequency.Update100;
                 Echo($"Script autostart in prog");
             }
-
-
         }
 
         /// <summary>
@@ -237,7 +233,7 @@ namespace IngameScript.BaseManager.BaseNew
             SaveData.AddSection("Ammo");
             SaveData.AddSection("BuildIngots");
 
-            foreach (var dict in oresDict)
+            foreach (var dict in oreDictionary)
             {
                 SaveData.Set("Ores", dict.Key, dict.Value.Priority);
             }
@@ -261,7 +257,7 @@ namespace IngameScript.BaseManager.BaseNew
             }
 
             //Builded ingots
-            foreach (var dict in buildedIngnotsDictionary)
+            foreach (var dict in buildedIngotsDictionary)
             {
                 SaveData.Set("BuildIngots", dict.Key, dict.Value.Current);
             }
@@ -292,7 +288,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 foreach (var key in keys)
                 {
-                    oresDict.Add(key.Name, new OrePriority() { Priority = LoadData.Get(key).ToInt32() });
+                    oreDictionary.Add(key.Name, new OrePriority() { Priority = LoadData.Get(key).ToInt32() });
                 }
 
                 keys.Clear();
@@ -324,7 +320,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 foreach (var key in keys)
                 {
-                    buildedIngnotsDictionary.Add(key.Name, new ItemBalanser { Current = LoadData.Get(key).ToInt32() });
+                    buildedIngotsDictionary.Add(key.Name, new ItemBalanser { Current = LoadData.Get(key).ToInt32() });
                 }
 
                 Echo("Load internal data OK");
@@ -365,14 +361,14 @@ namespace IngameScript.BaseManager.BaseNew
                     FindInventories();
                     break;
                 case 1:
-                    DisplayOres();
+                    FindOres();
                     RefinereysPrintData();
                     break;
                 case 2:
-                    DisplayIngots();
+                    FindIngots();
                     break;
                 case 3:
-                    DisplayParts();
+                    FindParts();
                     break;
                 case 4:
                     PowerMangment();
@@ -415,6 +411,7 @@ namespace IngameScript.BaseManager.BaseNew
                 useRefinereysOperations = dataSystem.Get("Operations", "UseRefinereyOperations").ToBoolean();
                 useRefinereyPriorty = dataSystem.Get("Operations", "UseRefinereyPriortty").ToBoolean();
                 reactorPayloadLimitter = dataSystem.Get("Operations", "ReactorFuelLimitter").ToBoolean();
+                deepScan = dataSystem.Get("Operations", "DeepContainerScan").ToBoolean();
 
                 //Containers 
                 oreStorageName = dataSystem.Get("ContainerNames", "OreStorageName").ToString();
@@ -488,6 +485,7 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set("Operations", "UseRefinereyOperations", false);
                 dataSystem.Set("Operations", "UseRefinereyPriortty", false);
                 dataSystem.Set("Operations", "ReactorFuelLimitter", false);
+                dataSystem.Set("Operations", "DeepContainerScan", false);
 
                 dataSystem.AddSection("DisplaysNames");
                 dataSystem.Set("DisplaysNames", "LcdInventoryOresName", "LCD Ore");
@@ -501,8 +499,8 @@ namespace IngameScript.BaseManager.BaseNew
 
                 dataSystem.AddSection("ContainerNames");
                 dataSystem.Set("ContainerNames", "OreStorageName", "Ore");
-                dataSystem.Set("ContainerNames", "IngotStorageName", "Ingnot");
-                dataSystem.Set("ContainerNames", "ComponentsStorageName", "Parts");
+                dataSystem.Set("ContainerNames", "IngotStorageName", "Ingot");
+                dataSystem.Set("ContainerNames", "ComponentsStorageName", "Part");
                 dataSystem.Set("ContainerNames", "AmmoStorageName", "Ammo");
 
                 dataSystem.AddSection("TagsNames");
@@ -535,6 +533,7 @@ namespace IngameScript.BaseManager.BaseNew
             dataSystem.Set("Operations", "UseRefinereyOperations", useRefinereysOperations);
             dataSystem.Set("Operations", "UseRefinereyPriortty", useRefinereyPriorty);
             dataSystem.Set("Operations", "ReactorFuelLimitter", reactorPayloadLimitter);
+            dataSystem.Set("Operations", "DeepContainerScan", deepScan);
 
             dataSystem.Set("DisplaysNames", "LcdInventoryOresName", lcdInventoryOresName);
             dataSystem.Set("DisplaysNames", "LcdInventoryIngotsName", lcdInventoryIngotsName);
@@ -691,6 +690,7 @@ namespace IngameScript.BaseManager.BaseNew
             Echo($"Get ore frm outer: {getOreFromTransports}");
             Echo($"Refinerey ops: {useRefinereysOperations}");
             Echo($"Scan blueprints: {assemblerBlueprintGetter}");
+            Echo($"Deep cont scan: {deepScan}");
 
             Echo(">>>-------------------------------<<<");
         }
@@ -745,26 +745,16 @@ namespace IngameScript.BaseManager.BaseNew
         /// <summary>
         /// Отображение руды в контейнерах
         /// </summary>
-        public void DisplayOres()
+        public void FindOres()
         {
             Echo("Find ores in containers");
 
-            var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName)))
-                                         .Select(i => i.GetInventory(0))
-                                         .Where(i => i.ItemCount > 0).ToList();
+            string containerNames = deepScan == true ? "" : oreStorageName;
 
-            if (!oreInventory.Any())
-            {
-                oreDisplay?.WriteText("", false);
-                oreDisplay?.WriteText($"<<-----------Ores----------->>" +
-                                      $"\nUse prior:{useRefinereyPriorty} INOP" +
-                                      $"\nContainers:{oreInventory.Count}" +
-                                      $"\nVolume: {0} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
+            var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName) || c.CustomName.Contains(containerNames)))
+                                         .Select(i => i.GetInventory(0));
 
-                return;
-            }
-
-            foreach (var key in oresDict)
+            foreach (var key in oreDictionary)
             {
                 key.Value.Amount = 0;
             }
@@ -782,14 +772,15 @@ namespace IngameScript.BaseManager.BaseNew
                 {
                     if (item.Type.TypeId == "MyObjectBuilder_Ore")
                     {
-                        if (oresDict.ContainsKey(item.Type.SubtypeId))
+                        if (oreDictionary.ContainsKey(item.Type.SubtypeId))
                         {
-                            oresDict[item.Type.SubtypeId].Amount += item.Amount.ToIntSafe();
+                            oreDictionary[item.Type.SubtypeId].Amount += item.Amount.ToIntSafe();
                         }
                         else
                         {
-                            oresDict.Add(item.Type.SubtypeId, new OrePriority
+                            oreDictionary.Add(item.Type.SubtypeId, new OrePriority
                             {
+                                Type = item.Type,
                                 Amount = item.Amount.ToIntSafe(),
                                 Priority = 0
                             });
@@ -815,13 +806,13 @@ namespace IngameScript.BaseManager.BaseNew
                 {
                     foreach (System.Text.RegularExpressions.Match match in matches)
                     {
-                        if (oresDict.ContainsKey(match.Groups["Name"].Value))
+                        if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
                         {
                             int prior = 0;
 
                             if (int.TryParse(match.Groups["Prior"].Value, out prior))
                             {
-                                oresDict[match.Groups["Name"].Value].Priority = prior;
+                                oreDictionary[match.Groups["Name"].Value].Priority = prior;
                             }
                         }
                     }
@@ -831,10 +822,10 @@ namespace IngameScript.BaseManager.BaseNew
             oreDisplay?.WriteText("", false);
             oreDisplay?.WriteText($"<<-----------Ores----------->>" +
                                   $"\nUse prior:{useRefinereyPriorty}" +
-                                  $"\nContainers:{oreInventory.Count}" +
+                                  $"\nContainers:{oreInventory.Count()}" +
                                   $"\nVolume: {precentageOreVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
-            foreach (var dict in oresDict.OrderBy(k => k.Key))
+            foreach (var dict in oreDictionary.OrderBy(k => k.Key))
             {
                 oreDisplay?.WriteText($"\n{dict.Key} : {dict.Value.Amount} P {dict.Value.Priority} ", true);
             }
@@ -888,13 +879,79 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
-        /// Вывод информации о компонентах на дисплей
+        /// Загрузка руды в печи
         /// </summary>
-        public void DisplayParts()
+        public void LoadRefinereys()
         {
-            if (partsPanel == null)
+            if (!useRefinereysOperations)
                 return;
 
+            var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName)))
+                                         .Select(i => i.GetInventory(0))
+                                         .Where(i => i.ItemCount > 0);
+
+            //Если нет контейнеров с рудой и включен глубокий поиск, руда ищеится во всех контейнерах
+            if (!oreInventory.Any() && deepScan)
+            {
+                string containerNames = deepScan == true ? "" : oreStorageName;
+
+                oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName) || c.CustomName.Contains(containerNames)))
+                                             .Select(i => i.GetInventory(0))
+                                             .Where(i => i.ItemCount > 0);
+                
+            }
+            if (!oreInventory.Any())
+                return;
+
+            foreach (var refs in refinereys)
+            {
+                if (refs.Closed)
+                    continue;
+
+                refs.UseConveyorSystem = false;
+
+                if (refs.InputInventory.ItemCount == 0)
+                {
+                    //тут загрузка руды пустой печи
+                    foreach (var inv in oreInventory)
+                    {
+                      
+                    }
+                }
+                else
+                {
+                    var load = (double)refs.InputInventory.CurrentVolume * 100 / (double)refs.InputInventory.MaxVolume;
+                    if (load < refinereyReloadPrecentage)
+                    {
+                        var refsItem = refs.InputInventory.GetItemAt(0);
+
+                        if (refsItem == null)
+                            continue;
+
+                        foreach (var inv in oreInventory)
+                        {
+                            var targItem = inv.FindItem(refsItem.Value.Type);
+
+                            if (targItem.HasValue)
+                            {
+                                if (!inv.TransferItemTo(refs.InputInventory, targItem.Value, null))
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+
+        }
+
+        /// <summary>
+        /// Вывод информации о компонентах на дисплей
+        /// </summary>
+        public void FindParts()
+        {
             Echo("Find parts in containers");
 
             totalPartsStorageVolume = 0;
@@ -908,12 +965,14 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 dict.Value.Current = 0;
             }
-            foreach (var dict in buildedIngnotsDictionary)
+            foreach (var dict in buildedIngotsDictionary)
             {
                 dict.Value.Current = 0;
             }
 
-            var partsInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
+            string containerNames = deepScan == true ? "" : componentsStorageName;
+
+            var partsInventorys = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(containerNames)))
                                             .Select(i => i.GetInventory(0));
 
             freePartsStorageVolume = partsInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
@@ -939,7 +998,6 @@ namespace IngameScript.BaseManager.BaseNew
                             partsDictionary.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
                         }
                     }
-
                     else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
                     {
                         if (ammoDictionary.ContainsKey(item.Type.SubtypeId))
@@ -951,21 +1009,27 @@ namespace IngameScript.BaseManager.BaseNew
                             ammoDictionary.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
                         }
                     }
-                    //Только для сортированных контейнеров
                     else if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
                     {
-                        if (buildedIngnotsDictionary.ContainsKey(item.Type.SubtypeId))
+                        //Добавляем только те слитки, у которых есть возомжность построить
+                        if (blueprintData.ContainsKey(item.Type.SubtypeId))
                         {
-                            buildedIngnotsDictionary[item.Type.SubtypeId].Current += item.Amount.ToIntSafe();
-                        }
-                        else
-                        {
-                            buildedIngnotsDictionary.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
+                            if (buildedIngotsDictionary.ContainsKey(item.Type.SubtypeId))
+                            {
+                                buildedIngotsDictionary[item.Type.SubtypeId].Current += item.Amount.ToIntSafe();
+                            }
+                            else
+                            {
+                                buildedIngotsDictionary.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
+                            }
                         }
                     }
                 }
                 productionItems.Clear();
             }//
+
+            if (partsPanel == null)
+                return;
 
             //Автосборка компонентов
             if (useAutoBuildSystem)
@@ -988,13 +1052,11 @@ namespace IngameScript.BaseManager.BaseNew
                             {
                                 partsDictionary[name].Requested = amount;
                             }
-
-                            if (buildedIngnotsDictionary.ContainsKey(name))
+                            else if (buildedIngotsDictionary.ContainsKey(name))
                             {
-                                buildedIngnotsDictionary[name].Requested = amount;
+                                buildedIngotsDictionary[name].Requested = amount;
                             }
-
-                            if (ammoDictionary.ContainsKey(name))
+                            else if (ammoDictionary.ContainsKey(name)) 
                             {
                                 ammoDictionary[name].Requested = amount;
                             }
@@ -1041,9 +1103,9 @@ namespace IngameScript.BaseManager.BaseNew
                 }
             }
 
-            partsPanel?.WriteText("\n<<-----------As Ingnot----------->>", true);
+            partsPanel?.WriteText("\n<<-----------Ingot----------->>", true);
 
-            foreach (var dict in buildedIngnotsDictionary.OrderBy(k => k.Key))
+            foreach (var dict in buildedIngotsDictionary.OrderBy(k => k.Key))
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
@@ -1054,17 +1116,50 @@ namespace IngameScript.BaseManager.BaseNew
                     partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
+        }
 
+        /// <summary>
+        /// Перенос из одного инвентаря в другой
+        /// </summary>
+        public void TransferItems(IEnumerable<IMyInventory> from, IEnumerable<IMyInventory> to)
+        {
+            foreach (var inventory in from)
+            {
+                var availConts = to.Where(i => i.IsConnectedTo(inventory));
+
+                if (!availConts.Any())
+                {
+                    Echo($"No reacheable containers, check connection!");
+                    continue;
+                }
+
+                var currentCargo = inventory.ItemCount;
+                var targInv = availConts.First().Owner as IMyCargoContainer;
+
+                for (int i = 0; i <= currentCargo; i++)
+                {
+                    var item = inventory.GetItemAt(0);
+
+                    if (item == null)
+                        continue;
+
+                    if (inventory.TransferItemTo(availConts.First(), 0, null, true))
+                    {
+                        Echo($"Transer item: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    }
+                    else
+                    {
+                        Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
+                    }
+                }
+            }
         }
 
         /// <summary>
         /// Вывод информации о слитках
         /// </summary>
-        public void DisplayIngots()
+        public void FindIngots()
         {
-            if (ingnotPanel == null)
-                return;
-
             Echo("Find ingnots in containers");
 
             foreach (var dict in ingotsDict.ToList())
@@ -1072,11 +1167,12 @@ namespace IngameScript.BaseManager.BaseNew
                 dict.Value.Current = 0;
             }
 
-            partsIngotAndOresDictionary.Clear();
             totalIngotStorageVolume = 0;
             freeIngotStorageVolume = 0;
 
-            var ingnotInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName))
+            string containerNames = deepScan == true ? "" : ingotStorageName;
+
+            var ingnotInventorys = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(ingotStorageName) || c.CustomName.Contains(containerNames)))
                                              .Select(i => i.GetInventory(0));
 
             freeIngotStorageVolume = ingnotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
@@ -1102,41 +1198,24 @@ namespace IngameScript.BaseManager.BaseNew
                             ingotsDict.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
                         }
                     }
-
-                    if (item.Type.TypeId == "MyObjectBuilder_Ore")//построенная руда  
-                    {
-                        if (partsIngotAndOresDictionary.ContainsKey(item.Type.SubtypeId))
-                        {
-                            partsIngotAndOresDictionary[item.Type.SubtypeId] += item.Amount.ToIntSafe();
-                        }
-                        else
-                        {
-                            partsIngotAndOresDictionary.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
-                        }
-                    }
-
                 }
                 ingotItems.Clear();
             }//
 
+            if (ingnotPanel == null)
+                return;
+
             //Вывод на дисплей
             ingnotPanel?.WriteText("", false);
-            ingnotPanel?.WriteText($"<<-----------Ingnots----------->>" +
+            ingnotPanel?.WriteText($"<<-----------Ingots----------->>" +
                                    $"\nContainers:{ingnotInventorys.Count()}" +
                                    $"\nVolume: {precentageIngotsVolume} % {freeIngotStorageVolume} / {totalIngotStorageVolume} T", true);
 
-            ingnotPanel?.WriteText("\n<<-----------Ingnots----------->>", true);
+            ingnotPanel?.WriteText("\n<<-----------Ingots----------->>", true);
 
             foreach (var dict in ingotsDict.OrderBy(k => k.Key))
             {
                 ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} ", true);
-            }
-
-            ingnotPanel?.WriteText("\n<<-----------Ores----------->>", true);
-
-            foreach (var dict in partsIngotAndOresDictionary.OrderBy(k => k.Key))
-            {
-                ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value} ", true);
             }
         }
 
@@ -1338,6 +1417,7 @@ namespace IngameScript.BaseManager.BaseNew
 
         public class OrePriority
         {
+            public MyItemType Type { set; get; }
             public int Priority { set; get; } = 0;
             public int Amount { set; get; } = 0;
 
