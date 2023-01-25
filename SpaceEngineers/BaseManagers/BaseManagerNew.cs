@@ -374,6 +374,9 @@ namespace IngameScript.BaseManager.BaseNew
                     PowerMangment();
                     PowerSystemDetailed();
                     break;
+                case 5:
+                    LoadRefinereys();
+                    break;
 
             }
 
@@ -775,6 +778,7 @@ namespace IngameScript.BaseManager.BaseNew
                         if (oreDictionary.ContainsKey(item.Type.SubtypeId))
                         {
                             oreDictionary[item.Type.SubtypeId].Amount += item.Amount.ToIntSafe();
+                            oreDictionary[item.Type.SubtypeId].Type = item.Type;
                         }
                         else
                         {
@@ -912,10 +916,27 @@ namespace IngameScript.BaseManager.BaseNew
 
                 if (refs.InputInventory.ItemCount == 0)
                 {
+                    var oreList = oreDictionary.Where(o => o.Value.Amount > 0)
+                                               .OrderBy(k => k.Value.Priority);
+
+                    if (!oreList.Any())
+                        continue;
+
+                    var ore = oreList.FirstOrDefault();               
+
                     //тут загрузка руды пустой печи
                     foreach (var inv in oreInventory)
                     {
-                      
+                        var oreToLoad = inv.FindItem(ore.Value.Type);
+
+                        if(oreToLoad.HasValue)
+                        {
+                            if (!inv.TransferItemTo(refs.InputInventory, oreToLoad.Value, null))
+                            {
+                                Echo($"Ore loaded: {oreToLoad.GetValueOrDefault()} to {refs?.CustomName}");
+                                break;
+                            }
+                        }
                     }
                 }
                 else
@@ -936,6 +957,7 @@ namespace IngameScript.BaseManager.BaseNew
                             {
                                 if (!inv.TransferItemTo(refs.InputInventory, targItem.Value, null))
                                 {
+                                    Echo($"Ore loaded: {targItem.GetValueOrDefault()} to {refs?.CustomName}");
                                     break;
                                 }
                             }
