@@ -43,6 +43,45 @@ namespace IngameScript.BaseManager.BaseNew
 
         /////////////DO NOT EDIT BELOW THE LINE//////////////////
 
+        string operationSection = "Operations";
+        string namesSection = "DisplaysNames";
+        string contSection = "ContainerNames";
+        string tagSection = "TagsNames";
+        string bpcSection = "Blueprints";
+
+        string autorunDataName = "Autorun";
+        string replaceIngotsName = "ReplaceIngots";
+        string replacePartsName = "ReplaceParts";
+        string powerManagmentName = "PowerManagmentSystem";
+        string detailedPowerManagmentName = "DetailedPowerMonitoring";
+        string autoBuildSystem = "AutoBuildSystem";
+        string transferOresFromOtherName = "TransferOreFromTransports";
+        string nanobotOrerationsName = "UseNanobotAutoBuild";
+        string refinereyOperationsName = "UseRefinereyOperations";
+        string refinereyPriorityName = "UseRefinereyPriortty";
+        string reactorFuelLimitterName = "ReactorFuelLimitter";
+        string deepContScanName = "DeepContainerScan";
+
+        string oreLCDName = "LcdInventoryOresName";
+        string ingotLCDName = "LcdInventoryIngotsName";
+        string powerLCDName = "LcdPowerSystemName";
+        string powerFullLCDName = "LcdPowerDetailedName";
+        string partsLCDName = "LcdPartsName";
+        string nanoLCDName = "NanobotDisplayName";
+        string debugLCDName = "LcdInventoryDebugName";
+        string refinereysLCDName = "LcdRefinereyName";
+
+        string oreContName = "OreStorageName";
+        string ingotContName = "IngotStorageName";
+        string componentContName = "ComponentsStorageName";
+        string ammoContName = "AmmoStorageName";
+
+        string specAssTagName = "AssemblersSpecialOperationsTagName";
+        string bpcLearnTagName = "AssemblersBlueprintLeanerName";
+
+
+
+
         PerformanceMonitor monitor;
         MyIni dataSystem;
         //дисплеи
@@ -71,6 +110,7 @@ namespace IngameScript.BaseManager.BaseNew
         IMyTerminalBlock nanobotBuildModule;
 
         bool autorun = false;
+        bool switchProdModulesAsScript = false;
         bool needReplaceIngots = false;
         bool needReplaceParts = false;
         bool usePowerManagmentSystem = false;
@@ -262,16 +302,6 @@ namespace IngameScript.BaseManager.BaseNew
                 SaveData.Set("BuildIngots", dict.Key, dict.Value.Current);
             }
 
-
-
-
-
-            //Ores as Ingots
-            //foreach (var dict in partsIngotAndOresDictionary)
-            //{
-            //    oreData.Set("Ingots", dict.Key, dict.Value);
-            //}
-
             Storage = SaveData.ToString();
         }
 
@@ -402,54 +432,44 @@ namespace IngameScript.BaseManager.BaseNew
             else
             {
 
-                autorun = dataSystem.Get("Operations", "Autorun").ToBoolean();
+                autorun = dataSystem.Get(operationSection, autorunDataName).ToBoolean();
 
-                needReplaceIngots = dataSystem.Get("Operations", "ReplaceIngots").ToBoolean();
-                needReplaceParts = dataSystem.Get("Operations", "ReplaceParts").ToBoolean();
-                usePowerManagmentSystem = dataSystem.Get("Operations", "PowerManagmentSystem").ToBoolean();
-                useDetailedPowerMonitoring = dataSystem.Get("Operations", "DetailedPowerMonitoring").ToBoolean();
-                useAutoBuildSystem = dataSystem.Get("Operations", "AutoBuildSystem").ToBoolean();
-                getOreFromTransports = dataSystem.Get("Operations", "TransferOreFromTransports").ToBoolean();
-                useNanobotAutoBuild = dataSystem.Get("Operations", "UseNanobotAutoBuild").ToBoolean();
-                useRefinereysOperations = dataSystem.Get("Operations", "UseRefinereyOperations").ToBoolean();
-                useRefinereyPriorty = dataSystem.Get("Operations", "UseRefinereyPriortty").ToBoolean();
-                reactorPayloadLimitter = dataSystem.Get("Operations", "ReactorFuelLimitter").ToBoolean();
-                deepScan = dataSystem.Get("Operations", "DeepContainerScan").ToBoolean();
+                needReplaceIngots = dataSystem.Get(operationSection, replaceIngotsName).ToBoolean();
+                needReplaceParts = dataSystem.Get(operationSection, replacePartsName).ToBoolean();
+                usePowerManagmentSystem = dataSystem.Get(operationSection, powerManagmentName).ToBoolean();
+                useDetailedPowerMonitoring = dataSystem.Get(operationSection, detailedPowerManagmentName).ToBoolean();
+                useAutoBuildSystem = dataSystem.Get(operationSection, autoBuildSystem).ToBoolean();
+                getOreFromTransports = dataSystem.Get(operationSection, transferOresFromOtherName).ToBoolean();
+                useNanobotAutoBuild = dataSystem.Get(operationSection, nanobotOrerationsName).ToBoolean();
+                useRefinereysOperations = dataSystem.Get(operationSection, refinereyOperationsName).ToBoolean();
+                useRefinereyPriorty = dataSystem.Get(operationSection, refinereyPriorityName).ToBoolean();
+                reactorPayloadLimitter = dataSystem.Get(operationSection, reactorFuelLimitterName).ToBoolean();
+                deepScan = dataSystem.Get(operationSection, deepContScanName).ToBoolean();
 
                 //Containers 
-                oreStorageName = dataSystem.Get("ContainerNames", "OreStorageName").ToString();
-                ingotStorageName = dataSystem.Get("ContainerNames", "IngotStorageName").ToString();
-                componentsStorageName = dataSystem.Get("ContainerNames", "ComponentsStorageName").ToString();
-                ammoStorageName = dataSystem.Get("ContainerNames", "AmmoStorageName").ToString();
+                oreStorageName = dataSystem.Get(contSection, oreContName).ToString();
+                ingotStorageName = dataSystem.Get(contSection, ingotContName).ToString();
+                componentsStorageName = dataSystem.Get(contSection, componentContName).ToString();
+                ammoStorageName = dataSystem.Get(contSection, ammoContName).ToString();
 
                 //Displays 
-                lcdInventoryOresName = dataSystem.Get("DisplaysNames", "LcdInventoryOresName").ToString();
-                lcdInventoryIngotsName = dataSystem.Get("DisplaysNames", "LcdInventoryIngotsName").ToString();
-                lcdPowerSystemName = dataSystem.Get("DisplaysNames", "LcdPowerSystemName").ToString();
-                lcdPartsName = dataSystem.Get("DisplaysNames", "LcdPartsName").ToString();
-                lcdInventoryDebugName = dataSystem.Get("DisplaysNames", "LcdInventoryDebugName").ToString();
-                lcdPowerDetailedName = dataSystem.Get("DisplaysNames", "LcdPowerDetailedName").ToString();
-                lcdNanobotName = dataSystem.Get("DisplaysNames", "NanobotDisplayName").ToString();
-                lcdRefinereyName = dataSystem.Get("DisplaysNames", "LcdRefinereyName").ToString();
+                lcdInventoryOresName = dataSystem.Get(namesSection, oreLCDName).ToString();
+                lcdInventoryIngotsName = dataSystem.Get(namesSection, ingotLCDName).ToString();
+                lcdPowerSystemName = dataSystem.Get(namesSection, powerLCDName).ToString();
+                lcdPartsName = dataSystem.Get(namesSection, partsLCDName).ToString();
+                lcdInventoryDebugName = dataSystem.Get(namesSection, debugLCDName).ToString();
+                lcdPowerDetailedName = dataSystem.Get(namesSection, powerFullLCDName).ToString();
+                lcdNanobotName = dataSystem.Get(namesSection, nanoLCDName).ToString();
+                lcdRefinereyName = dataSystem.Get(namesSection, refinereysLCDName).ToString();
 
                 //Tags
-                assemblersSpecialOperationsName = dataSystem.Get("TagsNames", "AssemblersSpecialOperationsTagName").ToString();
-                assemblersBlueprintLeanerName = dataSystem.Get("TagsNames", "AssemblersBlueprintLeanerName").ToString();
+                assemblersSpecialOperationsName = dataSystem.Get(tagSection, specAssTagName).ToString();
+                assemblersBlueprintLeanerName = dataSystem.Get(tagSection, bpcLearnTagName).ToString();
 
-                // OrePriority
+
                 List<MyIniKey> keys = new List<MyIniKey>();
-                dataSystem.GetKeys("OrePriority", keys);
-
-                //INOP
-                foreach (var key in keys)
-                {
-                    orePriority.Add(key.Name, dataSystem.Get(key).ToInt32());
-                }
-
-                keys.Clear();
-
                 // Blueprints
-                dataSystem.GetKeys("Blueprints", keys);
+                dataSystem.GetKeys(bpcSection, keys);
 
                 foreach (var key in keys)
                 {
@@ -476,43 +496,43 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 Echo("Custom data empty!");
 
-                dataSystem.AddSection("Operations");
-                dataSystem.Set("Operations", "Autorun", false);
-                dataSystem.Set("Operations", "ReplaceIngots", false);
-                dataSystem.Set("Operations", "ReplaceParts", false);
-                dataSystem.Set("Operations", "PowerManagmentSystem", false);
-                dataSystem.Set("Operations", "DetailedPowerMonitoring", false);
-                dataSystem.Set("Operations", "AutoBuildSystem", false);
-                dataSystem.Set("Operations", "TransferOreFromTransports", false);
-                dataSystem.Set("Operations", "UseNanobotAutoBuild", false);
-                dataSystem.Set("Operations", "UseRefinereyOperations", false);
-                dataSystem.Set("Operations", "UseRefinereyPriortty", false);
-                dataSystem.Set("Operations", "ReactorFuelLimitter", false);
-                dataSystem.Set("Operations", "DeepContainerScan", false);
+                dataSystem.AddSection(operationSection);
+                dataSystem.Set(operationSection, autorunDataName, false);
+                dataSystem.Set(operationSection, replaceIngotsName, false);
+                dataSystem.Set(operationSection, replacePartsName, false);
+                dataSystem.Set(operationSection, powerManagmentName, false);
+                dataSystem.Set(operationSection, detailedPowerManagmentName, false);
+                dataSystem.Set(operationSection, autoBuildSystem, false);
+                dataSystem.Set(operationSection, transferOresFromOtherName, false);
+                dataSystem.Set(operationSection, nanobotOrerationsName, false);
+                dataSystem.Set(operationSection, refinereyOperationsName, false);
+                dataSystem.Set(operationSection, refinereyPriorityName, false);
+                dataSystem.Set(operationSection, reactorFuelLimitterName, false);
+                dataSystem.Set(operationSection, deepContScanName, false);
 
-                dataSystem.AddSection("DisplaysNames");
-                dataSystem.Set("DisplaysNames", "LcdInventoryOresName", "LCD Ore");
-                dataSystem.Set("DisplaysNames", "LcdInventoryIngotsName", "LCD Inventory");
-                dataSystem.Set("DisplaysNames", "LcdPowerSystemName", "LCD Power");
-                dataSystem.Set("DisplaysNames", "LcdPowerDetailedName", "LCD Power full");
-                dataSystem.Set("DisplaysNames", "LcdPartsName", "LCD Parts");
-                dataSystem.Set("DisplaysNames", "NanobotDisplayName", "LCD Nano");
-                dataSystem.Set("DisplaysNames", "LcdInventoryDebugName", "LCD Debug");
-                dataSystem.Set("DisplaysNames", "LcdRefinereyName", "LCD Refinerey");
+                dataSystem.AddSection(namesSection);
+                dataSystem.Set(namesSection, oreLCDName, lcdInventoryOresName);
+                dataSystem.Set(namesSection, ingotLCDName, lcdInventoryIngotsName);
+                dataSystem.Set(namesSection, powerLCDName, lcdPowerSystemName);
+                dataSystem.Set(namesSection, powerFullLCDName, lcdPowerDetailedName);
+                dataSystem.Set(namesSection, partsLCDName, lcdPartsName);
+                dataSystem.Set(namesSection, nanoLCDName, lcdNanobotName);
+                dataSystem.Set(namesSection, debugLCDName, lcdInventoryDebugName);
+                dataSystem.Set(namesSection, refinereysLCDName, lcdRefinereyName);
 
-                dataSystem.AddSection("ContainerNames");
-                dataSystem.Set("ContainerNames", "OreStorageName", "Ore");
-                dataSystem.Set("ContainerNames", "IngotStorageName", "Ingot");
-                dataSystem.Set("ContainerNames", "ComponentsStorageName", "Part");
-                dataSystem.Set("ContainerNames", "AmmoStorageName", "Ammo");
+                dataSystem.AddSection(contSection);
+                dataSystem.Set(contSection, oreContName, oreStorageName);
+                dataSystem.Set(contSection, ingotContName, ingotStorageName);
+                dataSystem.Set(contSection, componentContName, componentsStorageName);
+                dataSystem.Set(contSection, ammoContName, ammoStorageName);
 
-                dataSystem.AddSection("TagsNames");
-                dataSystem.Set("TagsNames", "AssemblersSpecialOperationsTagName", "[sp]");
-                dataSystem.Set("TagsNames", "AssemblersBlueprintLeanerName", "[bps]");
+                dataSystem.AddSection(tagSection);
+                dataSystem.Set(tagSection, specAssTagName, assemblersSpecialOperationsName);
+                dataSystem.Set(tagSection, bpcLearnTagName, assemblersBlueprintLeanerName);
 
-                dataSystem.AddSection("OrePriority");
+              //  dataSystem.AddSection("OrePriority");
 
-                dataSystem.AddSection("Blueprints");
+                dataSystem.AddSection(bpcSection);
 
                 Me.CustomData = dataSystem.ToString();
             }
@@ -525,35 +545,35 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void ReloadData()
         {
-            dataSystem.Set("Operations", "Autorun", autorun);
-            dataSystem.Set("Operations", "ReplaceIngots", needReplaceIngots);
-            dataSystem.Set("Operations", "ReplaceParts", needReplaceParts);
-            dataSystem.Set("Operations", "PowerManagmentSystem", usePowerManagmentSystem);
-            dataSystem.Set("Operations", "DetailedPowerMonitoring", useDetailedPowerMonitoring);
-            dataSystem.Set("Operations", "AutoBuildSystem", useAutoBuildSystem);
-            dataSystem.Set("Operations", "TransferOreFromTransports", getOreFromTransports);
-            dataSystem.Set("Operations", "UseNanobotAutoBuild", useNanobotAutoBuild);
-            dataSystem.Set("Operations", "UseRefinereyOperations", useRefinereysOperations);
-            dataSystem.Set("Operations", "UseRefinereyPriortty", useRefinereyPriorty);
-            dataSystem.Set("Operations", "ReactorFuelLimitter", reactorPayloadLimitter);
-            dataSystem.Set("Operations", "DeepContainerScan", deepScan);
+            dataSystem.Set(operationSection, autorunDataName, autorun);
+            dataSystem.Set(operationSection, replaceIngotsName, needReplaceIngots);
+            dataSystem.Set(operationSection, replacePartsName, needReplaceParts);
+            dataSystem.Set(operationSection, powerManagmentName, usePowerManagmentSystem);
+            dataSystem.Set(operationSection, detailedPowerManagmentName, useDetailedPowerMonitoring);
+            dataSystem.Set(operationSection, autoBuildSystem, useAutoBuildSystem);
+            dataSystem.Set(operationSection, transferOresFromOtherName, getOreFromTransports);
+            dataSystem.Set(operationSection, nanobotOrerationsName, useNanobotAutoBuild);
+            dataSystem.Set(operationSection, refinereyOperationsName, useRefinereysOperations);
+            dataSystem.Set(operationSection, refinereyPriorityName, useRefinereyPriorty);
+            dataSystem.Set(operationSection, reactorFuelLimitterName, reactorPayloadLimitter);
+            dataSystem.Set(operationSection, deepContScanName, deepScan);
 
-            dataSystem.Set("DisplaysNames", "LcdInventoryOresName", lcdInventoryOresName);
-            dataSystem.Set("DisplaysNames", "LcdInventoryIngotsName", lcdInventoryIngotsName);
-            dataSystem.Set("DisplaysNames", "LcdPowerSystemName", lcdPowerSystemName);
-            dataSystem.Set("DisplaysNames", "LcdPowerDetailedName", lcdPowerDetailedName);
-            dataSystem.Set("DisplaysNames", "LcdPartsName", lcdPartsName);
-            dataSystem.Set("DisplaysNames", "NanobotDisplayName", lcdNanobotName);
-            dataSystem.Set("DisplaysNames", "LcdInventoryDebugName", lcdInventoryDebugName);
-            dataSystem.Set("DisplaysNames", "LcdRefinereyName", lcdRefinereyName);
+            dataSystem.Set(namesSection, oreLCDName, lcdInventoryOresName);
+            dataSystem.Set(namesSection, ingotLCDName, lcdInventoryIngotsName);
+            dataSystem.Set(namesSection, powerLCDName, lcdPowerSystemName);
+            dataSystem.Set(namesSection, powerFullLCDName, lcdPowerDetailedName);
+            dataSystem.Set(namesSection, partsLCDName, lcdPartsName);
+            dataSystem.Set(namesSection, nanoLCDName, lcdNanobotName);
+            dataSystem.Set(namesSection, debugLCDName, lcdInventoryDebugName);
+            dataSystem.Set(namesSection, refinereysLCDName, lcdRefinereyName);
 
-            dataSystem.Set("ContainerNames", "OreStorageName", oreStorageName);
-            dataSystem.Set("ContainerNames", "IngotStorageName", ingotStorageName);
-            dataSystem.Set("ContainerNames", "ComponentsStorageName", componentsStorageName);
-            dataSystem.Set("ContainerNames", "AmmoStorageName", ammoStorageName);
+            dataSystem.Set(contSection, oreContName, oreStorageName);
+            dataSystem.Set(contSection, ingotContName, ingotStorageName);
+            dataSystem.Set(contSection, componentContName, componentsStorageName);
+            dataSystem.Set(contSection, ammoContName, ammoStorageName);
 
-            dataSystem.Set("TagsNames", "AssemblersSpecialOperationsTagName", assemblersSpecialOperationsName);
-            dataSystem.Set("TagsNames", "AssemblersBlueprintLeanerName", assemblersBlueprintLeanerName);
+            dataSystem.Set(tagSection, specAssTagName, assemblersSpecialOperationsName);
+            dataSystem.Set(tagSection, bpcLearnTagName, assemblersBlueprintLeanerName);
 
 
             Me.CustomData = dataSystem.ToString();
@@ -568,6 +588,14 @@ namespace IngameScript.BaseManager.BaseNew
         public void SwitchPartsMode()
         {
             needReplaceParts = !needReplaceParts;
+        }
+
+        /// <summary>
+        /// Включение и выключение печек и сборщиков при выключении/включении скрипта
+        /// </summary>
+        public void SwitchProductionModules()
+        {
+            switchProdModulesAsScript = !switchProdModulesAsScript;
         }
 
         /// <summary>
@@ -676,18 +704,15 @@ namespace IngameScript.BaseManager.BaseNew
             Echo($"Generators:{generators.Count}");
             Echo($"Gas tanks:{gasTanks.Count}");
 
-
-            if (nanobotBuildModule != null)
-            {
-                string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
-                Echo($"Nanobot:{nanoFinded}:{nanobotBuildModule?.CustomName}");
-            }
+            string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
+            Echo($"Nanobot:{nanoFinded}:{nanobotBuildModule?.CustomName}");
+         
 
             Echo(">>>-------------------------------<<<");
 
             Echo($"Auto build system: {useAutoBuildSystem}");
             Echo($"Nanobot system: {useNanobotAutoBuild}");
-            Echo($"Ingnot replace system: {needReplaceIngots}");
+            Echo($"Ingot replace system: {needReplaceIngots}");
             Echo($"Parts replace system: {needReplaceParts}");
             Echo($"Power mng system: {usePowerManagmentSystem}");
             Echo($"Get ore frm outer: {getOreFromTransports}");
@@ -705,6 +730,7 @@ namespace IngameScript.BaseManager.BaseNew
         {
             List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType(blocks);
+
             inventories = blocks.Where(b => b.HasInventory)
                                 .Select(b => b.GetInventory(b.InventoryCount - 1));//берем из инвентаря готовой продукции
 
@@ -744,6 +770,25 @@ namespace IngameScript.BaseManager.BaseNew
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
         }
+
+        /// <summary>
+        /// Включение/Выключение сборщиков и печей
+        /// </summary>
+        public void SwitchAssemblers(bool turnOnOff)
+        {
+            foreach(var ass in assemblers)
+            {
+                if (!ass.Closed)
+                    ass.Enabled = turnOnOff;
+            }
+
+            foreach(var refs in refinereys)
+            {
+                if (!refs.Closed)
+                    refs.Enabled = turnOnOff;
+            }
+        }
+
 
         /// <summary>
         /// Отображение руды в контейнерах
@@ -937,7 +982,7 @@ namespace IngameScript.BaseManager.BaseNew
                     {
                         foreach (var prior in refinereyPriority)
                         {
-                            var oreList = oreDictionary.Where(o => o.Value.Amount > 0 && o.Value.Priority == prior);
+                            var oreList = oreDictionary.Where(oreItem => oreItem.Value.Amount > 0 && oreItem.Value.Priority == prior);
 
                             if (!oreList.Any())
                                 continue;
@@ -947,7 +992,7 @@ namespace IngameScript.BaseManager.BaseNew
                     }
                     else
                     {   //Сортировка по уменьшению приоритета
-                        var oreList = oreDictionary.Where(o => o.Value.Amount > 0)
+                        var oreList = oreDictionary.Where(oreItem => oreItem.Value.Amount > 0)
                                                    .OrderByDescending(k => k.Value.Priority);
 
                         if (!oreList.Any())
@@ -979,6 +1024,7 @@ namespace IngameScript.BaseManager.BaseNew
                 else
                 {   //Догрузка руды в печи
                     var load = (double)refs.InputInventory.CurrentVolume * 100 / (double)refs.InputInventory.MaxVolume;
+
                     if (load < refinereyReloadPrecentage)
                     {
                         var refsItem = refs.InputInventory.GetItemAt(0);
@@ -1457,7 +1503,7 @@ namespace IngameScript.BaseManager.BaseNew
             foreach (var key in blueprintData)
             {
                 debugPanel?.WriteText($"ITEM:{key.Key} X BP: {key.Value} \n", true);
-                dataSystem.Set("Blueprints", key.Key, key.Value);
+                dataSystem.Set(bpcSection, key.Key, key.Value);
             }
 
             ReloadData();
