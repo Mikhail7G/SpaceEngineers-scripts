@@ -7,6 +7,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -203,6 +204,11 @@ namespace IngameScript.BaseManager.BaseNew
         //Имя и количество компонентов для автостройки
         System.Text.RegularExpressions.Regex ProdItemFullRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
+        IEnumerator<bool> _stateMachine;
+        int stateMachineCounter = 0;
+        int stateMachineCounterTotal = 0;
+        IEnumerator<bool> _stateUpdateMachine;
+
 
         /// <summary>
         /// Инициализация компонентов 1 раз при создании объекта
@@ -249,9 +255,12 @@ namespace IngameScript.BaseManager.BaseNew
 
             if (autorun)
             {
-                Runtime.UpdateFrequency = UpdateFrequency.None;
+                Runtime.UpdateFrequency = UpdateFrequency.Update100;
                 Echo($"Script autostart in prog");
             }
+
+            _stateMachine = ReadPartsData();
+            _stateUpdateMachine = Update();
         }
 
         /// <summary>
@@ -263,7 +272,28 @@ namespace IngameScript.BaseManager.BaseNew
             if ((updateType & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
                 Commands(args);
 
-            Update();
+            monitor.AddRuntime();
+            //  Update();
+
+            if (_stateUpdateMachine != null)
+            {
+
+                bool hasMoreSteps = _stateUpdateMachine.MoveNext();
+
+                if (hasMoreSteps)
+                {
+                   
+                }
+                else
+                {
+                    _stateUpdateMachine.Dispose();
+                    _stateUpdateMachine = Update();
+                }
+            }
+
+            monitor.AddInstructions();
+            monitor.EndOfFrameCalc();
+            monitor.Draw();
         }
 
         public void Save()
@@ -383,7 +413,69 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
 
-        public void Update()
+        //public void Update()
+        //{
+        //    DrawEcho();
+        //    SaveAllBlueprints();
+
+        //    switch (currentTick)
+        //    {
+        //        case 0:
+        //            FindLcds();
+        //            FindInventories();
+        //            break;
+        //        case 1:
+        //            FindOres();
+        //            PrintOres();
+
+        //            RefinereysGetData();
+        //            break;
+        //        case 2:
+        //            FindIngots();
+        //            PrintIngots();
+        //            break;
+        //        case 3:
+        //           // FindParts();
+
+        //            if (_stateMachine != null)
+        //            {
+
+        //                bool hasMoreSteps = _stateMachine.MoveNext();
+
+        //                if (hasMoreSteps)
+        //                {
+
+        //                }
+        //                else
+        //                {
+        //                    _stateMachine.Dispose();
+        //                    _stateMachine = ReadPartsData();
+        //                }
+        //            }
+
+        //            // ReadPartsData();
+        //          //  PrintParts();
+        //            break;
+        //        case 4:
+        //            PowerMangment();
+        //            PowerSystemDetailed();
+        //            break;
+        //        case 5:
+        //            LoadRefinereys();
+        //            break;
+
+        //    }
+
+        //    currentTick++;
+        //    if (currentTick == 6)
+        //        currentTick = 0;
+
+        //    monitor.AddInstructions("");
+        //    monitor.EndOfFrameCalc();
+        //    monitor.Draw();
+        //}
+
+        public IEnumerator<bool> Update()
         {
             DrawEcho();
             SaveAllBlueprints();
@@ -405,9 +497,32 @@ namespace IngameScript.BaseManager.BaseNew
                     PrintIngots();
                     break;
                 case 3:
-                    FindParts();
-                    ReadPartsData();
-                   // PrintParts();
+                    // FindParts();
+
+                    if (_stateMachine != null)
+                    {
+
+                        bool hasMoreSteps = _stateMachine.MoveNext();
+
+                        while(hasMoreSteps)
+                        {
+                            hasMoreSteps = _stateMachine.MoveNext();
+                            yield return true;
+                        }
+
+                        if (hasMoreSteps)
+                        {
+                          
+                        }
+                        else
+                        {
+                            _stateMachine.Dispose();
+                            _stateMachine = ReadPartsData();
+                        }
+                    }
+
+                    // ReadPartsData();
+                    //  PrintParts();
                     break;
                 case 4:
                     PowerMangment();
@@ -423,9 +538,6 @@ namespace IngameScript.BaseManager.BaseNew
             if (currentTick == 6)
                 currentTick = 0;
 
-            monitor.AddInstructions("");
-            monitor.EndOfFrameCalc();
-            monitor.Draw();
         }
 
         public void GetIniData()
@@ -703,6 +815,8 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void DrawEcho()
         {
+            Echo($"CC: {stateMachineCounter}"); //stateMachineCounterTotal
+            Echo($"CC1: {stateMachineCounterTotal}");
             Echo(">>>-------------------------------<<<");
             Echo($"Current frame: {currentTick}");
             Echo($"Refinereys found:{refinereys.Count}");
@@ -868,21 +982,22 @@ namespace IngameScript.BaseManager.BaseNew
 
                 System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
 
-                if (matches.Count > 0)
-                {
-                    foreach (System.Text.RegularExpressions.Match match in matches)
-                    {
-                        if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
-                        {
-                            int prior = 0;
+                if (matches.Count == 0)
+                    return;
 
-                            if (int.TryParse(match.Groups["Prior"].Value, out prior))
-                            {
-                                oreDictionary[match.Groups["Name"].Value].Priority = prior;
-                            }
+                foreach (System.Text.RegularExpressions.Match match in matches)
+                {
+                    if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
+                    {
+                        int prior = 0;
+
+                        if (int.TryParse(match.Groups["Prior"].Value, out prior))
+                        {
+                            oreDictionary[match.Groups["Name"].Value].Priority = prior;
                         }
                     }
                 }
+                
             }
             //Отрисовка на дисплей
             oreDisplay?.WriteText("", false);
@@ -1151,50 +1266,108 @@ namespace IngameScript.BaseManager.BaseNew
             }//
         }
 
-        public void ReadPartsData()
+        //public void ReadPartsData()
+        //{
+        //    if (partsPanel == null)
+        //        return;
+
+        //    Echo("Read parts LCD");
+
+        //    //Автосборка компонентов
+        //    if (useAutoBuildSystem)
+        //    {
+        //        partsDisplayData.Clear();
+        //        partsPanel?.ReadText(partsDisplayData);
+
+        //        var strings = partsDisplayData.ToString().Split('\n');
+
+        //        foreach (var str in strings)
+        //        {
+        //            System.Text.RegularExpressions.Match ResultReg = ProdItemFullRegex.Match(str);
+
+        //            if (ResultReg.Success)
+        //            {
+        //                int amount = 0;
+        //                string name = ResultReg.Groups["Name"].Value;
+
+        //                if (int.TryParse(ResultReg.Groups["Amount"].Value, out amount))
+        //                {
+        //                    if (partsDictionary.ContainsKey(name))
+        //                    {
+        //                        partsDictionary[name].Requested = amount;
+        //                    }
+        //                    else if (buildedIngotsDictionary.ContainsKey(name))
+        //                    {
+        //                        buildedIngotsDictionary[name].Requested = amount;
+        //                    }
+        //                    else if (ammoDictionary.ContainsKey(name))
+        //                    {
+        //                        ammoDictionary[name].Requested = amount;
+        //                    }
+
+        //                }
+        //            }
+        //        }
+        //    }///
+        //}
+
+        public IEnumerator<bool> ReadPartsData()
         {
             if (partsPanel == null)
-                return;
+                yield return false;
 
             Echo("Read parts LCD");
 
+          
             //Автосборка компонентов
             if (useAutoBuildSystem)
             {
                 partsDisplayData.Clear();
                 partsPanel?.ReadText(partsDisplayData);
 
-                System.Text.RegularExpressions.MatchCollection matches = ProdItemFullRegex.Matches(partsDisplayData.ToString());
+                var strings = partsDisplayData.ToString().Split('\n');
 
-     
-                if (matches.Count == 0)
-                    return;
-                
-                foreach (System.Text.RegularExpressions.Match match in matches.Cast<System.Text.RegularExpressions.Match>())
+                foreach (var str in strings)
                 {
-                    int amount = 0;
-                    string name = match.Groups["Name"].Value;
 
-                    if (int.TryParse(match.Groups["Amount"].Value, out amount))
+                    if (stateMachineCounter > 5) 
                     {
-                        if (partsDictionary.ContainsKey(name))
+                        stateMachineCounter = 0;
+                        yield return true;
+                    }
+                    stateMachineCounter++;
+                    stateMachineCounterTotal++;
+
+                    System.Text.RegularExpressions.Match ResultReg = ProdItemFullRegex.Match(str);
+
+                    if (ResultReg.Success)
+                    {
+
+                        debugPanel?.WriteText($"\n {ResultReg.Groups["Name"].Value}", true);
+                        int amount = 0;
+                        string name = ResultReg.Groups["Name"].Value;
+
+                        if (int.TryParse(ResultReg.Groups["Amount"].Value, out amount))
                         {
-                            partsDictionary[name].Requested = amount;
-                        }
-                        else if (buildedIngotsDictionary.ContainsKey(name))
-                        {
-                            buildedIngotsDictionary[name].Requested = amount;
-                        }
-                        else if (ammoDictionary.ContainsKey(name))
-                        {
-                            ammoDictionary[name].Requested = amount;
+                            if (partsDictionary.ContainsKey(name))
+                            {
+                                partsDictionary[name].Requested = amount;
+                            }
+                            else if (buildedIngotsDictionary.ContainsKey(name))
+                            {
+                                buildedIngotsDictionary[name].Requested = amount;
+                            }
+                            else if (ammoDictionary.ContainsKey(name))
+                            {
+                                ammoDictionary[name].Requested = amount;
+                            }
+
                         }
                     }
                 }
-                
             }///
-
         }
+
 
         /// <summary>
         /// Отображение компонентов на дисплее
@@ -1613,15 +1786,18 @@ namespace IngameScript.BaseManager.BaseNew
 
             }
 
+            public void AddRuntime()
+            {
+                UpdateTime = mainProgram.Runtime.LastRunTimeMs;
+                avrTime += UpdateTime;
 
-            public void AddInstructions(string methodName)
+            }
+
+            public void AddInstructions()
             {
                 TotalInstructions = mainProgram.Runtime.CurrentInstructionCount;
                 MaxInstructions = mainProgram.Runtime.MaxInstructionCount;
                 avrInst += TotalInstructions;
-
-                UpdateTime = mainProgram.Runtime.LastRunTimeMs;
-                avrTime += UpdateTime;
 
                 CallPerTick++;
 
