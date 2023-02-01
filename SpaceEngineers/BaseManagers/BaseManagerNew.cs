@@ -204,10 +204,10 @@ namespace IngameScript.BaseManager.BaseNew
         //Имя и количество компонентов для автостройки
         System.Text.RegularExpressions.Regex ProdItemFullRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
-        IEnumerator<bool> _stateMachine;
+        IEnumerator<bool> partsReadstateMachine;
         int stateMachineCounter = 0;
         int stateMachineCounterTotal = 0;
-        IEnumerator<bool> _stateUpdateMachine;
+        IEnumerator<bool> updateStateMachine;
 
 
         /// <summary>
@@ -259,8 +259,8 @@ namespace IngameScript.BaseManager.BaseNew
                 Echo($"Script autostart in prog");
             }
 
-            _stateMachine = ReadPartsData();
-            _stateUpdateMachine = Update();
+            partsReadstateMachine = ReadPartsData();
+            updateStateMachine = Update();
         }
 
         /// <summary>
@@ -273,21 +273,16 @@ namespace IngameScript.BaseManager.BaseNew
                 Commands(args);
 
             monitor.AddRuntime();
-            //  Update();
 
-            if (_stateUpdateMachine != null)
+
+            if (updateStateMachine != null)
             {
+                bool hasMoreSteps = updateStateMachine.MoveNext();
 
-                bool hasMoreSteps = _stateUpdateMachine.MoveNext();
-
-                if (hasMoreSteps)
+                if (!hasMoreSteps)
                 {
-                   
-                }
-                else
-                {
-                    _stateUpdateMachine.Dispose();
-                    _stateUpdateMachine = Update();
+                    updateStateMachine.Dispose();
+                    updateStateMachine = Update();
                 }
             }
 
@@ -499,29 +494,31 @@ namespace IngameScript.BaseManager.BaseNew
                 case 3:
                     // FindParts();
 
-                    if (_stateMachine != null)
+                    while (PartReadStateMachine())
                     {
-
-                        bool hasMoreSteps = _stateMachine.MoveNext();
-
-                        while(hasMoreSteps)
-                        {
-                            hasMoreSteps = _stateMachine.MoveNext();
-                            yield return true;
-                        }
-
-                        if (hasMoreSteps)
-                        {
-                          
-                        }
-                        else
-                        {
-                            _stateMachine.Dispose();
-                            _stateMachine = ReadPartsData();
-                        }
+                        Runtime.UpdateFrequency = UpdateFrequency.Update1;
+                        yield return true;
                     }
+                    Runtime.UpdateFrequency = UpdateFrequency.Update100;
 
-                    // ReadPartsData();
+                    //bool hasMoreSteps = _stateMachine.MoveNext();
+
+                    //while (hasMoreSteps)
+                    //{
+                    //    hasMoreSteps = _stateMachine.MoveNext();
+                    //    yield return true;
+                    //}
+
+                    //if (hasMoreSteps)
+                    //{
+
+                    //}
+                    //else
+                    //{
+                    //    _stateMachine.Dispose();
+                    //    _stateMachine = ReadPartsData();
+                    //}
+
                     //  PrintParts();
                     break;
                 case 4:
@@ -712,6 +709,29 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
+        /// Упоавление корутиной по считыванию данных с диплея компонентов
+        /// </summary>
+        public bool PartReadStateMachine()
+        {
+            if (partsReadstateMachine == null)
+                return false;
+
+            bool hasMoreSteps = partsReadstateMachine.MoveNext();
+
+            if (hasMoreSteps)
+            {
+                return true;
+            }
+            else
+            {
+                partsReadstateMachine.Dispose();
+                partsReadstateMachine = ReadPartsData();
+                return false;
+            }
+
+        }
+
+        /// <summary>
         /// Включение и выключение печек и сборщиков при выключении/включении скрипта
         /// </summary>
         public void SwitchProductionModules()
@@ -815,8 +835,6 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void DrawEcho()
         {
-            Echo($"CC: {stateMachineCounter}"); //stateMachineCounterTotal
-            Echo($"CC1: {stateMachineCounterTotal}");
             Echo(">>>-------------------------------<<<");
             Echo($"Current frame: {currentTick}");
             Echo($"Refinereys found:{refinereys.Count}");
@@ -1266,51 +1284,9 @@ namespace IngameScript.BaseManager.BaseNew
             }//
         }
 
-        //public void ReadPartsData()
-        //{
-        //    if (partsPanel == null)
-        //        return;
-
-        //    Echo("Read parts LCD");
-
-        //    //Автосборка компонентов
-        //    if (useAutoBuildSystem)
-        //    {
-        //        partsDisplayData.Clear();
-        //        partsPanel?.ReadText(partsDisplayData);
-
-        //        var strings = partsDisplayData.ToString().Split('\n');
-
-        //        foreach (var str in strings)
-        //        {
-        //            System.Text.RegularExpressions.Match ResultReg = ProdItemFullRegex.Match(str);
-
-        //            if (ResultReg.Success)
-        //            {
-        //                int amount = 0;
-        //                string name = ResultReg.Groups["Name"].Value;
-
-        //                if (int.TryParse(ResultReg.Groups["Amount"].Value, out amount))
-        //                {
-        //                    if (partsDictionary.ContainsKey(name))
-        //                    {
-        //                        partsDictionary[name].Requested = amount;
-        //                    }
-        //                    else if (buildedIngotsDictionary.ContainsKey(name))
-        //                    {
-        //                        buildedIngotsDictionary[name].Requested = amount;
-        //                    }
-        //                    else if (ammoDictionary.ContainsKey(name))
-        //                    {
-        //                        ammoDictionary[name].Requested = amount;
-        //                    }
-
-        //                }
-        //            }
-        //        }
-        //    }///
-        //}
-
+      /// <summary>
+      /// Считывает данные с дисплея, с корутиной для potato серверов
+      /// </summary>
         public IEnumerator<bool> ReadPartsData()
         {
             if (partsPanel == null)
@@ -1318,7 +1294,6 @@ namespace IngameScript.BaseManager.BaseNew
 
             Echo("Read parts LCD");
 
-          
             //Автосборка компонентов
             if (useAutoBuildSystem)
             {
@@ -1329,21 +1304,17 @@ namespace IngameScript.BaseManager.BaseNew
 
                 foreach (var str in strings)
                 {
-
                     if (stateMachineCounter > 5) 
                     {
                         stateMachineCounter = 0;
                         yield return true;
                     }
                     stateMachineCounter++;
-                    stateMachineCounterTotal++;
 
                     System.Text.RegularExpressions.Match ResultReg = ProdItemFullRegex.Match(str);
 
                     if (ResultReg.Success)
                     {
-
-                        debugPanel?.WriteText($"\n {ResultReg.Groups["Name"].Value}", true);
                         int amount = 0;
                         string name = ResultReg.Groups["Name"].Value;
 
@@ -1361,10 +1332,10 @@ namespace IngameScript.BaseManager.BaseNew
                             {
                                 ammoDictionary[name].Requested = amount;
                             }
-
                         }
                     }
                 }
+                stateMachineCounterTotal = 0;
             }///
         }
 
