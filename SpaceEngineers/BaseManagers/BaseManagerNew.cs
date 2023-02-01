@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using VRage;
 using VRage.Collections;
 using VRage.Game;
@@ -96,6 +97,9 @@ namespace IngameScript.BaseManager.BaseNew
 
         //все объекты, содержащие инвентарь
         IEnumerable<IMyInventory> inventories;
+        IEnumerable<IMyInventory> oreInventories;
+        IEnumerable<IMyInventory> partsInventories;
+        IEnumerable<IMyInventory> ingnotInventorys;
 
         //сборщики, печки, контейнера
         List<IMyRefinery> refinereys;
@@ -174,7 +178,7 @@ namespace IngameScript.BaseManager.BaseNew
         Dictionary<string, int> orePriority;
 
         //Печки
-        Dictionary<IMyRefinery, float> refinereyEfectivity;
+        Dictionary<IMyRefinery, float> refinereyModules;
         Dictionary<string, float> refsUpgradeList;
         List<MyInventoryItem> oreItems;
         List<MyInventoryItem> ingotItems;
@@ -234,7 +238,7 @@ namespace IngameScript.BaseManager.BaseNew
             refinereysItems = new List<MyProductionItem>();
             productionItems = new List<MyInventoryItem>();
             ingotItems = new List<MyInventoryItem>();
-            refinereyEfectivity = new Dictionary<IMyRefinery, float>();
+            refinereyModules = new Dictionary<IMyRefinery, float>();
             orePriority = new Dictionary<string, int>();
 
             dataSystem = new MyIni();
@@ -245,7 +249,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             if (autorun)
             {
-                Runtime.UpdateFrequency = UpdateFrequency.Update100;
+                Runtime.UpdateFrequency = UpdateFrequency.None;
                 Echo($"Script autostart in prog");
             }
         }
@@ -392,13 +396,18 @@ namespace IngameScript.BaseManager.BaseNew
                     break;
                 case 1:
                     FindOres();
-                    RefinereysPrintData();
+                    PrintOres();
+
+                    RefinereysGetData();
                     break;
                 case 2:
                     FindIngots();
+                    PrintIngots();
                     break;
                 case 3:
                     FindParts();
+                    ReadPartsData();
+                   // PrintParts();
                     break;
                 case 4:
                     PowerMangment();
@@ -791,7 +800,7 @@ namespace IngameScript.BaseManager.BaseNew
 
 
         /// <summary>
-        /// Отображение руды в контейнерах
+        /// Поиск руды в контейнерах
         /// </summary>
         public void FindOres()
         {
@@ -799,20 +808,20 @@ namespace IngameScript.BaseManager.BaseNew
 
             string containerNames = deepScan == true ? "" : oreStorageName;
 
-            var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName) || c.CustomName.Contains(containerNames)))
-                                         .Select(i => i.GetInventory(0));
+            oreInventories = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName) || c.CustomName.Contains(containerNames)))
+                                     .Select(i => i.GetInventory(0));
 
             foreach (var key in oreDictionary)
             {
                 key.Value.Amount = 0;
             }
 
-            freeOreStorageVolume = oreInventory.Sum(i => i.CurrentVolume.ToIntSafe());
-            totalOreStorageVolume = oreInventory.Sum(i => i.MaxVolume.ToIntSafe());
+            freeOreStorageVolume = oreInventories.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalOreStorageVolume = oreInventories.Sum(i => i.MaxVolume.ToIntSafe());
 
             precentageOreVolume = Math.Round(((double)freeOreStorageVolume / (double)totalOreStorageVolume) * 100, 1);
 
-            foreach (var inv in oreInventory)
+            foreach (var inv in oreInventories)
             {
                 inv.GetItems(oreItems);
 
@@ -839,9 +848,17 @@ namespace IngameScript.BaseManager.BaseNew
                 }
                 oreItems.Clear();
             }
+        }
 
+        /// <summary>
+        /// Вывод содержимого контейнеров с рудой на дисплей
+        /// </summary>
+        public void PrintOres()
+        {
             if (oreDisplay == null)
                 return;
+
+            Echo("Update ores LCD");
 
             //Блок считывания приоритета с дисплея
             if (useRefinereyPriorty)
@@ -871,22 +888,21 @@ namespace IngameScript.BaseManager.BaseNew
             oreDisplay?.WriteText("", false);
             oreDisplay?.WriteText($"<<-----------Ores----------->>" +
                                   $"\nUse prior:{useRefinereyPriorty}" +
-                                  $"\nContainers:{oreInventory.Count()}" +
+                                  $"\nContainers:{oreInventories.Count()}" +
                                   $"\nVolume: {precentageOreVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
             foreach (var dict in oreDictionary.OrderBy(k => k.Key))
             {
                 oreDisplay?.WriteText($"\n{dict.Key} : {dict.Value.Amount} P {dict.Value.Priority} ", true);
             }
+
         }
 
         /// <summary>
         /// Вывод информации о заполнении печек и наличию модов
         /// </summary>
-        public void RefinereysPrintData()
+        public void RefinereysGetData()
         {
-            if (refinereysDisplay == null)
-                return;
 
             Echo("Get refinereys data");
 
@@ -895,20 +911,23 @@ namespace IngameScript.BaseManager.BaseNew
                 var upgradeBlock = refs as IMyUpgradableBlock;
                 upgradeBlock?.GetUpgrades(out refsUpgradeList);
 
-                if (refinereyEfectivity.ContainsKey(refs))
+                if (refinereyModules.ContainsKey(refs))
                 {
-                    refinereyEfectivity[refs] = refsUpgradeList["Effectiveness"];
+                    refinereyModules[refs] = refsUpgradeList["Effectiveness"];
                 }
                 else
                 {
-                    refinereyEfectivity.Add(refs, refsUpgradeList["Effectiveness"]);
+                    refinereyModules.Add(refs, refsUpgradeList["Effectiveness"]);
                 }
             }
+
+            if (refinereysDisplay == null)
+                return;
 
             refinereysDisplay?.WriteText("", false);
             refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
 
-            foreach (var refs in refinereyEfectivity)
+            foreach (var refs in refinereyModules)
             {
                 double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
                 double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
@@ -1051,7 +1070,7 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
-        /// Вывод информации о компонентах на дисплей
+        /// Поиск компонентов
         /// </summary>
         public void FindParts()
         {
@@ -1075,16 +1094,16 @@ namespace IngameScript.BaseManager.BaseNew
 
             string containerNames = deepScan == true ? "" : componentsStorageName;
 
-            var partsInventorys = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(containerNames)))
-                                            .Select(i => i.GetInventory(0));
+            partsInventories = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(containerNames)))
+                                        .Select(i => i.GetInventory(0));
 
-            freePartsStorageVolume = partsInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
-            totalPartsStorageVolume = partsInventorys.Sum(i => i.MaxVolume.ToIntSafe());
+            freePartsStorageVolume = partsInventories.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalPartsStorageVolume = partsInventories.Sum(i => i.MaxVolume.ToIntSafe());
 
             precentagePartsVolume = Math.Round(((double)freePartsStorageVolume / (double)totalPartsStorageVolume) * 100, 1);
 
             //Блок получения всех компонентов в контейнерах
-            foreach (var inventory in partsInventorys)
+            foreach (var inventory in partsInventories)
             {
                 inventory.GetItems(productionItems);
 
@@ -1130,9 +1149,14 @@ namespace IngameScript.BaseManager.BaseNew
                 }
                 productionItems.Clear();
             }//
+        }
 
+        public void ReadPartsData()
+        {
             if (partsPanel == null)
                 return;
+
+            Echo("Read parts LCD");
 
             //Автосборка компонентов
             if (useAutoBuildSystem)
@@ -1142,40 +1166,53 @@ namespace IngameScript.BaseManager.BaseNew
 
                 System.Text.RegularExpressions.MatchCollection matches = ProdItemFullRegex.Matches(partsDisplayData.ToString());
 
-                if (matches.Count > 0)
+     
+                if (matches.Count == 0)
+                    return;
+                
+                foreach (System.Text.RegularExpressions.Match match in matches.Cast<System.Text.RegularExpressions.Match>())
                 {
-                    foreach (System.Text.RegularExpressions.Match match in matches)
+                    int amount = 0;
+                    string name = match.Groups["Name"].Value;
+
+                    if (int.TryParse(match.Groups["Amount"].Value, out amount))
                     {
-                        int amount = 0;
-                        string name = match.Groups["Name"].Value;
-
-                        if (int.TryParse(match.Groups["Amount"].Value, out amount))
+                        if (partsDictionary.ContainsKey(name))
                         {
-                            if (partsDictionary.ContainsKey(name))
-                            {
-                                partsDictionary[name].Requested = amount;
-                            }
-                            else if (buildedIngotsDictionary.ContainsKey(name))
-                            {
-                                buildedIngotsDictionary[name].Requested = amount;
-                            }
-                            else if (ammoDictionary.ContainsKey(name)) 
-                            {
-                                ammoDictionary[name].Requested = amount;
-                            }
+                            partsDictionary[name].Requested = amount;
                         }
-
-
+                        else if (buildedIngotsDictionary.ContainsKey(name))
+                        {
+                            buildedIngotsDictionary[name].Requested = amount;
+                        }
+                        else if (ammoDictionary.ContainsKey(name))
+                        {
+                            ammoDictionary[name].Requested = amount;
+                        }
                     }
                 }
+                
             }///
+
+        }
+
+        /// <summary>
+        /// Отображение компонентов на дисплее
+        /// </summary>
+        public void PrintParts()
+        {
+           
+            if (partsPanel == null)
+                return;
+
+            Echo("Update parts LCD");
 
             //Блок вывода инфорации на дисплеи
             string sysState = useAutoBuildSystem == true ? "Auto mode ON" : "Auto mode OFF";
             partsPanel?.WriteText("", false);
             partsPanel?.WriteText($"<<-------------Production------------->>" +
                                   $"\n{sysState}" +
-                                  $"\nContainers:{partsInventorys.Count()}" +
+                                  $"\nContainers:{partsInventories.Count()}" +
                                   $"\nVolume: {precentagePartsVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T" +
                                   "\n<<-----------Parts----------->>", true);
 
@@ -1259,7 +1296,7 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
-        /// Вывод информации о слитках
+        /// Поиск слитков
         /// </summary>
         public void FindIngots()
         {
@@ -1275,8 +1312,8 @@ namespace IngameScript.BaseManager.BaseNew
 
             string containerNames = deepScan == true ? "" : ingotStorageName;
 
-            var ingnotInventorys = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(ingotStorageName) || c.CustomName.Contains(containerNames)))
-                                             .Select(i => i.GetInventory(0));
+            ingnotInventorys = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(ingotStorageName) || c.CustomName.Contains(containerNames)))
+                                         .Select(i => i.GetInventory(0));
 
             freeIngotStorageVolume = ingnotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalIngotStorageVolume = ingnotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
@@ -1304,9 +1341,17 @@ namespace IngameScript.BaseManager.BaseNew
                 }
                 ingotItems.Clear();
             }//
+        }
 
+        /// <summary>
+        /// Отображение слитков на дисплее
+        /// </summary>
+        public void PrintIngots()
+        {
             if (ingnotPanel == null)
                 return;
+
+            Echo("Update ingots LCD");
 
             //Вывод на дисплей
             ingnotPanel?.WriteText("", false);

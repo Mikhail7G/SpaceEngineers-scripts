@@ -31,3 +31,8 @@ V1
 2:GetIniData,wY
 2:dataResult,I
 2:keys,MQ
+2:ReadPartsData,q
+2:matches,u4
+2:match,x
+2:amount,v
+2:name,MO
