@@ -29,6 +29,7 @@ namespace IngameScript.BaseManager.BaseNew
         string ingotStorageName = "Ingot";
         string componentsStorageName = "Part";
         string ammoStorageName = "Ammo";
+        string ignoreStorageName = "Ignore";
 
         string lcdInventoryOresName = "LCD Ore";
         string lcdInventoryIngotsName = "LCD Inventory";
@@ -256,7 +257,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             if (autorun)
             {
-                Runtime.UpdateFrequency = UpdateFrequency.None;
+                Runtime.UpdateFrequency = UpdateFrequency.Update100;
                 Echo($"Script autostart in prog");
             }
 
@@ -405,71 +406,11 @@ namespace IngameScript.BaseManager.BaseNew
                 case "PART":
                     SwitchPartsMode();
                     break;
+                case "NANO":
+                    SwitchNanobotMode();
+                    break;
             }
         }
-
-
-        //public void Update()
-        //{
-        //    DrawEcho();
-        //    SaveAllBlueprints();
-
-        //    switch (currentTick)
-        //    {
-        //        case 0:
-        //            FindLcds();
-        //            FindInventories();
-        //            break;
-        //        case 1:
-        //            FindOres();
-        //            PrintOres();
-
-        //            RefinereysGetData();
-        //            break;
-        //        case 2:
-        //            FindIngots();
-        //            PrintIngots();
-        //            break;
-        //        case 3:
-        //           // FindParts();
-
-        //            if (_stateMachine != null)
-        //            {
-
-        //                bool hasMoreSteps = _stateMachine.MoveNext();
-
-        //                if (hasMoreSteps)
-        //                {
-
-        //                }
-        //                else
-        //                {
-        //                    _stateMachine.Dispose();
-        //                    _stateMachine = ReadPartsData();
-        //                }
-        //            }
-
-        //            // ReadPartsData();
-        //          //  PrintParts();
-        //            break;
-        //        case 4:
-        //            PowerMangment();
-        //            PowerSystemDetailed();
-        //            break;
-        //        case 5:
-        //            LoadRefinereys();
-        //            break;
-
-        //    }
-
-        //    currentTick++;
-        //    if (currentTick == 6)
-        //        currentTick = 0;
-
-        //    monitor.AddInstructions("");
-        //    monitor.EndOfFrameCalc();
-        //    monitor.Draw();
-        //}
 
         public IEnumerator<bool> Update()
         {
@@ -491,26 +432,31 @@ namespace IngameScript.BaseManager.BaseNew
                 case 2:
                     FindIngots();
                     PrintIngots();
+                    ReplaceIngots();
                     break;
                 case 3:
+                    ReplaceParts();
                     FindParts();
 
                     while (PartReadingStateMachine())
                     {
-                       // Runtime.UpdateFrequency = UpdateFrequency.Update1;
+                        Runtime.UpdateFrequency = UpdateFrequency.Update1;
                         yield return true;
                     }
-                   // Runtime.UpdateFrequency = UpdateFrequency.Update100;
-
-                    PrintParts();
+                    Runtime.UpdateFrequency = UpdateFrequency.Update100;
                     break;
                 case 4:
-                    //PowerMangment();
-                    //PowerSystemDetailed();
-                    ReplaceIngots();
+                    PrintParts();
+                    PowerMangment();
+                    PowerSystemDetailed();
+                    PartsAutoBuild();
                     break;
                 case 5:
                     LoadRefinereys();
+                    ClearAssemblers();
+
+                    NanobotOperations();
+                    PrintNanobotQueue();
                     break;
 
             }
@@ -681,7 +627,6 @@ namespace IngameScript.BaseManager.BaseNew
             Me.CustomData = dataSystem.ToString();
         }
 
-
         public void SwitchIngotMode()
         {
             needReplaceIngots = !needReplaceIngots;
@@ -690,6 +635,16 @@ namespace IngameScript.BaseManager.BaseNew
         public void SwitchPartsMode()
         {
             needReplaceParts = !needReplaceParts;
+        }
+
+        public void SwitchNanobotMode()
+        {
+            useNanobotAutoBuild = !useNanobotAutoBuild;
+            if (useNanobotAutoBuild)
+            {
+                if (nanobotBuildModule != null)
+                    nanobotBuildModule.SetValueBool("OnOff", true);
+            }
         }
 
         /// <summary>
@@ -983,23 +938,24 @@ namespace IngameScript.BaseManager.BaseNew
 
                 System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
 
-                if (matches.Count == 0)
-                    return;
-
-                foreach (System.Text.RegularExpressions.Match match in matches)
+                if (matches.Count > 0)
                 {
-                    if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
+                    foreach (System.Text.RegularExpressions.Match match in matches)
                     {
-                        int prior = 0;
-
-                        if (int.TryParse(match.Groups["Prior"].Value, out prior))
+                        if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
                         {
-                            oreDictionary[match.Groups["Name"].Value].Priority = prior;
+                            int prior = 0;
+
+                            if (int.TryParse(match.Groups["Prior"].Value, out prior))
+                            {
+                                oreDictionary[match.Groups["Name"].Value].Priority = prior;
+                            }
                         }
                     }
                 }
                 
             }
+
             //Отрисовка на дисплей
             oreDisplay?.WriteText("", false);
             oreDisplay?.WriteText($"<<-----------Ores----------->>" +
@@ -1055,7 +1011,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 foreach (var bp in refinereysItems)
                 {
-                    refinereysDisplay?.WriteText($"\n{bp.BlueprintId.SubtypeName} X Ore:{bp.Amount}", true);
+                    refinereysDisplay?.WriteText($"\n{bp.BlueprintId.SubtypeName} X Ore:{bp.Amount.ToIntSafe()}", true);
                 }
                 refinereysDisplay?.WriteText("\n----------", true);
 
@@ -1078,7 +1034,10 @@ namespace IngameScript.BaseManager.BaseNew
             var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName) || c.CustomName.Contains(containerNames)))
                                          .Select(i => i.GetInventory(0))
                                          .Where(i => i.ItemCount > 0);
-            
+
+            var oreList = oreDictionary.Where(oreItem => oreItem.Value.Amount > 0)
+                                       .OrderByDescending(k => k.Value.Priority);
+
             if (!oreInventory.Any())
                 return;
 
@@ -1089,72 +1048,21 @@ namespace IngameScript.BaseManager.BaseNew
 
                 refs.UseConveyorSystem = false;
 
-                bool customData = false;
-                KeyValuePair<string, OrePriority> ore = new KeyValuePair<string, OrePriority>();
-                List<int> refinereyPriority = new List<int>();
-
-                //Считывание даты для приоритетов конкретных руд
-                if (refs.CustomData.Length > 1)
-                {
-                    var refPriors = refs.CustomData.Split(' ');
-
-                    foreach(var str in refPriors)
-                    {
-                        int pr = 0;
-                        if (int.TryParse(str, out pr))
-                        {
-                            refinereyPriority.Add(pr);
-                            customData = true;
-                        }
-                        else
-                        {
-                            Echo($"Failed to parse CD on {refs?.CustomName}");
-                        }
-                    }
-                }
-
                 if (refs.InputInventory.ItemCount == 0)
                 {
-                    //Если конкретные приоритеты, то ищем только приоритетную руду
-                    if (customData)
-                    {
-                        foreach (var prior in refinereyPriority)
-                        {
-                            var oreList = oreDictionary.Where(oreItem => oreItem.Value.Amount > 0 && oreItem.Value.Priority == prior);
-
-                            if (!oreList.Any())
-                                continue;
-
-                            ore = oreList.FirstOrDefault();
-                        }
-                    }
-                    else
-                    {   //Сортировка по уменьшению приоритета
-                        var oreList = oreDictionary.Where(oreItem => oreItem.Value.Amount > 0)
-                                                   .OrderByDescending(k => k.Value.Priority);
-
-                        if (!oreList.Any())
-                            continue;
-
-                        ore = oreList.FirstOrDefault();
-                    }
-
-                    if (ore.Equals(default(KeyValuePair<string,OrePriority>)))
-                    {
-                        continue;
-                    }
-
-                    //тут загрузка руды пустой печи
                     foreach (var inv in oreInventory)
                     {
-                        var oreToLoad = inv.FindItem(ore.Value.Type);
-
-                        if (oreToLoad.HasValue)
+                        foreach (var ore in oreList)
                         {
-                            if (!inv.TransferItemTo(refs.InputInventory, oreToLoad.Value, null))
+                            var oreToLoad = inv.FindItem(ore.Value.Type);
+
+                            if (oreToLoad.HasValue)
                             {
-                                Echo($"Ore loaded: {oreToLoad.GetValueOrDefault()} to {refs?.CustomName}");
-                                break;
+                                if (inv.TransferItemTo(refs.InputInventory, oreToLoad.Value, null))
+                                {
+                                    Echo($"Ore loaded: {oreToLoad.GetValueOrDefault()} to {refs?.CustomName}");
+                                    break;
+                                }
                             }
                         }
                     }
@@ -1196,9 +1104,7 @@ namespace IngameScript.BaseManager.BaseNew
             if (!needReplaceIngots)
                 return;
 
-            string containerNames = deepScan == true ? "" : oreStorageName;
-
-            var targetInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(ingotStorageName) || c.CustomName.Contains(containerNames)))
+            var targetInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName) && !c.CustomName.Contains(ignoreStorageName))
                                             .Select(i => i.GetInventory(0))
                                             .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
@@ -1217,8 +1123,6 @@ namespace IngameScript.BaseManager.BaseNew
             Echo($"Total ingot conts:{targetInventory.Count()}");
 
             TransferItems(refsInventory, targetInventory);
-
-
         }
 
         /// <summary>
@@ -1301,6 +1205,87 @@ namespace IngameScript.BaseManager.BaseNew
                 }
                 productionItems.Clear();
             }//
+        }
+
+        /// <summary>
+        /// Разгрузка сборщиков
+        /// </summary>
+        public void ReplaceParts()
+        {
+            if (!needReplaceParts)
+                return;
+
+            var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
+                                                .Select(i => i.GetInventory(0))
+                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            var targetAmmoInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
+                                               .Select(i => i.GetInventory(0))
+                                               .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            var assInventory = assemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName))
+                                         .Select(i => i.GetInventory(1))
+                                         .Where(i => i.ItemCount > 0);
+
+            Echo("------Replace parts starting------");
+
+            if (!assInventory.Any())
+            {
+                Echo("------No items to transfer-----");
+                return;
+            }
+
+            foreach (var ass in assInventory)
+            {
+                var currentCargo = ass.ItemCount;
+
+                for (int i = 0; i <= currentCargo; i++)
+                {
+                    var getItem = ass.GetItemAt(i);
+
+                    if (getItem == null)
+                        continue;
+
+                    var item = getItem.Value;
+
+                    if (item.Type.TypeId == "MyObjectBuilder_Component")//части
+                    {
+                        TransferItem(item, ass, targetItemInventory,i);
+                    }
+
+                    else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+                    {
+                        TransferItem(item, ass, targetAmmoInventory);
+                    }
+
+                    else if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
+                    {
+                        TransferItem(item, ass, targetItemInventory);
+                    }
+                }
+
+            }
+        }
+
+        /// <summary>
+        /// Очистка входного инвентаря ассемблера
+        /// </summary>
+        public void ClearAssemblers()
+        {
+            Echo("------Clear assemblers------");
+
+            var assInventory = assemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName) && (a.IsQueueEmpty || a.Mode == MyAssemblerMode.Disassembly))
+                                         .Select(i => i.GetInventory(0))
+                                         .Where(i => i.ItemCount > 0);
+
+            var targetInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName) && !c.CustomName.Contains(ignoreStorageName))
+                                            .Select(i => i.GetInventory(0))
+                                            .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            if (!assInventory.Any() || !targetInventory.Any())
+                return;
+
+            TransferItems(assInventory, targetInventory);
         }
 
       /// <summary>
@@ -1453,6 +1438,31 @@ namespace IngameScript.BaseManager.BaseNew
                         Echo($"Transer FAILED!: {item.GetValueOrDefault()} to {targInv?.CustomName}");
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Перенос из одного инвентаря в другой по одному компоненту
+        /// </summary>
+        public void TransferItem(MyInventoryItem item, IMyInventory from, IEnumerable<IMyInventory> to, int pos = 0)
+        {
+            var availConts = to.Where(i => i.IsConnectedTo(from));
+
+            if (!availConts.Any())
+            {
+                Echo($"No reacheable containers, check connection!");
+                return;
+            }
+
+            var targInv = availConts.First().Owner as IMyCargoContainer;
+
+            if (from.TransferItemTo(availConts.First(), pos, null, true))
+            {
+                Echo($"Transer item: {item} to {targInv?.CustomName}");
+            }
+            else
+            {
+                Echo($"Transer FAILED!: {item} to {targInv?.CustomName}");
             }
         }
 
@@ -1624,22 +1634,16 @@ namespace IngameScript.BaseManager.BaseNew
             assemblerBlueprintGetter = !assemblerBlueprintGetter;
 
             if (assemblerBlueprintGetter)
-            {
-                needReplaceParts = false;
-                useAutoBuildSystem = false;
-                useNanobotAutoBuild = false;
-
+            { 
                 SpecialAssemblerLastName = ass.CustomName;
                 ass.CustomName = assemblersBlueprintLeanerName + "Assembler ready to copy bps";
                 ass.ClearQueue();
-                // ass.SetValueBool("OnOff", false);
                 ass.Enabled = false;
             }
             else
             {
                 ass.CustomName = SpecialAssemblerLastName;
                 ass.ClearQueue();
-                // ass.SetValueBool("OnOff", true);
                 ass.Enabled = true;
             }
         }
@@ -1716,7 +1720,240 @@ namespace IngameScript.BaseManager.BaseNew
             //  monitor.AddInstructions("");
         }
 
-      
+        /// <summary>
+        /// Автосборка компонентов
+        /// </summary>
+        void PartsAutoBuild()
+        {
+            if (!useAutoBuildSystem)
+                return;
+
+            Echo("------Auto build system-------");
+
+            var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed && ass.Mode == MyAssemblerMode.Assembly && !ass.CustomName.Contains(assemblersBlueprintLeanerName)).ToList();
+
+            var reqItems = partsDictionary.Where(k => k.Value.Current < k.Value.Requested);
+            var reqIngnotsItem = buildedIngotsDictionary.Where(k => k.Value.Current < k.Value.Requested);
+
+            if (reqItems.Any() || reqIngnotsItem.Any())
+            {
+                Echo($"Total to build:{reqItems.Count() + reqIngnotsItem.Count()}");
+            }
+
+            foreach (var key in reqItems)
+            {
+                AddItemToProduct(key, freeAssemblers);
+            }
+
+            foreach (var key in reqIngnotsItem)
+            {
+                AddItemToProduct(key, freeAssemblers);
+            }
+        }
+
+        /// <summary>
+        /// Добавить недостающий предмет на автосборку
+        /// </summary>
+        private void AddItemToProduct(KeyValuePair<string, ItemBalanser> key, List<IMyAssembler> availAssemblers)
+        {
+            var needed = key.Value.Requested - key.Value.Current;
+
+            var bd = blueprintData.Where(k => k.Key.Contains(key.Key));
+
+            if (!bd.Any())
+            {
+                Echo($"WARNING no blueprint: {key.Key}");
+                return;
+            }
+
+            string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Value;
+
+            MyDefinitionId blueprint;
+
+            if (!MyDefinitionId.TryParse(name, out blueprint))
+            {
+                Echo($"WARNING cant parse: {name}");
+                return;
+            }
+
+            var availAss = availAssemblers.Where(ass => !ass.Closed && ass.CanUseBlueprint(blueprint)).ToList();
+            if (!availAss.Any())
+                return;
+
+            List<MyProductionItem> items = new List<MyProductionItem>();
+            List<MyInventoryItem> prodItems = new List<MyInventoryItem>();
+
+            foreach (var ass in availAss)
+            {
+                items.Clear();
+                prodItems.Clear();
+
+                ass.GetQueue(items);
+                ass.OutputInventory.GetItems(prodItems);
+
+                var itemsInOutInv = prodItems.Where(item => item.Type.SubtypeId.Contains(key.Key)).ToList();
+                var neededItems = items.Where(i => i.BlueprintId.Equals(blueprint)).ToList();
+
+                if (neededItems.Any())
+                {
+                    needed -= neededItems.Sum(i => i.Amount.ToIntSafe());
+                    if (needed < 0)
+                        return;
+                }
+
+                if (itemsInOutInv.Any())
+                {
+                    needed -= itemsInOutInv.Sum(i => i.Amount.ToIntSafe());
+                    if (needed < 0)
+                        return;
+                }
+            }
+
+            int count = needed / availAss.Count;
+            double div = needed % availAss.Count;
+
+            if (div == 0)
+                return;
+
+            if (count > 1)
+            {
+                foreach (var ass in availAss)
+                {
+                    VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
+                    ass.AddQueueItem(blueprint, amount);
+
+                    Echo($"Item added: {blueprint.SubtypeId} x {amount} to \n{ass.CustomName}");
+                }
+            }
+            else
+            {
+                availAss.First().AddQueueItem(blueprint, (MyFixedPoint)div);
+            }
+        }
+
+        /// <summary>
+        /// Автосборка с помощью мода Nanobot
+        /// </summary>
+        public void NanobotOperations()
+        {
+            if (nanobotBuildModule == null)
+                return;
+        
+            Echo("Nanobot system working");
+
+            nanobotBuildQueue.Clear();
+
+            nanobotBuildQueue = nanobotBuildModule.GetValue<Dictionary<MyDefinitionId, int>>("BuildAndRepair.MissingComponents");
+            Echo($"Nanobot total components:{nanobotBuildQueue.Count}");
+
+            if (useNanobotAutoBuild && nanobotBuildQueue.Any())
+            {
+                AddNanobotPartsToProduct();
+            }
+
+            var nanoInventory = nanobotBuildModule.GetInventory(0);
+
+            var freeNanoStorageVolume = nanoInventory.CurrentVolume.ToIntSafe();
+            var totalNanoStorageVolume = nanoInventory.MaxVolume.ToIntSafe();
+
+            var precentageNanoVolume = Math.Round(((double)freeNanoStorageVolume / (double)totalNanoStorageVolume) * 100, 1);
+
+            Echo($"Nanobot ITEMS{precentageNanoVolume}");
+
+            if (precentageNanoVolume > 75)
+            {
+                var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
+                                                    .Select(i => i.GetInventory(0))
+                                                    .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+                var currentCargo = nanoInventory.ItemCount;
+
+                for (int i = 0; i <= currentCargo; i++)
+                {
+                    var getItem = nanoInventory.GetItemAt(0);
+
+                    if (getItem == null)
+                        continue;
+
+                    var item = getItem.Value;
+
+                    TransferItem(item, nanoInventory, targetItemInventory);
+                }
+            }
+
+
+
+        }
+
+        public void AddNanobotPartsToProduct()
+        {
+            nanobuildReady = true;
+
+            var freeAssemblers = specialAssemblers.Where(ass => (!ass.Closed) && ass.IsQueueEmpty && !ass.CustomName.Contains(assemblersBlueprintLeanerName)).ToList();
+
+            if (!freeAssemblers.Any())
+                return;
+
+            foreach (var bps in nanobotBuildQueue)
+            {
+                var bd = blueprintData.Where(k => k.Key.Contains(bps.Key.SubtypeName));
+
+                if (!bd.Any())
+                {
+                    Echo($"WARNING no blueprint: {bps.Key.SubtypeName}");
+                    nanobuildReady = false;
+                    continue;
+                }
+
+                string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Value;
+
+                MyDefinitionId blueprint;
+
+                if (!MyDefinitionId.TryParse(name, out blueprint))
+                {
+                    Echo($"WARNING cant parse: {name}");
+                    continue;
+                }
+
+                var availAss = freeAssemblers.Where(ass => ass.CanUseBlueprint(blueprint)).ToList();
+                if (!availAss.Any())
+                    return;
+
+                var count = bps.Value / availAss.Count;
+                if (count < 1)
+                    count = 1;
+
+                foreach (var ass in availAss)
+                {
+                    VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
+                    ass.AddQueueItem(blueprint, amount);
+                }
+            }
+        }
+
+        public void PrintNanobotQueue()
+        {
+            if ((nanobotBuildModule == null) || (nanobotBuildModule.Closed) || (nanobotDisplay == null) || (nanobotDisplay.Closed))
+            {
+                nanobotDisplay?.WriteText("\n\n     -------->>>No Nanobot module<<<--------", false);
+                return;
+            }
+
+            //сообщение об ощибке модуля сборки
+            string sysState = nanobuildReady == true ? $"\nStatus:All blueprint finded!" : "nStatus:Nanobuild failed!!! no BP??";
+
+            nanobotDisplay?.WriteText("", false);
+            nanobotDisplay?.WriteText("<<-----------Nanobot module----------->>", true);
+            nanobotDisplay?.WriteText($"\nName:{nanobotBuildModule.CustomName}\nNanobuild: {useNanobotAutoBuild}" +
+                                        sysState, true);
+
+            foreach (var comp in nanobotBuildQueue.OrderBy(c => c.Key.ToString()))
+            {
+                nanobotDisplay?.WriteText($"\n{comp.Key.SubtypeName} X {comp.Value}", true);
+            }
+        }
+
+
 
         public class ItemBalanser
         {
