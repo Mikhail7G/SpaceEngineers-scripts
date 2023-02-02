@@ -183,7 +183,7 @@ namespace IngameScript.BaseManager.BaseNew
         Dictionary<string, int> orePriority;
 
         //Печки
-        Dictionary<IMyRefinery, RefinereyDatas> refineryData;
+        Dictionary<IMyRefinery, float> refineryData;
         Dictionary<string, float> refsUpgradeList;
         List<MyInventoryItem> oreItems;
         List<MyInventoryItem> ingotItems;
@@ -246,7 +246,7 @@ namespace IngameScript.BaseManager.BaseNew
             refinereysItems = new List<MyProductionItem>();
             productionItems = new List<MyInventoryItem>();
             ingotItems = new List<MyInventoryItem>();
-            refineryData = new Dictionary<IMyRefinery, RefinereyDatas>();
+            refineryData = new Dictionary<IMyRefinery, float>();
             orePriority = new Dictionary<string, int>();
 
             dataSystem = new MyIni();
@@ -985,11 +985,11 @@ namespace IngameScript.BaseManager.BaseNew
 
                 if (refineryData.ContainsKey(refs))
                 {
-                    refineryData[refs].Effectivity = refsUpgradeList["Effectiveness"];
+                    refineryData[refs] = refsUpgradeList["Effectiveness"];
                 }
                 else
                 {
-                    refineryData.Add(refs, new RefinereyDatas { Effectivity = refsUpgradeList["Effectiveness"] });
+                    refineryData.Add(refs, refsUpgradeList["Effectiveness"]);
                 }
             }
 
@@ -1007,7 +1007,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 refs.Key.GetQueue(refinereysItems);
                 refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
-                                             $"\nEffectivity: {refs.Value.Effectivity} Load: {loadInput} / {loadOuptut} %", true);
+                                             $"\nEffectivity: {refs.Value} Load: {loadInput} / {loadOuptut} %", true);
 
                 foreach (var bp in refinereysItems)
                 {
@@ -1683,7 +1683,6 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 lastDetectedBlueprintItem = blueprints[0];
                 ass.CustomName = assemblersBlueprintLeanerName + $"bps:{lastDetectedBlueprintItem.BlueprintId.SubtypeName}";
-                // ass.SetValueBool("OnOff", true);
                 ass.Enabled = true;
                 return;
             }
@@ -1699,7 +1698,6 @@ namespace IngameScript.BaseManager.BaseNew
 
             if (assInv.TransferItemTo(targetInventory.First(), 0, null, true))
                 ass.Enabled = false;
-            // ass.SetValueBool("OnOff", false);
 
             if (!blueprintData.ContainsKey(lastDetectedConstructItem.Value.Type.SubtypeId))
             {
@@ -1717,7 +1715,6 @@ namespace IngameScript.BaseManager.BaseNew
             }
 
             ReloadData();
-            //  monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -1812,9 +1809,6 @@ namespace IngameScript.BaseManager.BaseNew
             int count = needed / availAss.Count;
             double div = needed % availAss.Count;
 
-            if (div == 0)
-                return;
-
             if (count > 1)
             {
                 foreach (var ass in availAss)
@@ -1827,6 +1821,9 @@ namespace IngameScript.BaseManager.BaseNew
             }
             else
             {
+                if (div == 0)
+                    return;
+
                 availAss.First().AddQueueItem(blueprint, (MyFixedPoint)div);
             }
         }
@@ -1858,9 +1855,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             var precentageNanoVolume = Math.Round(((double)freeNanoStorageVolume / (double)totalNanoStorageVolume) * 100, 1);
 
-            Echo($"Nanobot ITEMS{precentageNanoVolume}");
-
-            if (precentageNanoVolume > 75)
+            if (precentageNanoVolume > 70)
             {
                 var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
                                                     .Select(i => i.GetInventory(0))
