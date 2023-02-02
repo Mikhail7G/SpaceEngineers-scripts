@@ -36,3 +36,9 @@ V1
 2:match,x
 2:amount,v
 2:name,MO
+2:case 0:,u4m
+2:case 1:,YB
+2:case 2:,t1
+2:case 3:,o
+2:case 4:,R5
+2:case 5:,J

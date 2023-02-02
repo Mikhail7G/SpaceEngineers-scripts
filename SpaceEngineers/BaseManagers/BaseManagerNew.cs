@@ -144,6 +144,9 @@ namespace IngameScript.BaseManager.BaseNew
         int refinereyReloadPrecentage = 70;
         int maxVolumeContainerPercentage = 95;
 
+        int stateMachineCounter = 0;
+        int maxPartsPerScan = 5;
+
         float fontSize = 0.8f;
 
         float maxStoredPower = 0;
@@ -179,7 +182,7 @@ namespace IngameScript.BaseManager.BaseNew
         Dictionary<string, int> orePriority;
 
         //Печки
-        Dictionary<IMyRefinery, float> refinereyModules;
+        Dictionary<IMyRefinery, RefinereyDatas> refineryData;
         Dictionary<string, float> refsUpgradeList;
         List<MyInventoryItem> oreItems;
         List<MyInventoryItem> ingotItems;
@@ -205,8 +208,6 @@ namespace IngameScript.BaseManager.BaseNew
         System.Text.RegularExpressions.Regex ProdItemFullRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
         IEnumerator<bool> partsReadstateMachine;
-        int stateMachineCounter = 0;
-        int stateMachineCounterTotal = 0;
         IEnumerator<bool> updateStateMachine;
 
 
@@ -244,7 +245,7 @@ namespace IngameScript.BaseManager.BaseNew
             refinereysItems = new List<MyProductionItem>();
             productionItems = new List<MyInventoryItem>();
             ingotItems = new List<MyInventoryItem>();
-            refinereyModules = new Dictionary<IMyRefinery, float>();
+            refineryData = new Dictionary<IMyRefinery, RefinereyDatas>();
             orePriority = new Dictionary<string, int>();
 
             dataSystem = new MyIni();
@@ -255,7 +256,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             if (autorun)
             {
-                Runtime.UpdateFrequency = UpdateFrequency.Update100;
+                Runtime.UpdateFrequency = UpdateFrequency.None;
                 Echo($"Script autostart in prog");
             }
 
@@ -492,38 +493,21 @@ namespace IngameScript.BaseManager.BaseNew
                     PrintIngots();
                     break;
                 case 3:
-                    // FindParts();
+                    FindParts();
 
-                    while (PartReadStateMachine())
+                    while (PartReadingStateMachine())
                     {
-                        Runtime.UpdateFrequency = UpdateFrequency.Update1;
+                       // Runtime.UpdateFrequency = UpdateFrequency.Update1;
                         yield return true;
                     }
-                    Runtime.UpdateFrequency = UpdateFrequency.Update100;
+                   // Runtime.UpdateFrequency = UpdateFrequency.Update100;
 
-                    //bool hasMoreSteps = _stateMachine.MoveNext();
-
-                    //while (hasMoreSteps)
-                    //{
-                    //    hasMoreSteps = _stateMachine.MoveNext();
-                    //    yield return true;
-                    //}
-
-                    //if (hasMoreSteps)
-                    //{
-
-                    //}
-                    //else
-                    //{
-                    //    _stateMachine.Dispose();
-                    //    _stateMachine = ReadPartsData();
-                    //}
-
-                    //  PrintParts();
+                    PrintParts();
                     break;
                 case 4:
-                    PowerMangment();
-                    PowerSystemDetailed();
+                    //PowerMangment();
+                    //PowerSystemDetailed();
+                    ReplaceIngots();
                     break;
                 case 5:
                     LoadRefinereys();
@@ -709,9 +693,9 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
-        /// Упоавление корутиной по считыванию данных с диплея компонентов
+        /// Управление корутиной по считыванию данных с диплея компонентов
         /// </summary>
-        public bool PartReadStateMachine()
+        public bool PartReadingStateMachine()
         {
             if (partsReadstateMachine == null)
                 return false;
@@ -728,7 +712,6 @@ namespace IngameScript.BaseManager.BaseNew
                 partsReadstateMachine = ReadPartsData();
                 return false;
             }
-
         }
 
         /// <summary>
@@ -1044,30 +1027,31 @@ namespace IngameScript.BaseManager.BaseNew
                 var upgradeBlock = refs as IMyUpgradableBlock;
                 upgradeBlock?.GetUpgrades(out refsUpgradeList);
 
-                if (refinereyModules.ContainsKey(refs))
+                if (refineryData.ContainsKey(refs))
                 {
-                    refinereyModules[refs] = refsUpgradeList["Effectiveness"];
+                    refineryData[refs].Effectivity = refsUpgradeList["Effectiveness"];
                 }
                 else
                 {
-                    refinereyModules.Add(refs, refsUpgradeList["Effectiveness"]);
+                    refineryData.Add(refs, new RefinereyDatas { Effectivity = refsUpgradeList["Effectiveness"] });
                 }
             }
 
+            //
             if (refinereysDisplay == null)
                 return;
 
             refinereysDisplay?.WriteText("", false);
             refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
 
-            foreach (var refs in refinereyModules)
+            foreach (var refs in refineryData)
             {
                 double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
                 double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
 
                 refs.Key.GetQueue(refinereysItems);
                 refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
-                                             $"\nEffectivity: {refs.Value} Load: {loadInput} / {loadOuptut} %", true);
+                                             $"\nEffectivity: {refs.Value.Effectivity} Load: {loadInput} / {loadOuptut} %", true);
 
                 foreach (var bp in refinereysItems)
                 {
@@ -1086,6 +1070,8 @@ namespace IngameScript.BaseManager.BaseNew
         {
             if (!useRefinereysOperations)
                 return;
+
+            Echo("Try to load refinereys");
 
             string containerNames = deepScan == true ? "" : oreStorageName;
 
@@ -1163,7 +1149,7 @@ namespace IngameScript.BaseManager.BaseNew
                     {
                         var oreToLoad = inv.FindItem(ore.Value.Type);
 
-                        if(oreToLoad.HasValue)
+                        if (oreToLoad.HasValue)
                         {
                             if (!inv.TransferItemTo(refs.InputInventory, oreToLoad.Value, null))
                             {
@@ -1200,6 +1186,39 @@ namespace IngameScript.BaseManager.BaseNew
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Перекладываем слитки из печек по контейнерам
+        /// </summary>
+        public void ReplaceIngots()
+        {
+            if (!needReplaceIngots)
+                return;
+
+            string containerNames = deepScan == true ? "" : oreStorageName;
+
+            var targetInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(ingotStorageName) || c.CustomName.Contains(containerNames)))
+                                            .Select(i => i.GetInventory(0))
+                                            .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            var refsInventory = refinereys.Where(r => !r.Closed)
+                                          .Select(i => i.GetInventory(1))
+                                          .Where(i => i.ItemCount > 0);
+
+            Echo("------Replace ingots starting------");
+
+            if ((!targetInventory.Any()) || (!refsInventory.Any()))
+            {
+                Echo("------No items to transfer-----");
+                return;
+            }
+
+            Echo($"Total ingot conts:{targetInventory.Count()}");
+
+            TransferItems(refsInventory, targetInventory);
+
+
         }
 
         /// <summary>
@@ -1304,7 +1323,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 foreach (var str in strings)
                 {
-                    if (stateMachineCounter > 5) 
+                    if (stateMachineCounter > maxPartsPerScan) 
                     {
                         stateMachineCounter = 0;
                         yield return true;
@@ -1335,10 +1354,8 @@ namespace IngameScript.BaseManager.BaseNew
                         }
                     }
                 }
-                stateMachineCounterTotal = 0;
             }///
         }
-
 
         /// <summary>
         /// Отображение компонентов на дисплее
@@ -1705,6 +1722,12 @@ namespace IngameScript.BaseManager.BaseNew
         {
             public int Current { set; get; } = 0;
             public int Requested { set; get; } = 0;
+        }
+
+        public class RefinereyDatas
+        {
+            public float Effectivity { set; get; } = 0;
+            public List<int> OrePriority = new List<int>();
         }
 
         public class OrePriority
