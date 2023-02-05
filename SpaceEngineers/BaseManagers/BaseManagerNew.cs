@@ -80,6 +80,7 @@ namespace IngameScript.BaseManager.BaseNew
         string ingotContName = "IngotStorageName";
         string componentContName = "ComponentsStorageName";
         string ammoContName = "AmmoStorageName";
+        string itemContName = "ItemStorageName";
 
         string specAssTagName = "AssemblersSpecialOperationsTagName";
         string bpcLearnTagName = "AssemblersBlueprintLeanerName";
@@ -178,6 +179,7 @@ namespace IngameScript.BaseManager.BaseNew
         Dictionary<string, ItemBalanser> partsDictionary;
         Dictionary<string, ItemBalanser> ammoDictionary;
         Dictionary<string, ItemBalanser> buildedIngotsDictionary;
+        Dictionary<string, ItemBalanser> equipmentDictionary;
 
         Dictionary<string, OrePriority> oreDictionary;
 
@@ -243,6 +245,7 @@ namespace IngameScript.BaseManager.BaseNew
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
             ammoDictionary = new Dictionary<string, ItemBalanser>();
             buildedIngotsDictionary = new Dictionary<string, ItemBalanser>();
+            equipmentDictionary = new Dictionary<string, ItemBalanser>();
 
             blueprintData = new Dictionary<string, string>();
 
@@ -432,6 +435,8 @@ namespace IngameScript.BaseManager.BaseNew
                     FindLcds();
                     yield return true;
                     FindInventories();
+                    yield return true;
+                    GetContainers();
                     break;
                 case 1:
                     FindOres();
@@ -516,6 +521,7 @@ namespace IngameScript.BaseManager.BaseNew
                 ingotStorageName = dataSystem.Get(contSection, ingotContName).ToString();
                 componentsStorageName = dataSystem.Get(contSection, componentContName).ToString();
                 ammoStorageName = dataSystem.Get(contSection, ammoContName).ToString();
+                equipStorageName = dataSystem.Get(contSection, itemContName).ToString();
 
                 //Displays 
                 lcdInventoryOresName = dataSystem.Get(namesSection, oreLCDName).ToString();
@@ -590,6 +596,7 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set(contSection, ingotContName, ingotStorageName);
                 dataSystem.Set(contSection, componentContName, componentsStorageName);
                 dataSystem.Set(contSection, ammoContName, ammoStorageName);
+                dataSystem.Set(contSection, itemContName, equipStorageName);
 
                 dataSystem.AddSection(tagSection);
                 dataSystem.Set(tagSection, specAssTagName, assemblersSpecialOperationsName);
@@ -636,6 +643,7 @@ namespace IngameScript.BaseManager.BaseNew
             dataSystem.Set(contSection, ingotContName, ingotStorageName);
             dataSystem.Set(contSection, componentContName, componentsStorageName);
             dataSystem.Set(contSection, ammoContName, ammoStorageName);
+            dataSystem.Set(contSection, itemContName, equipStorageName);
 
             dataSystem.Set(tagSection, specAssTagName, assemblersSpecialOperationsName);
             dataSystem.Set(tagSection, bpcLearnTagName, assemblersBlueprintLeanerName);
@@ -824,11 +832,10 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void FindInventories()
         {
+            Echo("Find blocks");
+
             List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType(blocks);
-
-            inventories = blocks.Where(b => b.HasInventory)
-                                .Select(b => b.GetInventory(b.InventoryCount - 1));//берем из инвентаря готовой продукции
 
             refinereys = blocks.Where(b => b is IMyRefinery)
                                .Where(r => r.IsFunctional)
@@ -865,6 +872,34 @@ namespace IngameScript.BaseManager.BaseNew
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
+            inventories = containers.Where(b => !b.Closed)
+                                    .Select(b => b.GetInventory(0));//берем из инвентаря готовой продукции
+        }
+
+        public void GetContainers()
+        {
+            Echo("Find containers");
+
+            oreInventories = containers.Where(c => (!c.Closed) && c.CustomName.Contains(oreStorageName))
+                                       .Select(i => i.GetInventory(0));
+
+            freeOreStorageVolume = oreInventories.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalOreStorageVolume = oreInventories.Sum(i => i.MaxVolume.ToIntSafe());
+            precentageOreVolume = Math.Round((double)freeOreStorageVolume / (double)totalOreStorageVolume * 100, 1);
+            
+            partsInventories = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(ammoStorageName) || c.CustomName.Contains(equipStorageName)))
+                                        .Select(i => i.GetInventory(0));
+
+            freePartsStorageVolume = partsInventories.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalPartsStorageVolume = partsInventories.Sum(i => i.MaxVolume.ToIntSafe());
+            precentagePartsVolume = Math.Round(((double)freePartsStorageVolume / (double)totalPartsStorageVolume) * 100, 1);
+
+            ingotInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName))
+                                       .Select(i => i.GetInventory(0));
+
+            freeIngotStorageVolume = ingotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalIngotStorageVolume = ingotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
+            precentageIngotsVolume = Math.Round(((double)freeIngotStorageVolume / (double)totalIngotStorageVolume) * 100, 1);
         }
 
         /// <summary>
@@ -893,19 +928,12 @@ namespace IngameScript.BaseManager.BaseNew
         {
             Echo("Find ores in containers");
 
-            oreInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) && c.CustomName.Contains(oreStorageName))
-                                       .Select(i => i.GetInventory(0));
-
-            freeOreStorageVolume = oreInventories.Sum(i => i.CurrentVolume.ToIntSafe());
-            totalOreStorageVolume = oreInventories.Sum(i => i.MaxVolume.ToIntSafe());
-            precentageOreVolume = Math.Round((double)freeOreStorageVolume / (double)totalOreStorageVolume * 100, 1);
-
             foreach (var key in oreDictionary)
             {
                 key.Value.Amount = 0;
             }
 
-            foreach (var inv in oreInventories)
+            foreach (var inv in inventories)
             {
                 inv.GetItems(oreItems);
 
@@ -1146,16 +1174,14 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 dict.Value.Current = 0;
             }
+            foreach (var dict in equipmentDictionary)
+            {
+                dict.Value.Current = 0;
+            }
 
-            partsInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) &&  (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(ammoStorageName)))
-                                         .Select(i => i.GetInventory(0));
-
-            freePartsStorageVolume = partsInventories.Sum(i => i.CurrentVolume.ToIntSafe());
-            totalPartsStorageVolume = partsInventories.Sum(i => i.MaxVolume.ToIntSafe());
-            precentagePartsVolume = Math.Round(((double)freePartsStorageVolume / (double)totalPartsStorageVolume) * 100, 1);
 
             //Блок получения всех компонентов в контейнерах
-            foreach (var inventory in partsInventories)
+            foreach (var inventory in inventories)
             {
                 inventory.GetItems(productionItems);
 
@@ -1201,6 +1227,17 @@ namespace IngameScript.BaseManager.BaseNew
                             {
                                 buildedIngotsDictionary.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
                             }
+                        }
+                    }
+                    else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
+                    {
+                        if (equipmentDictionary.ContainsKey(item.Type.SubtypeId))
+                        {
+                            equipmentDictionary[item.Type.SubtypeId].Current += item.Amount.ToIntSafe();
+                        }
+                        else
+                        {
+                            equipmentDictionary.Add(item.Type.SubtypeId, new ItemBalanser { Current = item.Amount.ToIntSafe() });
                         }
                     }
                 }
@@ -1412,6 +1449,20 @@ namespace IngameScript.BaseManager.BaseNew
                     partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
+
+            partsPanel?.WriteText("\n<<-----------Equipment----------->>", true);
+
+            foreach (var dict in equipmentDictionary.OrderBy(k => k.Key))
+            {
+                if (blueprintData.ContainsKey(dict.Key))
+                {
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
+                }
+                else
+                {
+                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
+                }
+            }
         }
 
         /// <summary>
@@ -1488,18 +1539,8 @@ namespace IngameScript.BaseManager.BaseNew
                 dict.Value.Current = 0;
             }
 
-            totalIngotStorageVolume = 0;
-            freeIngotStorageVolume = 0;
-
-            ingotInventorys = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) && c.CustomName.Contains(ingotStorageName))
-                                        .Select(i => i.GetInventory(0));
-
-            freeIngotStorageVolume = ingotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
-            totalIngotStorageVolume = ingotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
-            precentageIngotsVolume = Math.Round(((double)freeIngotStorageVolume / (double)totalIngotStorageVolume) * 100, 1);
-
             //Проверка контейнеров
-            foreach (var inventory in ingotInventorys)
+            foreach (var inventory in inventories)
             {
                 inventory.GetItems(ingotItems);
 
