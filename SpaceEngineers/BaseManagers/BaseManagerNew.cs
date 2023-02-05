@@ -103,7 +103,7 @@ namespace IngameScript.BaseManager.BaseNew
         IEnumerable<IMyInventory> inventories;
         IEnumerable<IMyInventory> oreInventories;
         IEnumerable<IMyInventory> partsInventories;
-        IEnumerable<IMyInventory> ingnotInventorys;
+        IEnumerable<IMyInventory> ingotInventorys;
 
         //сборщики, печки, контейнера
         List<IMyRefinery> refinereys;
@@ -893,20 +893,17 @@ namespace IngameScript.BaseManager.BaseNew
         {
             Echo("Find ores in containers");
 
-            string containerNames = deepScan == true ? "" : oreStorageName;
+            oreInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) && c.CustomName.Contains(oreStorageName))
+                                       .Select(i => i.GetInventory(0));
 
-            oreInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) && c.CustomName.Contains(containerNames))
-                                     .Select(i => i.GetInventory(0));
+            freeOreStorageVolume = oreInventories.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalOreStorageVolume = oreInventories.Sum(i => i.MaxVolume.ToIntSafe());
+            precentageOreVolume = Math.Round((double)freeOreStorageVolume / (double)totalOreStorageVolume * 100, 1);
 
             foreach (var key in oreDictionary)
             {
                 key.Value.Amount = 0;
             }
-
-            freeOreStorageVolume = oreInventories.Sum(i => i.CurrentVolume.ToIntSafe());
-            totalOreStorageVolume = oreInventories.Sum(i => i.MaxVolume.ToIntSafe());
-
-            precentageOreVolume = Math.Round(((double)freeOreStorageVolume / (double)totalOreStorageVolume) * 100, 1);
 
             foreach (var inv in oreInventories)
             {
@@ -1150,14 +1147,11 @@ namespace IngameScript.BaseManager.BaseNew
                 dict.Value.Current = 0;
             }
 
-            string containerNames = deepScan == true ? "" : componentsStorageName;
-
-            partsInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) &&  (c.CustomName.Contains(containerNames) || c.CustomName.Contains(ammoStorageName)))
-                                        .Select(i => i.GetInventory(0));
+            partsInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) &&  (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(ammoStorageName)))
+                                         .Select(i => i.GetInventory(0));
 
             freePartsStorageVolume = partsInventories.Sum(i => i.CurrentVolume.ToIntSafe());
             totalPartsStorageVolume = partsInventories.Sum(i => i.MaxVolume.ToIntSafe());
-
             precentagePartsVolume = Math.Round(((double)freePartsStorageVolume / (double)totalPartsStorageVolume) * 100, 1);
 
             //Блок получения всех компонентов в контейнерах
@@ -1191,7 +1185,12 @@ namespace IngameScript.BaseManager.BaseNew
                     }
                     else if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
                     {
-                        //Добавляем только те слитки, у которых есть возомжность построить
+                        //Добавляем только те слитки, у которых есть возомжность построить и которых нет в списке компонентов
+                        if (partsDictionary.ContainsKey(item.Type.SubtypeId))
+                        {
+                            continue;
+                        }
+
                         if (blueprintData.ContainsKey(item.Type.SubtypeId))
                         {
                             if (buildedIngotsDictionary.ContainsKey(item.Type.SubtypeId))
@@ -1226,8 +1225,8 @@ namespace IngameScript.BaseManager.BaseNew
                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
-                                             .Select(i => i.GetInventory(0))
-                                             .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+                                                 .Select(i => i.GetInventory(0))
+                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             var assInventory = assemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName))
                                          .Select(i => i.GetInventory(1))
@@ -1492,18 +1491,15 @@ namespace IngameScript.BaseManager.BaseNew
             totalIngotStorageVolume = 0;
             freeIngotStorageVolume = 0;
 
-            string containerNames = deepScan == true ? "" : ingotStorageName;
+            ingotInventorys = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) && c.CustomName.Contains(ingotStorageName))
+                                        .Select(i => i.GetInventory(0));
 
-            ingnotInventorys = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) && c.CustomName.Contains(containerNames))
-                                         .Select(i => i.GetInventory(0));
-
-            freeIngotStorageVolume = ingnotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
-            totalIngotStorageVolume = ingnotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
-
+            freeIngotStorageVolume = ingotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalIngotStorageVolume = ingotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
             precentageIngotsVolume = Math.Round(((double)freeIngotStorageVolume / (double)totalIngotStorageVolume) * 100, 1);
 
             //Проверка контейнеров
-            foreach (var inventory in ingnotInventorys)
+            foreach (var inventory in ingotInventorys)
             {
                 inventory.GetItems(ingotItems);
 
@@ -1538,7 +1534,7 @@ namespace IngameScript.BaseManager.BaseNew
             //Вывод на дисплей
             ingnotPanel?.WriteText("", false);
             ingnotPanel?.WriteText($"<<-----------Ingots----------->>" +
-                                   $"\nContainers:{ingnotInventorys.Count()}" +
+                                   $"\nContainers:{ingotInventorys.Count()}" +
                                    $"\nVolume: {precentageIngotsVolume} % {freeIngotStorageVolume} / {totalIngotStorageVolume} T", true);
 
             ingnotPanel?.WriteText("\n<<-----------Ingots----------->>", true);
