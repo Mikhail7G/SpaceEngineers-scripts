@@ -65,7 +65,6 @@ namespace IngameScript.BaseManager.BaseNew
         string refinereyOperationsName = "UseRefinereyOperations";
         string refinereyPriorityName = "UseRefinereyPriortty";
         string reactorFuelLimitterName = "ReactorFuelLimitter";
-        string deepContScanName = "DeepContainerScan";
 
         string oreLCDName = "LcdInventoryOresName";
         string ingotLCDName = "LcdInventoryIngotsName";
@@ -101,7 +100,7 @@ namespace IngameScript.BaseManager.BaseNew
         IMyTextPanel oreDisplay;
 
         //все объекты, содержащие инвентарь
-        IEnumerable<IMyInventory> inventories;
+        IEnumerable<IMyInventory> containerInventories;
         IEnumerable<IMyInventory> oreInventories;
         IEnumerable<IMyInventory> partsInventories;
         IEnumerable<IMyInventory> ingotInventorys;
@@ -125,12 +124,10 @@ namespace IngameScript.BaseManager.BaseNew
         bool usePowerManagmentSystem = false;
         bool useDetailedPowerMonitoring = false;
         bool useAutoBuildSystem = false;
-        bool getOreFromTransports = false;
         bool useNanobotAutoBuild = false;
         bool useRefinereysOperations = false;
         bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
-        bool deepScan = false;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -226,7 +223,7 @@ namespace IngameScript.BaseManager.BaseNew
             Echo($"Script first init starting");
             Runtime.UpdateFrequency = UpdateFrequency.None;
 
-            inventories = new List<IMyInventory>();
+            containerInventories = new List<IMyInventory>();
             oreItems = new List<MyInventoryItem>();
             refinereys = new List<IMyRefinery>();
             assemblers = new List<IMyAssembler>();
@@ -509,12 +506,10 @@ namespace IngameScript.BaseManager.BaseNew
                 usePowerManagmentSystem = dataSystem.Get(operationSection, powerManagmentName).ToBoolean();
                 useDetailedPowerMonitoring = dataSystem.Get(operationSection, detailedPowerManagmentName).ToBoolean();
                 useAutoBuildSystem = dataSystem.Get(operationSection, autoBuildSystem).ToBoolean();
-                getOreFromTransports = dataSystem.Get(operationSection, transferOresFromOtherName).ToBoolean();
                 useNanobotAutoBuild = dataSystem.Get(operationSection, nanobotOrerationsName).ToBoolean();
                 useRefinereysOperations = dataSystem.Get(operationSection, refinereyOperationsName).ToBoolean();
                 useRefinereyPriorty = dataSystem.Get(operationSection, refinereyPriorityName).ToBoolean();
                 reactorPayloadLimitter = dataSystem.Get(operationSection, reactorFuelLimitterName).ToBoolean();
-                deepScan = dataSystem.Get(operationSection, deepContScanName).ToBoolean();
 
                 //Containers 
                 oreStorageName = dataSystem.Get(contSection, oreContName).ToString();
@@ -574,12 +569,10 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set(operationSection, powerManagmentName, false);
                 dataSystem.Set(operationSection, detailedPowerManagmentName, false);
                 dataSystem.Set(operationSection, autoBuildSystem, false);
-                dataSystem.Set(operationSection, transferOresFromOtherName, false);
                 dataSystem.Set(operationSection, nanobotOrerationsName, false);
                 dataSystem.Set(operationSection, refinereyOperationsName, false);
                 dataSystem.Set(operationSection, refinereyPriorityName, false);
                 dataSystem.Set(operationSection, reactorFuelLimitterName, false);
-                dataSystem.Set(operationSection, deepContScanName, false);
 
                 dataSystem.AddSection(namesSection);
                 dataSystem.Set(namesSection, oreLCDName, lcdInventoryOresName);
@@ -623,12 +616,10 @@ namespace IngameScript.BaseManager.BaseNew
             dataSystem.Set(operationSection, powerManagmentName, usePowerManagmentSystem);
             dataSystem.Set(operationSection, detailedPowerManagmentName, useDetailedPowerMonitoring);
             dataSystem.Set(operationSection, autoBuildSystem, useAutoBuildSystem);
-            dataSystem.Set(operationSection, transferOresFromOtherName, getOreFromTransports);
             dataSystem.Set(operationSection, nanobotOrerationsName, useNanobotAutoBuild);
             dataSystem.Set(operationSection, refinereyOperationsName, useRefinereysOperations);
             dataSystem.Set(operationSection, refinereyPriorityName, useRefinereyPriorty);
             dataSystem.Set(operationSection, reactorFuelLimitterName, reactorPayloadLimitter);
-            dataSystem.Set(operationSection, deepContScanName, deepScan);
 
             dataSystem.Set(namesSection, oreLCDName, lcdInventoryOresName);
             dataSystem.Set(namesSection, ingotLCDName, lcdInventoryIngotsName);
@@ -819,10 +810,8 @@ namespace IngameScript.BaseManager.BaseNew
             Echo($"Ingot replace system: {needReplaceIngots}");
             Echo($"Parts replace system: {needReplaceParts}");
             Echo($"Power mng system: {usePowerManagmentSystem}");
-            Echo($"Get ore frm outer: {getOreFromTransports}");
             Echo($"Refinerey ops: {useRefinereysOperations}");
             Echo($"Scan blueprints: {assemblerBlueprintGetter}");
-            Echo($"Deep cont scan: {deepScan}");
 
             Echo(">>>-------------------------------<<<");
         }
@@ -835,16 +824,14 @@ namespace IngameScript.BaseManager.BaseNew
             Echo("Find blocks");
 
             List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks);
+            GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
 
             refinereys = blocks.Where(b => b is IMyRefinery)
                                .Where(r => r.IsFunctional)
-                               .Where(b => b.CubeGrid == Me.CubeGrid)
                                .Select(t => t as IMyRefinery).ToList();
 
             assemblers = blocks.Where(b => b is IMyAssembler)
                                .Where(a => a.IsFunctional)
-                               .Where(b => b.CubeGrid == Me.CubeGrid)
                                .Select(t => t as IMyAssembler).ToList();
 
             containers = blocks.Where(b => b is IMyCargoContainer)
@@ -852,28 +839,25 @@ namespace IngameScript.BaseManager.BaseNew
                                .Select(t => t as IMyCargoContainer).ToList();
 
             batteries = blocks.Where(b => b is IMyBatteryBlock)
-                              .Where(b => b.CubeGrid == Me.CubeGrid)
                               .Where(b => b.IsFunctional)
                               .Select(t => t as IMyBatteryBlock).ToList();
 
             gasTanks = blocks.Where(b => b is IMyGasTank)
-                             .Where(b => b.CubeGrid == Me.CubeGrid)
                              .Where(g => g.IsFunctional)
                              .Select(t => t as IMyGasTank).ToList();
 
             generators = blocks.Where(b => b is IMyPowerProducer)
-                               .Where(b => b.CubeGrid == Me.CubeGrid)
                                .Where(r => r.IsFunctional)
                                .Select(t => t as IMyPowerProducer).ToList();
 
             nanobotBuildModule = blocks.Where(b => b.IsFunctional)
                                        .Where(g => g.BlockDefinition.SubtypeName.ToString() == "SELtdLargeNanobotBuildAndRepairSystem")
-                                       .Where(n => n.CubeGrid == Me.CubeGrid).FirstOrDefault();
+                                       .FirstOrDefault();
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
-            inventories = containers.Where(b => !b.Closed)
-                                    .Select(b => b.GetInventory(0));//берем из инвентаря готовой продукции
+            containerInventories = containers.Where(b => !b.Closed)
+                                             .Select(b => b.GetInventory(0));
         }
 
         public void GetContainers()
@@ -888,11 +872,11 @@ namespace IngameScript.BaseManager.BaseNew
             precentageOreVolume = Math.Round((double)freeOreStorageVolume / (double)totalOreStorageVolume * 100, 1);
             
             partsInventories = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(ammoStorageName) || c.CustomName.Contains(equipStorageName)))
-                                        .Select(i => i.GetInventory(0));
+                                         .Select(i => i.GetInventory(0));
 
             freePartsStorageVolume = partsInventories.Sum(i => i.CurrentVolume.ToIntSafe());
             totalPartsStorageVolume = partsInventories.Sum(i => i.MaxVolume.ToIntSafe());
-            precentagePartsVolume = Math.Round(((double)freePartsStorageVolume / (double)totalPartsStorageVolume) * 100, 1);
+            precentagePartsVolume = Math.Round((double)freePartsStorageVolume / (double)totalPartsStorageVolume * 100, 1);
 
             ingotInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName))
                                        .Select(i => i.GetInventory(0));
@@ -933,7 +917,7 @@ namespace IngameScript.BaseManager.BaseNew
                 key.Value.Amount = 0;
             }
 
-            foreach (var inv in inventories)
+            foreach (var inv in containerInventories)
             {
                 inv.GetItems(oreItems);
 
@@ -1071,9 +1055,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             Echo("Try to load refinereys");
 
-            string containerNames = deepScan == true ? "" : oreStorageName;
-
-            var oreInventory = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName) || c.CustomName.Contains(containerNames)))
+            var oreInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(oreStorageName))
                                          .Select(i => i.GetInventory(0))
                                          .Where(i => i.ItemCount > 0);
 
@@ -1159,9 +1141,6 @@ namespace IngameScript.BaseManager.BaseNew
         {
             Echo("Find parts in containers");
 
-            totalPartsStorageVolume = 0;
-            freePartsStorageVolume = 0;
-
             foreach (var dict in partsDictionary)
             {
                 dict.Value.Current = 0;
@@ -1181,7 +1160,7 @@ namespace IngameScript.BaseManager.BaseNew
 
 
             //Блок получения всех компонентов в контейнерах
-            foreach (var inventory in inventories)
+            foreach (var inventory in containerInventories)
             {
                 inventory.GetItems(productionItems);
 
@@ -1406,9 +1385,9 @@ namespace IngameScript.BaseManager.BaseNew
             partsPanel?.WriteText($"<<-------------Production------------->>" +
                                   $"\n{sysState}" +
                                   $"\nContainers:{partsInventories.Count()}" +
-                                  $"\nVolume: {precentagePartsVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T" +
-                                  "\n<<-----------Parts----------->>", true);
+                                  $"\nVolume: {precentagePartsVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T", true);
 
+            partsPanel?.WriteText("\n<<-----------Parts----------->>", true);
 
             foreach (var dict in partsDictionary.OrderBy(k => k.Key))
             {
@@ -1540,7 +1519,7 @@ namespace IngameScript.BaseManager.BaseNew
             }
 
             //Проверка контейнеров
-            foreach (var inventory in inventories)
+            foreach (var inventory in containerInventories)
             {
                 inventory.GetItems(ingotItems);
 
