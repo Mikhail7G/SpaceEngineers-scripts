@@ -1,4 +1,5 @@
 ﻿using Sandbox.Game;
+using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI.Ingame;
 using Sandbox.ModAPI.Interfaces;
@@ -29,6 +30,7 @@ namespace IngameScript.BaseManager.BaseNew
         string ingotStorageName = "Ingot";
         string componentsStorageName = "Part";
         string ammoStorageName = "Ammo";
+        string equipStorageName = "Item";
         string ignoreStorageName = "Ignore";
 
         string lcdInventoryOresName = "LCD Ore";
@@ -139,6 +141,8 @@ namespace IngameScript.BaseManager.BaseNew
         int freePartsStorageVolume = 0;
 
         int currentTick = 0;
+        int globalTick = 0;
+        int globalTickLimit = 4;
 
         int maxReactorPayload = 50;
 
@@ -257,7 +261,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             if (autorun)
             {
-                Runtime.UpdateFrequency = UpdateFrequency.Update100;
+                Runtime.UpdateFrequency = UpdateFrequency.Update10;
                 Echo($"Script autostart in prog");
             }
 
@@ -265,9 +269,7 @@ namespace IngameScript.BaseManager.BaseNew
             updateStateMachine = Update();
         }
 
-        /// <summary>
-        /// Функия выполняется каждые 100 тиков
-        /// </summary>
+      
         public void Main(string args, UpdateType updateType)
         {
 
@@ -276,17 +278,24 @@ namespace IngameScript.BaseManager.BaseNew
 
             monitor.AddRuntime();
 
-
-            if (updateStateMachine != null)
+           if (globalTick == globalTickLimit)
             {
-                bool hasMoreSteps = updateStateMachine.MoveNext();
+                globalTick = 0;
+                DrawEcho();
 
-                if (!hasMoreSteps)
+                if (updateStateMachine != null)
                 {
-                    updateStateMachine.Dispose();
-                    updateStateMachine = Update();
+                    bool hasMoreSteps = updateStateMachine.MoveNext();
+
+                    if (!hasMoreSteps)
+                    {
+                        updateStateMachine.Dispose();
+                        updateStateMachine = Update();
+                    }
                 }
             }
+
+            globalTick++;
 
             monitor.AddInstructions();
             monitor.EndOfFrameCalc();
@@ -414,28 +423,33 @@ namespace IngameScript.BaseManager.BaseNew
 
         public IEnumerator<bool> Update()
         {
-            DrawEcho();
+            //DrawEcho();
             SaveAllBlueprints();
 
             switch (currentTick)
             {
                 case 0:
                     FindLcds();
+                    yield return true;
                     FindInventories();
                     break;
                 case 1:
                     FindOres();
+                    yield return true;
                     PrintOres();
-
+                    yield return true;
                     RefinereysGetData();
                     break;
                 case 2:
                     FindIngots();
+                    yield return true;
                     PrintIngots();
+                    yield return true;
                     ReplaceIngots();
                     break;
                 case 3:
                     ReplaceParts();
+                    yield return true;
                     FindParts();
 
                     while (PartReadingStateMachine())
@@ -443,18 +457,21 @@ namespace IngameScript.BaseManager.BaseNew
                         Runtime.UpdateFrequency = UpdateFrequency.Update1;
                         yield return true;
                     }
-                    Runtime.UpdateFrequency = UpdateFrequency.Update100;
+                    Runtime.UpdateFrequency = UpdateFrequency.Update10;
+
+                    PrintParts();
                     break;
                 case 4:
-                    PrintParts();
                     PowerMangment();
                     PowerSystemDetailed();
+                    yield return true;
                     PartsAutoBuild();
                     break;
                 case 5:
                     LoadRefinereys();
+                    yield return true;
                     ClearAssemblers();
-
+                    yield return true;
                     NanobotOperations();
                     PrintNanobotQueue();
                     break;
@@ -878,7 +895,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             string containerNames = deepScan == true ? "" : oreStorageName;
 
-            oreInventories = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(oreStorageName) || c.CustomName.Contains(containerNames)))
+            oreInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) && c.CustomName.Contains(containerNames))
                                      .Select(i => i.GetInventory(0));
 
             foreach (var key in oreDictionary)
@@ -1050,22 +1067,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 if (refs.InputInventory.ItemCount == 0)
                 {
-                    foreach (var inv in oreInventory)
-                    {
-                        foreach (var ore in oreList)
-                        {
-                            var oreToLoad = inv.FindItem(ore.Value.Type);
-
-                            if (oreToLoad.HasValue)
-                            {
-                                if (inv.TransferItemTo(refs.InputInventory, oreToLoad.Value, null))
-                                {
-                                    Echo($"Ore loaded: {oreToLoad.GetValueOrDefault()} to {refs?.CustomName}");
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                   
                 }
                 else
                 {   //Догрузка руды в печи
@@ -1150,7 +1152,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             string containerNames = deepScan == true ? "" : componentsStorageName;
 
-            partsInventories = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(containerNames)))
+            partsInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) &&  (c.CustomName.Contains(containerNames) || c.CustomName.Contains(ammoStorageName)))
                                         .Select(i => i.GetInventory(0));
 
             freePartsStorageVolume = partsInventories.Sum(i => i.CurrentVolume.ToIntSafe());
@@ -1223,6 +1225,10 @@ namespace IngameScript.BaseManager.BaseNew
                                                .Select(i => i.GetInventory(0))
                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
+            var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
+                                             .Select(i => i.GetInventory(0))
+                                             .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
             var assInventory = assemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName))
                                          .Select(i => i.GetInventory(1))
                                          .Where(i => i.ItemCount > 0);
@@ -1239,7 +1245,7 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 var currentCargo = ass.ItemCount;
 
-                for (int i = 0; i <= currentCargo; i++)
+                for (int i = currentCargo; i >= 0; i--)
                 {
                     var getItem = ass.GetItemAt(i);
 
@@ -1255,12 +1261,17 @@ namespace IngameScript.BaseManager.BaseNew
 
                     else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
                     {
-                        TransferItem(item, ass, targetAmmoInventory);
+                        TransferItem(item, ass, targetAmmoInventory,i);
                     }
 
                     else if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
                     {
-                        TransferItem(item, ass, targetItemInventory);
+                        TransferItem(item, ass, targetItemInventory,i);
+                    }
+
+                    else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
+                    {
+                        TransferItem(item, ass, targetEquipInventory,i);
                     }
                 }
 
@@ -1483,7 +1494,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             string containerNames = deepScan == true ? "" : ingotStorageName;
 
-            ingnotInventorys = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(ingotStorageName) || c.CustomName.Contains(containerNames)))
+            ingnotInventorys = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ignoreStorageName) && c.CustomName.Contains(containerNames))
                                          .Select(i => i.GetInventory(0));
 
             freeIngotStorageVolume = ingnotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
@@ -1664,7 +1675,7 @@ namespace IngameScript.BaseManager.BaseNew
                                             .Where(i => !i.IsFull);
 
             var blueprints = new List<MyProductionItem>();
-            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).First();
+            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).FirstOrDefault();
             if (ass == null)
                 return;
 
@@ -1718,6 +1729,32 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
+        /// Получение чертежа по названию компонента
+        /// </summary>
+        public bool TryGetBlueprint(string itemName, out MyDefinitionId blueprint)
+        {
+            blueprint = default(MyDefinitionId);
+
+            var bd = blueprintData.Where(k => k.Key.Contains(itemName));
+
+            if (!bd.Any())
+            {
+                Echo($"WARNING no blueprint: {itemName}");
+                return false;
+            }
+
+            string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Value;
+
+            if (!MyDefinitionId.TryParse(name, out blueprint))
+            {
+                Echo($"WARNING cant parse: {name}");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Автосборка компонентов
         /// </summary>
         void PartsAutoBuild()
@@ -1739,37 +1776,26 @@ namespace IngameScript.BaseManager.BaseNew
 
             foreach (var key in reqItems)
             {
-                AddItemToProduct(key, freeAssemblers);
+                AddItemToAutoProduct(key, freeAssemblers);
             }
 
             foreach (var key in reqIngnotsItem)
             {
-                AddItemToProduct(key, freeAssemblers);
+                AddItemToAutoProduct(key, freeAssemblers);
             }
         }
 
         /// <summary>
         /// Добавить недостающий предмет на автосборку
         /// </summary>
-        private void AddItemToProduct(KeyValuePair<string, ItemBalanser> key, List<IMyAssembler> availAssemblers)
+        private void AddItemToAutoProduct(KeyValuePair<string, ItemBalanser> key, List<IMyAssembler> availAssemblers)
         {
             var needed = key.Value.Requested - key.Value.Current;
 
-            var bd = blueprintData.Where(k => k.Key.Contains(key.Key));
-
-            if (!bd.Any())
-            {
-                Echo($"WARNING no blueprint: {key.Key}");
-                return;
-            }
-
-            string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Value;
-
             MyDefinitionId blueprint;
 
-            if (!MyDefinitionId.TryParse(name, out blueprint))
+            if(!TryGetBlueprint(key.Key, out blueprint))
             {
-                Echo($"WARNING cant parse: {name}");
                 return;
             }
 
@@ -1778,17 +1804,17 @@ namespace IngameScript.BaseManager.BaseNew
                 return;
 
             List<MyProductionItem> items = new List<MyProductionItem>();
-            List<MyInventoryItem> prodItems = new List<MyInventoryItem>();
+            List<MyInventoryItem> invItems = new List<MyInventoryItem>();
 
             foreach (var ass in availAss)
             {
                 items.Clear();
-                prodItems.Clear();
+                invItems.Clear();
 
                 ass.GetQueue(items);
-                ass.OutputInventory.GetItems(prodItems);
+                ass.OutputInventory.GetItems(invItems);
 
-                var itemsInOutInv = prodItems.Where(item => item.Type.SubtypeId.Contains(key.Key)).ToList();
+                var itemsInOutInv = invItems.Where(item => item.Type.SubtypeId.Contains(key.Key)).ToList();
                 var neededItems = items.Where(i => i.BlueprintId.Equals(blueprint)).ToList();
 
                 if (neededItems.Any())
@@ -1891,22 +1917,10 @@ namespace IngameScript.BaseManager.BaseNew
 
             foreach (var bps in nanobotBuildQueue)
             {
-                var bd = blueprintData.Where(k => k.Key.Contains(bps.Key.SubtypeName));
-
-                if (!bd.Any())
-                {
-                    Echo($"WARNING no blueprint: {bps.Key.SubtypeName}");
-                    nanobuildReady = false;
-                    continue;
-                }
-
-                string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Value;
-
                 MyDefinitionId blueprint;
 
-                if (!MyDefinitionId.TryParse(name, out blueprint))
+                if (!TryGetBlueprint(bps.Key.SubtypeName, out blueprint))
                 {
-                    Echo($"WARNING cant parse: {name}");
                     continue;
                 }
 
@@ -1955,16 +1969,11 @@ namespace IngameScript.BaseManager.BaseNew
             public int Current { set; get; } = 0;
             public int Requested { set; get; } = 0;
         }
-
-        public class RefinereyDatas
-        {
-            public float Effectivity { set; get; } = 0;
-            public List<int> OrePriority = new List<int>();
-        }
-
+      
         public class OrePriority
         {
             public MyItemType Type { set; get; }
+            public MyDefinitionId Blueprint { set; get; }
             public int Priority { set; get; } = 0;
             public int Amount { set; get; } = 0;
 
