@@ -60,7 +60,6 @@ namespace IngameScript.BaseManager.BaseNew
         string powerManagmentName = "PowerManagmentSystem";
         string detailedPowerManagmentName = "DetailedPowerMonitoring";
         string autoBuildSystem = "AutoBuildSystem";
-        string transferOresFromOtherName = "TransferOreFromTransports";
         string nanobotOrerationsName = "UseNanobotAutoBuild";
         string refinereyOperationsName = "UseRefinereyOperations";
         string refinereyPriorityName = "UseRefinereyPriortty";
@@ -84,9 +83,6 @@ namespace IngameScript.BaseManager.BaseNew
         string specAssTagName = "AssemblersSpecialOperationsTagName";
         string bpcLearnTagName = "AssemblersBlueprintLeanerName";
 
-
-
-
         PerformanceMonitor monitor;
         MyIni dataSystem;
         //дисплеи
@@ -105,6 +101,7 @@ namespace IngameScript.BaseManager.BaseNew
         IEnumerable<IMyInventory> partsInventories;
         IEnumerable<IMyInventory> ingotInventorys;
 
+        List<IMyTerminalBlock> allBlocks;
         //сборщики, печки, контейнера
         List<IMyRefinery> refinereys;
         List<IMyAssembler> assemblers;
@@ -147,7 +144,7 @@ namespace IngameScript.BaseManager.BaseNew
         int refinereyReloadPrecentage = 70;
         int maxVolumeContainerPercentage = 95;
 
-        int stateMachineCounter = 0;
+        int partsStateMachineCounter = 0;
         int maxPartsPerScan = 5;
 
         float fontSize = 0.8f;
@@ -223,6 +220,7 @@ namespace IngameScript.BaseManager.BaseNew
             Echo($"Script first init starting");
             Runtime.UpdateFrequency = UpdateFrequency.None;
 
+            allBlocks = new List<IMyTerminalBlock>();
             containerInventories = new List<IMyInventory>();
             oreItems = new List<MyInventoryItem>();
             refinereys = new List<IMyRefinery>();
@@ -423,7 +421,6 @@ namespace IngameScript.BaseManager.BaseNew
 
         public IEnumerator<bool> Update()
         {
-            //DrawEcho();
             SaveAllBlueprints();
 
             switch (currentTick)
@@ -441,6 +438,8 @@ namespace IngameScript.BaseManager.BaseNew
                     PrintOres();
                     yield return true;
                     RefinereysGetData();
+                    yield return true;
+                    ContainersSortingOres();
                     break;
                 case 2:
                     FindIngots();
@@ -448,6 +447,8 @@ namespace IngameScript.BaseManager.BaseNew
                     PrintIngots();
                     yield return true;
                     ReplaceIngots();
+                    yield return true;
+                    ContainersSortingIngots();
                     break;
                 case 3:
                     ReplaceParts();
@@ -462,6 +463,8 @@ namespace IngameScript.BaseManager.BaseNew
                     Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
                     PrintParts();
+                    yield return true;
+                    ContainersSortingParts();
                     break;
                 case 4:
                     PowerMangment();
@@ -823,43 +826,47 @@ namespace IngameScript.BaseManager.BaseNew
         {
             Echo("Find blocks");
 
-            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
+            allBlocks.Clear();
 
-            refinereys = blocks.Where(b => b is IMyRefinery)
-                               .Where(r => r.IsFunctional)
-                               .Select(t => t as IMyRefinery).ToList();
+            GridTerminalSystem.GetBlocksOfType(allBlocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
 
-            assemblers = blocks.Where(b => b is IMyAssembler)
-                               .Where(a => a.IsFunctional)
-                               .Select(t => t as IMyAssembler).ToList();
+            refinereys = allBlocks.Where(b => b is IMyRefinery)
+                                  .Where(r => r.IsFunctional)
+                                  .Select(t => t as IMyRefinery).ToList();
 
-            containers = blocks.Where(b => b is IMyCargoContainer)
-                               .Where(c => c.IsFunctional)
-                               .Select(t => t as IMyCargoContainer).ToList();
+            assemblers = allBlocks.Where(b => b is IMyAssembler)
+                                  .Where(a => a.IsFunctional)
+                                  .Select(t => t as IMyAssembler).ToList();
 
-            batteries = blocks.Where(b => b is IMyBatteryBlock)
-                              .Where(b => b.IsFunctional)
-                              .Select(t => t as IMyBatteryBlock).ToList();
+            containers = allBlocks.Where(b => b is IMyCargoContainer)
+                                  .Where(c => c.IsFunctional)
+                                  .Select(t => t as IMyCargoContainer).ToList();
 
-            gasTanks = blocks.Where(b => b is IMyGasTank)
-                             .Where(g => g.IsFunctional)
-                             .Select(t => t as IMyGasTank).ToList();
+            batteries = allBlocks.Where(b => b is IMyBatteryBlock)
+                                 .Where(b => b.IsFunctional)
+                                 .Select(t => t as IMyBatteryBlock).ToList();
 
-            generators = blocks.Where(b => b is IMyPowerProducer)
-                               .Where(r => r.IsFunctional)
-                               .Select(t => t as IMyPowerProducer).ToList();
+            gasTanks = allBlocks.Where(b => b is IMyGasTank)
+                                .Where(g => g.IsFunctional)
+                                .Select(t => t as IMyGasTank).ToList();
 
-            nanobotBuildModule = blocks.Where(b => b.IsFunctional)
-                                       .Where(g => g.BlockDefinition.SubtypeName.ToString() == "SELtdLargeNanobotBuildAndRepairSystem")
-                                       .FirstOrDefault();
+            generators = allBlocks.Where(b => b is IMyPowerProducer)
+                                  .Where(r => r.IsFunctional)
+                                  .Select(t => t as IMyPowerProducer).ToList();
+
+            nanobotBuildModule = allBlocks.Where(b => b.IsFunctional)
+                                          .Where(g => g.BlockDefinition.SubtypeName.ToString() == "SELtdLargeNanobotBuildAndRepairSystem")
+                                          .FirstOrDefault();
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
-            containerInventories = containers.Where(b => !b.Closed)
+            containerInventories = containers.Where(b => !b.Closed && !b.CustomName.Contains(ignoreStorageName))
                                              .Select(b => b.GetInventory(0));
         }
 
+        /// <summary>
+        /// Поиск спец контейнеров и рассчет их обьема
+        /// </summary>
         public void GetContainers()
         {
             Echo("Find containers");
@@ -884,7 +891,9 @@ namespace IngameScript.BaseManager.BaseNew
             freeIngotStorageVolume = ingotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalIngotStorageVolume = ingotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
             precentageIngotsVolume = Math.Round(((double)freeIngotStorageVolume / (double)totalIngotStorageVolume) * 100, 1);
+
         }
+
 
         /// <summary>
         /// Включение/Выключение сборщиков и печей
@@ -1033,7 +1042,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 refs.Key.GetQueue(refinereysItems);
                 refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
-                                             $"\nEffectivity: {refs.Value} Load: {loadInput} / {loadOuptut} %", true);
+                                             $"\nEffectivity: {refs.Value} Load: {Math.Round(loadInput, 1)} / {Math.Round(loadOuptut, 1)} %", true);
 
                 foreach (var bp in refinereysItems)
                 {
@@ -1113,25 +1122,25 @@ namespace IngameScript.BaseManager.BaseNew
             if (!needReplaceIngots)
                 return;
 
-            var targetInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName) && !c.CustomName.Contains(ignoreStorageName))
-                                            .Select(i => i.GetInventory(0))
-                                            .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetIngotInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName))
+                                                 .Select(i => i.GetInventory(0))
+                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             var refsInventory = refinereys.Where(r => !r.Closed)
                                           .Select(i => i.GetInventory(1))
                                           .Where(i => i.ItemCount > 0);
 
-            Echo("------Replace ingots starting------");
+            Echo("Replace ingots starting");
 
-            if ((!targetInventory.Any()) || (!refsInventory.Any()))
+            if ((!targetIngotInventory.Any()) || (!refsInventory.Any()))
             {
                 Echo("------No items to transfer-----");
                 return;
             }
 
-            Echo($"Total ingot conts:{targetInventory.Count()}");
+            Echo($"Total ingot conts:{targetIngotInventory.Count()}");
 
-            TransferItems(refsInventory, targetInventory);
+            TransferItems(refsInventory, targetIngotInventory);
         }
 
         /// <summary>
@@ -1192,7 +1201,11 @@ namespace IngameScript.BaseManager.BaseNew
                     {
                         //Добавляем только те слитки, у которых есть возомжность построить и которых нет в списке компонентов
                         if (partsDictionary.ContainsKey(item.Type.SubtypeId))
-                        {
+                        {//удаляем компонент из списка руд, если у него есть чертеж
+                            if(buildedIngotsDictionary.ContainsKey(item.Type.SubtypeId))
+                            {
+                                buildedIngotsDictionary.Remove(item.Type.SubtypeId);
+                            }
                             continue;
                         }
 
@@ -1244,11 +1257,11 @@ namespace IngameScript.BaseManager.BaseNew
                                                  .Select(i => i.GetInventory(0))
                                                  .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-            var assInventory = assemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName))
+            var assInventory = assemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName) && a.Mode == MyAssemblerMode.Assembly)
                                          .Select(i => i.GetInventory(1))
                                          .Where(i => i.ItemCount > 0);
 
-            Echo("------Replace parts starting------");
+            Echo("Replace parts starting");
 
             if (!assInventory.Any())
             {
@@ -1304,9 +1317,14 @@ namespace IngameScript.BaseManager.BaseNew
                                          .Select(i => i.GetInventory(0))
                                          .Where(i => i.ItemCount > 0);
 
-            var targetInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName) && !c.CustomName.Contains(ignoreStorageName))
-                                            .Select(i => i.GetInventory(0))
-                                            .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetInventory = ingotInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            var freeAssInv = specialAssemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName) && a.IsQueueEmpty && a.Mode == MyAssemblerMode.Disassembly);
+
+            foreach (var ass in freeAssInv)
+            {
+                ass.Mode = MyAssemblerMode.Assembly;
+            }
 
             if (!assInventory.Any() || !targetInventory.Any())
                 return;
@@ -1334,12 +1352,12 @@ namespace IngameScript.BaseManager.BaseNew
 
                 foreach (var str in strings)
                 {
-                    if (stateMachineCounter > maxPartsPerScan) 
+                    if (partsStateMachineCounter > maxPartsPerScan) 
                     {
-                        stateMachineCounter = 0;
+                        partsStateMachineCounter = 0;
                         yield return true;
                     }
-                    stateMachineCounter++;
+                    partsStateMachineCounter++;
 
                     System.Text.RegularExpressions.Match ResultReg = ProdItemFullRegex.Match(str);
 
@@ -1573,8 +1591,7 @@ namespace IngameScript.BaseManager.BaseNew
             if (!usePowerManagmentSystem)
                 return;
 
-
-            Echo("------Power managment system-------");
+            Echo("Power managment system");
             Echo($"Batt:{batteries.Count}");
             Echo($"Gens:{generators.Count}");
 
@@ -1650,11 +1667,10 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void SwitchBlueprintGetter()
         {
-            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).First();
+            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).FirstOrDefault();
 
             if (ass == null)
             {
-                assemblerBlueprintGetter = false;
                 return;
             }
 
@@ -1778,12 +1794,14 @@ namespace IngameScript.BaseManager.BaseNew
             if (!useAutoBuildSystem)
                 return;
 
-            Echo("------Auto build system-------");
+            Echo("uto build system");
 
             var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed && ass.Mode == MyAssemblerMode.Assembly && !ass.CustomName.Contains(assemblersBlueprintLeanerName)).ToList();
 
             var reqItems = partsDictionary.Where(k => k.Value.Current < k.Value.Requested);
             var reqIngnotsItem = buildedIngotsDictionary.Where(k => k.Value.Current < k.Value.Requested);
+            var reqAmmoItem = ammoDictionary.Where(k => k.Value.Current < k.Value.Requested);
+            var reqEqItem = equipmentDictionary.Where(k => k.Value.Current < k.Value.Requested);
 
             if (reqItems.Any() || reqIngnotsItem.Any())
             {
@@ -1799,6 +1817,17 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 AddItemToAutoProduct(key, freeAssemblers);
             }
+
+            foreach (var key in reqAmmoItem)
+            {
+                AddItemToAutoProduct(key, freeAssemblers);
+            }
+
+            foreach (var key in reqEqItem)
+            {
+                AddItemToAutoProduct(key, freeAssemblers);
+            }
+
         }
 
         /// <summary>
@@ -1978,6 +2007,125 @@ namespace IngameScript.BaseManager.BaseNew
             }
         }
 
+        /// <summary>
+        /// Поиск руд в контейнерах не для руд и перенос куда надо
+        /// </summary>
+        public void ContainersSortingOres()
+        {
+            Echo("Transfer ores to conts");
+
+            var nonOreInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(oreStorageName))
+                                      .Select(i => i.GetInventory(0));
+
+            var targetOreInventory = oreInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            foreach (var inv in nonOreInventories)
+            {
+                var currentCargo = inv.ItemCount;
+
+                for (int i = currentCargo; i >= 0; i--)
+                {
+                    var getItem = inv.GetItemAt(i);
+
+                    if (getItem == null)
+                        continue;
+
+                    var item = getItem.Value;
+
+                    if (item.Type.TypeId == "MyObjectBuilder_Ore")//Построенные слитки 
+                    {
+                        TransferItem(item, inv, targetOreInventory, i);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Перенос слитков в нужный контейнер
+        /// </summary>
+        public void ContainersSortingIngots()
+        {
+            Echo("Transfer ingots to conts");
+
+            var nonIngotInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ingotStorageName))
+                                      .Select(i => i.GetInventory(0));
+
+            var targetIngotInventory = ingotInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            foreach (var inv in nonIngotInventories)
+            {
+                var currentCargo = inv.ItemCount;
+
+                for (int i = currentCargo; i >= 0; i--)
+                {
+                    var getItem = inv.GetItemAt(i);
+
+                    if (getItem == null)
+                        continue;
+
+                    var item = getItem.Value;
+
+                    if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Построенные слитки 
+                    {
+                        TransferItem(item, inv, targetIngotInventory, i);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Перенос всех построенных компонентов в нужные контейнера
+        /// </summary>
+        public void ContainersSortingParts()
+        {
+            Echo("Transfer parts to conts");
+
+            var nonPartsInventories = containers.Where(c => (!c.Closed) && (!c.CustomName.Contains(componentsStorageName) || !c.CustomName.Contains(ammoStorageName) || !c.CustomName.Contains(equipStorageName)))
+                                                .Select(i => i.GetInventory(0));
+
+            var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
+                                                .Select(i => i.GetInventory(0))
+                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            var targetAmmoInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
+                                                .Select(i => i.GetInventory(0))
+                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
+                                                 .Select(i => i.GetInventory(0))
+                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            foreach (var inv in nonPartsInventories)
+            {
+                var currentCargo = inv.ItemCount;
+
+                for (int i = currentCargo; i >= 0; i--)
+                {
+                    var getItem = inv.GetItemAt(i);
+
+                    if (getItem == null)
+                        continue;
+
+                    var item = getItem.Value;
+
+                    if (item.Type.TypeId == "MyObjectBuilder_Component")//части
+                    {
+                        TransferItem(item, inv, targetItemInventory, i);
+                    }
+
+                    else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+                    {
+                        TransferItem(item, inv, targetAmmoInventory, i);
+                    }
+
+                    else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
+                    {
+                        TransferItem(item, inv, targetEquipInventory, i);
+                    }
+                }
+
+            }
+        }
 
 
         public class ItemBalanser
