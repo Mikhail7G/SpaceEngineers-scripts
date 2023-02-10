@@ -32,10 +32,9 @@ namespace SpaceEngineers.Autominer.Autominer
         MovementCommander mover;
         Navigation navigation;
 
+        bool navigating;
         bool saving;
         Waypoint point;
-        Waypoint wp;
-
 
         public Program()
         {
@@ -61,8 +60,10 @@ namespace SpaceEngineers.Autominer.Autominer
 
             mover.Update();
 
+            if (saving)
+                SaveWaypoint();
 
-            Echo($"{navigation.CurrentWaypoint}\n{navigation.TotalWaypoitns}");
+            Echo($"{navigation.CurrentWaypoint}\n{navigation.GetWaypoints()}");
 
             monitor.AddInstructions("");
             monitor.EndOfFrameCalc();
@@ -78,7 +79,8 @@ namespace SpaceEngineers.Autominer.Autominer
             switch (comm)
             {
                 case "START":
-                    mover.FlyTo(new Vector3D(1000, 0, 0), 1);
+                    navigation.Relase();
+                    navigation.ReversePoints();
                     break;
 
                 case "STOP":
@@ -86,19 +88,32 @@ namespace SpaceEngineers.Autominer.Autominer
                     break;
 
                 case "ADD":
-                  
+                    saving = !saving;
+                    point = new Waypoint(mover.GetPosition(), mover.GetOrientation(), 10);
+                    navigation.WaypointAdd(point);
                     break;
 
                 case "FLY":
-                 
-
                     break;
 
             }
 
         }
 
-      
+
+        public void SaveWaypoint()
+        {
+            if (point != null)
+            {
+                if (Vector3D.Distance(point.Position, mover.GetPosition()) > 50)
+                {
+                    point = new Waypoint(mover.GetPosition(), mover.GetOrientation(), (float)mover.GetSpeed());
+                    navigation.WaypointAdd(point);
+                }
+            }
+        }
+
+
         public class MovementCommander
         {
             IMyShipController shipController;
@@ -283,7 +298,6 @@ namespace SpaceEngineers.Autominer.Autominer
                     targetPos = pos;
                     DesiredSpeed = speed;
                     MoveToTarget = true;
-                    FlyMode = FlyType.Normal;
                 }
             }
 
@@ -294,7 +308,6 @@ namespace SpaceEngineers.Autominer.Autominer
                 targetRotation = wp.Orientation;
 
                 MoveToTarget = true;
-                FlyMode = FlyType.Normal;
             }
 
             public void AlignOnWP(RotateType type)
@@ -389,7 +402,6 @@ namespace SpaceEngineers.Autominer.Autominer
             {
                 MoveToTarget = false;
                 Rotate = false;
-                FlyMode = FlyType.Normal;
 
                 ReleaseEngines();
                 OverrideGyro(false);
@@ -642,8 +654,14 @@ namespace SpaceEngineers.Autominer.Autominer
                 main = program;
                 waypoints = new List<Waypoint>();
                 Reverse = false;
+                Finish = false;
                 CurrentWaypoint = 0;
 
+            }
+
+            public int GetWaypoints()
+            {
+                return waypoints.Count;
             }
 
             public void WaypointAdd(Vector3D pos, Matrix orientation, float speed, WaypointType type = WaypointType.Navigating)
@@ -653,9 +671,22 @@ namespace SpaceEngineers.Autominer.Autominer
 
             public void WaypointAdd(Waypoint WP)
             {
-                waypoints.Add(new Waypoint(WP.Position, WP.Orientation, WP.SpeedLimit, WP.Type));
+                waypoints.Add(WP);
             }
-           
+
+            public void Relase()
+            {
+                Finish = false;
+                CurrentWaypoint = 0;
+            }
+
+            public void ReversePoints()
+            {
+                Reverse = !Reverse;
+
+                waypoints.Reverse();
+            }
+
         }
 
         public class Waypoint
