@@ -41,7 +41,7 @@ namespace SpaceEngineers.Autominer.Autominer
 
         private void Mover_MovingFinishedNotify()
         {
-          
+           
         }
 
         public void Main(string args, UpdateType updateType)
@@ -57,9 +57,7 @@ namespace SpaceEngineers.Autominer.Autominer
             monitor.Draw();
         }
 
-   
 
-       
 
         public void Command(string commands)
         {
@@ -72,11 +70,7 @@ namespace SpaceEngineers.Autominer.Autominer
                     break;
 
                 case "STOP":
-                    mover.FullStop();     
-                    break;
-
-                case "SAVE":
-                    mover.Save();
+                    mover.FullStop();
                     break;
 
             }
@@ -103,6 +97,7 @@ namespace SpaceEngineers.Autominer.Autominer
             public FlyType FlyMode { get; private set; }
             //Основные параметры
             public bool MoveToTarget { get; private set; }
+            public bool RotateMatrix { get; private set; }
             public bool PlanetDetected { get; private set; }
             public bool InGravity { get; private set; }
             public float StoppingAccuracyDistance { get; set; }
@@ -149,9 +144,7 @@ namespace SpaceEngineers.Autominer.Autominer
             public delegate void MoveFinishHandler();
             public event MoveFinishHandler MovingFinishedNotify;
 
-
-            //TMP;
-            public Matrix RotMatr;
+            Matrix targetRotation;
 
             public enum FlyType
             {
@@ -228,43 +221,17 @@ namespace SpaceEngineers.Autominer.Autominer
 
             public void Update()
             {
-               
-                var pitch = forwardVector.Dot(RotMatr.Down);
-                var yaw = forwardVector.Dot(RotMatr.Right);
-                var roll = forwardVector.Dot(RotMatr.Backward);
-
-                var targetRoll = Vector3D.Dot(shipController.WorldMatrix.Left, Vector3D.Reject(Vector3D.Normalize(-RotMatr.Down), shipController.WorldMatrix.Forward));
-                targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
-
-                var targetPitch = Vector3D.Dot(shipController.WorldMatrix.Up, Vector3D.Reject(Vector3D.Normalize(-RotMatr.Forward), shipController.WorldMatrix.Left));
-                targetPitch = Math.Acos(targetPitch) - Math.PI / 2;
-
-                var targetYaw = Vector3D.Dot(shipController.WorldMatrix.Forward, Vector3D.Reject(Vector3D.Normalize(-RotMatr.Left), shipController.WorldMatrix.Up));
-                targetYaw = Math.Acos(targetYaw) - Math.PI / 2;
-
-
-                var calcPosition =(position + RotMatr.Forward) - position;
-
-                //calcPosition += shipController.WorldMatrix.Backward * targetRoll;
-
-                Vector3D resultVector = Vector3D.Normalize(calcPosition).Cross(shipController.WorldMatrix.Forward);
-                resultVector+= shipController.WorldMatrix.Backward * targetRoll;
-                resultVector += shipController.WorldMatrix.Left * targetPitch;
-                resultVector += shipController.WorldMatrix.Up * targetYaw;
-
+                GetShipParams();
 
                 if (MoveToTarget)
                 {
-                    GetShipParams();
-                    RefreshEngines();
                     ThrusterTick();
-                    SetGyro(resultVector);
                 }
 
-
-                program.Echo($"P:{pitch}" +
-                    $"\nR:{roll}" +
-                    $"\nY:{yaw}");
+                if(RotateMatrix)
+                {
+                    RotateByMatrix(targetRotation);
+                }
             }
 
             /// <summary>
@@ -281,12 +248,29 @@ namespace SpaceEngineers.Autominer.Autominer
                 }
             }
 
+            public void FlyToWP(Waypoint wp)
+            {
+                targetPos = wp.Position;
+                DesiredSpeed = wp.SpeedLimit;
+                targetRotation = wp.Orientation;
+
+                MoveToTarget = true;
+                FlyMode = FlyType.Normal;
+                RotateMatrix = true;
+                OverrideGyro(true);
+            }
+
             /// <summary>
             /// Текущая позиция грида
             /// </summary>
             public Vector3D GetPosition()
             {
                 return shipController.GetPosition();
+            }
+
+            public Matrix GetOrientation()
+            {
+                return shipController.WorldMatrix;
             }
 
             /// <summary>
@@ -333,7 +317,7 @@ namespace SpaceEngineers.Autominer.Autominer
             /// <summary>
             /// Локальное движение грида по заданным направлениям, направление и на сколько сдвинуть грид
             /// </summary>
-            public Vector3D GetShipGlobalDrift(Vector3D pos, float fwd,float up,float left)
+            public Vector3D GetShipGlobalDrift(Vector3D pos, float fwd, float up, float left)
             {
                 return pos + shipController.WorldMatrix.Forward * fwd + shipController.WorldMatrix.Up * up + shipController.WorldMatrix.Left * left;
             }
@@ -355,9 +339,11 @@ namespace SpaceEngineers.Autominer.Autominer
             public void FullStop()
             {
                 MoveToTarget = false;
+                RotateMatrix = false;
                 FlyMode = FlyType.Normal;
 
                 ReleaseEngines();
+                OverrideGyro(false);
             }
 
             void GetShipParams()
@@ -404,7 +390,6 @@ namespace SpaceEngineers.Autominer.Autominer
                 PathLen = (float)path.Length();
                 pathNormal = Vector3D.Normalize(path);
 
-                var size = shipController.CubeGrid.GridSize;
             }
 
             void RefreshEngines()
@@ -427,7 +412,6 @@ namespace SpaceEngineers.Autominer.Autominer
                     thruster.ThrustOverride = 0;
                 }
             }
-
 
             double GetMaxThrust(Vector3D dir)
             {
@@ -459,10 +443,11 @@ namespace SpaceEngineers.Autominer.Autominer
                 if (PathLen < StoppingAccuracyDistance)
                 {
                     MovingFinishedNotify?.Invoke();
-                    ReleaseEngines();
-                    MoveToTarget = false;
+                    FullStop();
                     return;
                 }
+
+                RefreshEngines();
 
                 Vector3D force, directVel, directNormal, indirectVel;
                 double timeToEnd, maxFrc, maxVel, maxAcc, TIME_STEP = 2.5 * TICK_TIME, smooth;
@@ -534,13 +519,28 @@ namespace SpaceEngineers.Autominer.Autominer
                 }
             }
 
-            public void Save()
+            public void RotateByMatrix(Matrix rotate)
             {
-               // RotMatr = Matrix.CreateWorld(position, forwardVector, upVector);
-                RotMatr = orientation;
+                var targetRoll = Vector3D.Dot(shipController.WorldMatrix.Left, Vector3D.Reject(Vector3D.Normalize(-rotate.Down), shipController.WorldMatrix.Forward));
+                targetRoll = Math.Acos(targetRoll) - Math.PI / 2;
+
+                var targetPitch = Vector3D.Dot(shipController.WorldMatrix.Up, Vector3D.Reject(Vector3D.Normalize(-rotate.Forward), shipController.WorldMatrix.Left));
+                targetPitch = Math.Acos(targetPitch) - Math.PI / 2;
+
+                var targetYaw = Vector3D.Dot(shipController.WorldMatrix.Forward, Vector3D.Reject(Vector3D.Normalize(-rotate.Left), shipController.WorldMatrix.Up));
+                targetYaw = Math.Acos(targetYaw) - Math.PI / 2;
+
+                var calcPosition = (position + rotate.Forward) - position;
+
+                Vector3D resultVector = Vector3D.Normalize(calcPosition).Cross(shipController.WorldMatrix.Forward);
+                resultVector += shipController.WorldMatrix.Backward * targetRoll;
+                resultVector += shipController.WorldMatrix.Left * targetPitch;
+                resultVector += shipController.WorldMatrix.Up * targetYaw;
+
+                SetGyro(resultVector);
             }
 
-            public void SetGyro(Vector3D axis)
+            void SetGyro(Vector3D axis)
             {
                 foreach (IMyGyro gyro in gyros)
                 {
@@ -550,9 +550,67 @@ namespace SpaceEngineers.Autominer.Autominer
                 }
             }
 
+            void OverrideGyro(bool enable)
+            {
+                foreach (IMyGyro gyro in gyros)
+                {
+                    gyro.Yaw = 0;
+                    gyro.Pitch = 0;
+                    gyro.Roll = 0;
+                    gyro.GyroOverride = enable;
+                }
+            }
+
+
+        }
+
+        public class Naviration
+        {
+            Program main;
+
+            List<Waypoint> waypoints;
+
+
+            public Naviration(Program program)
+            {
+                main = program;
+                waypoints = new List<Waypoint>();
+
+            }
+
+            public void WaypointAdd(Vector3D pos,Matrix orientation,float speed, WaypointType type = WaypointType.Navigating)
+            {
+                waypoints.Add(new Waypoint(pos, orientation, speed, type));
+            }
         }
 
 
+        public class Waypoint
+        {
+            public float SpeedLimit { get; set; }
+            public Vector3D Position { get; set; }
+            public Matrix Orientation { get; set; }
+            public WaypointType Type { get; set; }
+
+            public Waypoint(Vector3D pos,Matrix orient, float speed, WaypointType type = WaypointType.Navigating)
+            {
+                Position = pos;
+                Orientation = orient;
+                SpeedLimit = speed;
+                Type = type;
+            }
+
+
+        }
+
+        public enum WaypointType
+        {
+            Navigating=0,
+            Docking=1,
+        }
+
+
+          
 
         public class PIDRegulator
         {
