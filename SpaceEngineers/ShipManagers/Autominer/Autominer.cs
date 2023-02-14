@@ -682,8 +682,6 @@ namespace SpaceEngineers.Autominer.Autominer
 
             public void ReversePoints()
             {
-                Reverse = !Reverse;
-
                 waypoints.Reverse();
             }
 

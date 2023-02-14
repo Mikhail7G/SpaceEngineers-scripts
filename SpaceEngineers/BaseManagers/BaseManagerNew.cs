@@ -64,6 +64,7 @@ namespace IngameScript.BaseManager.BaseNew
         string refinereyOperationsName = "UseRefinereyOperations";
         string refinereyPriorityName = "UseRefinereyPriortty";
         string reactorFuelLimitterName = "ReactorFuelLimitter";
+        string containerSortingName = "SortingContainers";
 
         string oreLCDName = "LcdInventoryOresName";
         string ingotLCDName = "LcdInventoryIngotsName";
@@ -125,6 +126,7 @@ namespace IngameScript.BaseManager.BaseNew
         bool useRefinereysOperations = false;
         bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
+        bool containerSorting = false;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -465,6 +467,8 @@ namespace IngameScript.BaseManager.BaseNew
                     PrintParts();
                     yield return true;
                     ContainersSortingParts();
+                    yield return true;
+                    ContainersSortingAmmo();
                     break;
                 case 4:
                     PowerMangment();
@@ -513,6 +517,7 @@ namespace IngameScript.BaseManager.BaseNew
                 useRefinereysOperations = dataSystem.Get(operationSection, refinereyOperationsName).ToBoolean();
                 useRefinereyPriorty = dataSystem.Get(operationSection, refinereyPriorityName).ToBoolean();
                 reactorPayloadLimitter = dataSystem.Get(operationSection, reactorFuelLimitterName).ToBoolean();
+                containerSorting = dataSystem.Get(operationSection, containerSortingName).ToBoolean();
 
                 //Containers 
                 oreStorageName = dataSystem.Get(contSection, oreContName).ToString();
@@ -576,6 +581,7 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set(operationSection, refinereyOperationsName, false);
                 dataSystem.Set(operationSection, refinereyPriorityName, false);
                 dataSystem.Set(operationSection, reactorFuelLimitterName, false);
+                dataSystem.Set(operationSection, containerSortingName, false);
 
                 dataSystem.AddSection(namesSection);
                 dataSystem.Set(namesSection, oreLCDName, lcdInventoryOresName);
@@ -623,6 +629,7 @@ namespace IngameScript.BaseManager.BaseNew
             dataSystem.Set(operationSection, refinereyOperationsName, useRefinereysOperations);
             dataSystem.Set(operationSection, refinereyPriorityName, useRefinereyPriorty);
             dataSystem.Set(operationSection, reactorFuelLimitterName, reactorPayloadLimitter);
+            dataSystem.Set(operationSection, containerSortingName, containerSorting);
 
             dataSystem.Set(namesSection, oreLCDName, lcdInventoryOresName);
             dataSystem.Set(namesSection, ingotLCDName, lcdInventoryIngotsName);
@@ -812,6 +819,7 @@ namespace IngameScript.BaseManager.BaseNew
             Echo($"Nanobot system: {useNanobotAutoBuild}");
             Echo($"Ingot replace system: {needReplaceIngots}");
             Echo($"Parts replace system: {needReplaceParts}");
+            Echo($"Conts sorting: {containerSorting}");
             Echo($"Power mng system: {usePowerManagmentSystem}");
             Echo($"Refinerey ops: {useRefinereysOperations}");
             Echo($"Scan blueprints: {assemblerBlueprintGetter}");
@@ -2012,12 +2020,17 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void ContainersSortingOres()
         {
-            Echo("Transfer ores to conts");
+            if (!containerSorting)
+                return;
+
+            Echo("Sorting ores to conts");
 
             var nonOreInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(oreStorageName))
                                       .Select(i => i.GetInventory(0));
 
             var targetOreInventory = oreInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            Echo($"Conts:{nonOreInventories.Count()}");
 
             foreach (var inv in nonOreInventories)
             {
@@ -2045,12 +2058,17 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void ContainersSortingIngots()
         {
-            Echo("Transfer ingots to conts");
+            if (!containerSorting)
+                return;
+
+            Echo("Sorting ingots to conts");
 
             var nonIngotInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ingotStorageName))
                                       .Select(i => i.GetInventory(0));
 
             var targetIngotInventory = ingotInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            Echo($"Conts:{nonIngotInventories.Count()}");
 
             foreach (var inv in nonIngotInventories)
             {
@@ -2078,22 +2096,23 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void ContainersSortingParts()
         {
-            Echo("Transfer parts to conts");
+            if (!containerSorting)
+                return;
 
-            var nonPartsInventories = containers.Where(c => (!c.Closed) && (!c.CustomName.Contains(componentsStorageName) || !c.CustomName.Contains(ammoStorageName) || !c.CustomName.Contains(equipStorageName)))
+            Echo("Sorting parts to conts");
+
+            var nonPartsInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(componentsStorageName))
                                                 .Select(i => i.GetInventory(0));
 
             var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
                                                 .Select(i => i.GetInventory(0))
                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-            var targetAmmoInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
-                                                .Select(i => i.GetInventory(0))
-                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
+            //                                     .Select(i => i.GetInventory(0))
+            //                                     .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-            var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
-                                                 .Select(i => i.GetInventory(0))
-                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            Echo($"Conts:{nonPartsInventories.Count()}");
 
             foreach (var inv in nonPartsInventories)
             {
@@ -2113,18 +2132,54 @@ namespace IngameScript.BaseManager.BaseNew
                         TransferItem(item, inv, targetItemInventory, i);
                     }
 
-                    else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
-                    {
-                        TransferItem(item, inv, targetAmmoInventory, i);
-                    }
-
-                    else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
-                    {
-                        TransferItem(item, inv, targetEquipInventory, i);
-                    }
+                    //else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
+                    //{
+                    //    TransferItem(item, inv, targetEquipInventory, i);
+                    //}
                 }
 
             }
+        }
+
+        /// <summary>
+        /// Перенос всех боеприпасов в нужные контейнера
+        /// </summary>
+        public void ContainersSortingAmmo()
+        {
+            if (!containerSorting)
+                return;
+
+            Echo("Sorting ammo to conts");
+
+            var nonAmmoInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ammoStorageName))
+                                               .Select(i => i.GetInventory(0));
+
+            var targetAmmoInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
+                                                .Select(i => i.GetInventory(0))
+                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            Echo($"Conts:{nonAmmoInventories.Count()}");
+
+            foreach (var inv in nonAmmoInventories)
+            {
+                var currentCargo = inv.ItemCount;
+
+                for (int i = currentCargo; i >= 0; i--)
+                {
+                    var getItem = inv.GetItemAt(i);
+
+                    if (getItem == null)
+                        continue;
+
+                    var item = getItem.Value;
+
+                    if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+                    {
+                        TransferItem(item, inv, targetAmmoInventory, i);
+                    }
+                }
+            }
+
         }
 
 
