@@ -1,4 +1,5 @@
-﻿using Sandbox.Game;
+﻿using Microsoft.VisualBasic;
+using Sandbox.Game;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI.Ingame;
@@ -26,6 +27,10 @@ namespace IngameScript.BaseManager.BaseNew
 {
     public sealed class Program : MyGridProgram
     {
+        #region mdk preserve
+        // Когда нибудь тут будет детальное описание, но не сегодня
+        #endregion
+
         string oreStorageName = "Ore";
         string ingotStorageName = "Ingot";
         string componentsStorageName = "Part";
@@ -469,6 +474,8 @@ namespace IngameScript.BaseManager.BaseNew
                     ContainersSortingParts();
                     yield return true;
                     ContainersSortingAmmo();
+                    yield return true;
+                    ContainersSortingItems();
                     break;
                 case 4:
                     PowerMangment();
@@ -2026,9 +2033,15 @@ namespace IngameScript.BaseManager.BaseNew
             Echo("Sorting ores to conts");
 
             var nonOreInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(oreStorageName))
-                                      .Select(i => i.GetInventory(0));
+                                              .Select(i => i.GetInventory(0));
 
             var targetOreInventory = oreInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            if (!targetOreInventory.Any())
+            {
+                Echo("No target containers!");
+                return;
+            }
 
             Echo($"Conts:{nonOreInventories.Count()}");
 
@@ -2064,9 +2077,15 @@ namespace IngameScript.BaseManager.BaseNew
             Echo("Sorting ingots to conts");
 
             var nonIngotInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ingotStorageName))
-                                      .Select(i => i.GetInventory(0));
+                                                .Select(i => i.GetInventory(0));
 
             var targetIngotInventory = ingotInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            if (!targetIngotInventory.Any())
+            {
+                Echo("No target containers!");
+                return;
+            }
 
             Echo($"Conts:{nonIngotInventories.Count()}");
 
@@ -2108,9 +2127,11 @@ namespace IngameScript.BaseManager.BaseNew
                                                 .Select(i => i.GetInventory(0))
                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-            //var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
-            //                                     .Select(i => i.GetInventory(0))
-            //                                     .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            if (!targetItemInventory.Any())
+            {
+                Echo("No target containers!");
+                return;
+            }
 
             Echo($"Conts:{nonPartsInventories.Count()}");
 
@@ -2131,11 +2152,6 @@ namespace IngameScript.BaseManager.BaseNew
                     {
                         TransferItem(item, inv, targetItemInventory, i);
                     }
-
-                    //else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
-                    //{
-                    //    TransferItem(item, inv, targetEquipInventory, i);
-                    //}
                 }
 
             }
@@ -2158,6 +2174,12 @@ namespace IngameScript.BaseManager.BaseNew
                                                 .Select(i => i.GetInventory(0))
                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
+            if (!targetAmmoInventory.Any())
+            {
+                Echo("No target containers!");
+                return;
+            }
+
             Echo($"Conts:{nonAmmoInventories.Count()}");
 
             foreach (var inv in nonAmmoInventories)
@@ -2178,6 +2200,52 @@ namespace IngameScript.BaseManager.BaseNew
                         TransferItem(item, inv, targetAmmoInventory, i);
                     }
                 }
+            }
+
+        }
+
+        public void ContainersSortingItems()
+        {
+            if (!containerSorting)
+                return;
+
+            Echo("Sorting items to conts");
+
+            var nonEquipInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(equipStorageName))
+                                                .Select(i => i.GetInventory(0));
+
+            var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
+                                                 .Select(i => i.GetInventory(0))
+                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            if (!targetEquipInventory.Any())
+            {
+                Echo("No target containers!");
+                return;
+            }
+
+
+            Echo($"Conts:{nonEquipInventories.Count()}");
+
+            foreach (var inv in nonEquipInventories)
+            {
+                var currentCargo = inv.ItemCount;
+
+                for (int i = currentCargo; i >= 0; i--)
+                {
+                    var getItem = inv.GetItemAt(i);
+
+                    if (getItem == null)
+                        continue;
+
+                    var item = getItem.Value;
+
+                    if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
+                    {
+                        TransferItem(item, inv, targetEquipInventory, i);
+                    }
+                }
+
             }
 
         }
