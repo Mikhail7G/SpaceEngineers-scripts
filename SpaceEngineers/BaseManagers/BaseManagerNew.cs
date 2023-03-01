@@ -38,14 +38,14 @@ namespace IngameScript.BaseManager.BaseNew
         string equipStorageName = "Item";
         string ignoreStorageName = "Ignore";
 
-        string lcdInventoryOresName = "LCD Ore";
-        string lcdInventoryIngotsName = "LCD Inventory";
-        string lcdPowerSystemName = "LCD Power";
-        string lcdPartsName = "LCD Parts";
-        string lcdInventoryDebugName = "LCD Debug";
-        string lcdPowerDetailedName = "LCD Power full";
-        string lcdNanobotName = "LCD Nano";
-        string lcdRefinereyName = "LCD Refinerey";
+        string lcdInventoryOresName = "Ore";
+        string lcdInventoryIngotsName = "Ingot";
+        string lcdPowerSystemName = "Power";
+        string lcdPartsName = "Autobuild";
+        string lcdInventoryDebugName = "Debug";
+        string lcdPowerDetailedName = "Power full";
+        string lcdNanobotName = "Nano";
+        string lcdRefinereyName = "Refinerey";
 
         string assemblersSpecialOperationsName = "[sp]";
         string assemblersBlueprintLeanerName = "[bps]";
@@ -75,7 +75,7 @@ namespace IngameScript.BaseManager.BaseNew
         string ingotLCDName = "LcdInventoryIngotsName";
         string powerLCDName = "LcdPowerSystemName";
         string powerFullLCDName = "LcdPowerDetailedName";
-        string partsLCDName = "LcdPartsName";
+        string autobuildLCDName = "LcdAutobuildName";
         string nanoLCDName = "NanobotDisplayName";
         string debugLCDName = "LcdInventoryDebugName";
         string refinereysLCDName = "LcdRefinereyName";
@@ -96,7 +96,7 @@ namespace IngameScript.BaseManager.BaseNew
         IMyTextPanel ingnotPanel;
         IMyTextPanel powerPanel;
         IMyTextPanel detailedPowerPanel;
-        IMyTextPanel partsPanel;
+        IMyTextPanel autoBuildPanel;
         IMyTextPanel nanobotDisplay;
         IMyTextPanel refinereysDisplay;
         IMyTextPanel oreDisplay;
@@ -106,6 +106,8 @@ namespace IngameScript.BaseManager.BaseNew
         IEnumerable<IMyInventory> oreInventories;
         IEnumerable<IMyInventory> partsInventories;
         IEnumerable<IMyInventory> ingotInventorys;
+        IEnumerable<IMyInventory> ammoInventorys;
+        IEnumerable<IMyInventory> itemInventorys;
 
         List<IMyTerminalBlock> allBlocks;
         //сборщики, печки, контейнера
@@ -142,11 +144,17 @@ namespace IngameScript.BaseManager.BaseNew
         int totalPartsStorageVolume = 0;
         int freePartsStorageVolume = 0;
 
+        int totalAmmoStorageVolume = 0;
+        int freeAmmoStorageVolume = 0;
+
+        int totalItemStorageVolume = 0;
+        int freeItemStorageVolume = 0;
+
         int currentTick = 0;
         int globalTick = 0;
         int globalTickLimit = 4;
 
-        int maxReactorPayload = 50;
+        //int maxReactorPayload = 50;
 
         int refinereyReloadPrecentage = 70;
         int maxVolumeContainerPercentage = 95;
@@ -169,6 +177,8 @@ namespace IngameScript.BaseManager.BaseNew
         double precentageOreVolume = 0;
         double precentageIngotsVolume = 0;
         double precentagePartsVolume = 0;
+        double precentageAmmoVolume = 0;
+        double precentageItemVolume = 0;
 
         bool nanobuildReady = true;
 
@@ -433,9 +443,9 @@ namespace IngameScript.BaseManager.BaseNew
             switch (currentTick)
             {
                 case 0:
-                    FindLcds();
-                    yield return true;
                     FindInventories();
+                    yield return true;
+                    FindLcds();
                     yield return true;
                     GetContainers();
                     break;
@@ -469,7 +479,7 @@ namespace IngameScript.BaseManager.BaseNew
                     }
                     Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
-                    PrintParts();
+                    PrintAutobuildComponents();
                     yield return true;
                     ContainersSortingParts();
                     yield return true;
@@ -537,7 +547,7 @@ namespace IngameScript.BaseManager.BaseNew
                 lcdInventoryOresName = dataSystem.Get(namesSection, oreLCDName).ToString();
                 lcdInventoryIngotsName = dataSystem.Get(namesSection, ingotLCDName).ToString();
                 lcdPowerSystemName = dataSystem.Get(namesSection, powerLCDName).ToString();
-                lcdPartsName = dataSystem.Get(namesSection, partsLCDName).ToString();
+                lcdPartsName = dataSystem.Get(namesSection, autobuildLCDName).ToString();
                 lcdInventoryDebugName = dataSystem.Get(namesSection, debugLCDName).ToString();
                 lcdPowerDetailedName = dataSystem.Get(namesSection, powerFullLCDName).ToString();
                 lcdNanobotName = dataSystem.Get(namesSection, nanoLCDName).ToString();
@@ -595,7 +605,7 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set(namesSection, ingotLCDName, lcdInventoryIngotsName);
                 dataSystem.Set(namesSection, powerLCDName, lcdPowerSystemName);
                 dataSystem.Set(namesSection, powerFullLCDName, lcdPowerDetailedName);
-                dataSystem.Set(namesSection, partsLCDName, lcdPartsName);
+                dataSystem.Set(namesSection, autobuildLCDName, lcdPartsName);
                 dataSystem.Set(namesSection, nanoLCDName, lcdNanobotName);
                 dataSystem.Set(namesSection, debugLCDName, lcdInventoryDebugName);
                 dataSystem.Set(namesSection, refinereysLCDName, lcdRefinereyName);
@@ -642,7 +652,7 @@ namespace IngameScript.BaseManager.BaseNew
             dataSystem.Set(namesSection, ingotLCDName, lcdInventoryIngotsName);
             dataSystem.Set(namesSection, powerLCDName, lcdPowerSystemName);
             dataSystem.Set(namesSection, powerFullLCDName, lcdPowerDetailedName);
-            dataSystem.Set(namesSection, partsLCDName, lcdPartsName);
+            dataSystem.Set(namesSection, autobuildLCDName, lcdPartsName);
             dataSystem.Set(namesSection, nanoLCDName, lcdNanobotName);
             dataSystem.Set(namesSection, debugLCDName, lcdInventoryDebugName);
             dataSystem.Set(namesSection, refinereysLCDName, lcdRefinereyName);
@@ -681,6 +691,14 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
+        /// Включение и выключение печек и сборщиков при выключении/включении скрипта
+        /// </summary>
+        public void SwitchProductionModules()
+        {
+            switchProdModulesAsScript = !switchProdModulesAsScript;
+        }
+
+        /// <summary>
         /// Управление корутиной по считыванию данных с диплея компонентов
         /// </summary>
         public bool PartReadingStateMachine()
@@ -700,14 +718,6 @@ namespace IngameScript.BaseManager.BaseNew
                 partsReadstateMachine = ReadPartsData();
                 return false;
             }
-        }
-
-        /// <summary>
-        /// Включение и выключение печек и сборщиков при выключении/включении скрипта
-        /// </summary>
-        public void SwitchProductionModules()
-        {
-            switchProdModulesAsScript = !switchProdModulesAsScript;
         }
 
         /// <summary>
@@ -753,16 +763,14 @@ namespace IngameScript.BaseManager.BaseNew
                 }
             }
 
-
-
-            if ((partsPanel == null) || (partsPanel.Closed))
+            if ((autoBuildPanel == null) || (autoBuildPanel.Closed))
             {
                 //Echo($"Try find:{lcdPartsName}");
-                partsPanel = GridTerminalSystem.GetBlockWithName(lcdPartsName) as IMyTextPanel;
-                if (partsPanel != null)
+                autoBuildPanel = GridTerminalSystem.GetBlockWithName(lcdPartsName) as IMyTextPanel;
+                if (autoBuildPanel != null)
                 {
-                    partsPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    partsPanel.FontSize = fontSize;
+                    autoBuildPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    autoBuildPanel.FontSize = fontSize;
                 }
             }
 
@@ -892,23 +900,38 @@ namespace IngameScript.BaseManager.BaseNew
             freeOreStorageVolume = oreInventories.Sum(i => i.CurrentVolume.ToIntSafe());
             totalOreStorageVolume = oreInventories.Sum(i => i.MaxVolume.ToIntSafe());
             precentageOreVolume = Math.Round((double)freeOreStorageVolume / (double)totalOreStorageVolume * 100, 1);
-            
-            partsInventories = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(ammoStorageName) || c.CustomName.Contains(equipStorageName)))
+
+            ingotInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName))
+                                        .Select(i => i.GetInventory(0));
+
+            freeIngotStorageVolume = ingotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalIngotStorageVolume = ingotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
+            precentageIngotsVolume = Math.Round(((double)freeIngotStorageVolume / (double)totalIngotStorageVolume) * 100, 1);
+
+            //partsInventories = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(ammoStorageName) || c.CustomName.Contains(equipStorageName)))
+            //                             .Select(i => i.GetInventory(0));
+
+            partsInventories = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
                                          .Select(i => i.GetInventory(0));
 
             freePartsStorageVolume = partsInventories.Sum(i => i.CurrentVolume.ToIntSafe());
             totalPartsStorageVolume = partsInventories.Sum(i => i.MaxVolume.ToIntSafe());
             precentagePartsVolume = Math.Round((double)freePartsStorageVolume / (double)totalPartsStorageVolume * 100, 1);
 
-            ingotInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName))
+            ammoInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
                                        .Select(i => i.GetInventory(0));
 
-            freeIngotStorageVolume = ingotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
-            totalIngotStorageVolume = ingotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
-            precentageIngotsVolume = Math.Round(((double)freeIngotStorageVolume / (double)totalIngotStorageVolume) * 100, 1);
+            freeAmmoStorageVolume = ammoInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalAmmoStorageVolume = ammoInventorys.Sum(i => i.MaxVolume.ToIntSafe());
+            precentageAmmoVolume = Math.Round((double)freeAmmoStorageVolume / (double)totalAmmoStorageVolume * 100, 1);
 
+            itemInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
+                                       .Select(i => i.GetInventory(0));
+
+            freeItemStorageVolume = itemInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
+            totalItemStorageVolume = itemInventorys.Sum(i => i.MaxVolume.ToIntSafe());
+            precentageItemVolume = Math.Round((double)freeItemStorageVolume / (double)totalItemStorageVolume * 100, 1);
         }
-
 
         /// <summary>
         /// Включение/Выключение сборщиков и печей
@@ -1137,9 +1160,7 @@ namespace IngameScript.BaseManager.BaseNew
             if (!needReplaceIngots)
                 return;
 
-            var targetIngotInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName))
-                                                 .Select(i => i.GetInventory(0))
-                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetIngotInventory = ingotInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             var refsInventory = refinereys.Where(r => !r.Closed)
                                           .Select(i => i.GetInventory(1))
@@ -1260,17 +1281,21 @@ namespace IngameScript.BaseManager.BaseNew
             if (!needReplaceParts)
                 return;
 
-            var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
-                                                .Select(i => i.GetInventory(0))
-                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
+            //                                    .Select(i => i.GetInventory(0))
+            //                                    .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-            var targetAmmoInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
-                                               .Select(i => i.GetInventory(0))
-                                               .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetAmmoInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
+            //                                   .Select(i => i.GetInventory(0))
+            //                                   .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);ammoInventorys
 
-            var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
-                                                 .Select(i => i.GetInventory(0))
-                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
+            //                                     .Select(i => i.GetInventory(0))
+            //                                     .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);itemInventorys
+
+            var targetItemInventory = partsInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetAmmoInventory = ammoInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetEquipInventory = itemInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             var assInventory = assemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName) && a.Mode == MyAssemblerMode.Assembly)
                                          .Select(i => i.GetInventory(1))
@@ -1299,22 +1324,22 @@ namespace IngameScript.BaseManager.BaseNew
 
                     if (item.Type.TypeId == "MyObjectBuilder_Component")//части
                     {
-                        TransferItem(item, ass, targetItemInventory,i);
+                        TransferItem(item, ass, targetItemInventory, i);
                     }
 
                     else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
                     {
-                        TransferItem(item, ass, targetAmmoInventory,i);
+                        TransferItem(item, ass, targetAmmoInventory, i);
                     }
 
                     else if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
                     {
-                        TransferItem(item, ass, targetItemInventory,i);
+                        TransferItem(item, ass, targetItemInventory, i);
                     }
 
                     else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
                     {
-                        TransferItem(item, ass, targetEquipInventory,i);
+                        TransferItem(item, ass, targetEquipInventory, i);
                     }
                 }
 
@@ -1352,7 +1377,7 @@ namespace IngameScript.BaseManager.BaseNew
       /// </summary>
         public IEnumerator<bool> ReadPartsData()
         {
-            if (partsPanel == null)
+            if (autoBuildPanel == null)
                 yield return false;
 
             Echo("Read parts LCD");
@@ -1361,7 +1386,7 @@ namespace IngameScript.BaseManager.BaseNew
             if (useAutoBuildSystem)
             {
                 partsDisplayData.Clear();
-                partsPanel?.ReadText(partsDisplayData);
+                autoBuildPanel?.ReadText(partsDisplayData);
 
                 var strings = partsDisplayData.ToString().Split('\n');
 
@@ -1404,75 +1429,73 @@ namespace IngameScript.BaseManager.BaseNew
         /// <summary>
         /// Отображение компонентов на дисплее
         /// </summary>
-        public void PrintParts()
+        public void PrintAutobuildComponents()
         {
            
-            if (partsPanel == null)
+            if (autoBuildPanel == null)
                 return;
 
             Echo("Update parts LCD");
 
             //Блок вывода инфорации на дисплеи
             string sysState = useAutoBuildSystem == true ? "Auto mode ON" : "Auto mode OFF";
-            partsPanel?.WriteText("", false);
-            partsPanel?.WriteText($"<<-------------Production------------->>" +
-                                  $"\n{sysState}" +
-                                  $"\nContainers:{partsInventories.Count()}" +
-                                  $"\nVolume: {precentagePartsVolume} % {freePartsStorageVolume} / {totalPartsStorageVolume} T", true);
+            autoBuildPanel?.WriteText("", false);
+            autoBuildPanel?.WriteText($"<<-------------Production------------->>" +
+                                     $"\n{sysState}", true);
 
-            partsPanel?.WriteText("\n<<-----------Parts----------->>", true);
+            autoBuildPanel?.WriteText("\n<<-----------Parts----------->>", true);
 
             foreach (var dict in partsDictionary.OrderBy(k => k.Key))
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
+                    autoBuildPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
+                    autoBuildPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
 
-            partsPanel?.WriteText("\n<<-----------Ammo----------->>", true);
+            autoBuildPanel?.WriteText("\n<<-----------Ammo----------->>", true);
 
             foreach (var dict in ammoDictionary.OrderBy(k => k.Key))
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
+                    autoBuildPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
+                    autoBuildPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
 
-            partsPanel?.WriteText("\n<<-----------Ingot----------->>", true);
+            autoBuildPanel?.WriteText("\n<<-----------Ingot----------->>", true);
 
             foreach (var dict in buildedIngotsDictionary.OrderBy(k => k.Key))
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
+                    autoBuildPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
+                    autoBuildPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
 
-            partsPanel?.WriteText("\n<<-----------Equipment----------->>", true);
+            autoBuildPanel?.WriteText("\n<<-----------Equipment----------->>", true);
 
             foreach (var dict in equipmentDictionary.OrderBy(k => k.Key))
             {
                 if (blueprintData.ContainsKey(dict.Key))
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
+                    autoBuildPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current}. / {dict.Value.Requested}", true);
                 }
                 else
                 {
-                    partsPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
+                    autoBuildPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} / {dict.Value.Requested}", true);
                 }
             }
         }
@@ -2123,9 +2146,11 @@ namespace IngameScript.BaseManager.BaseNew
             var nonPartsInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(componentsStorageName))
                                                 .Select(i => i.GetInventory(0));
 
-            var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
-                                                .Select(i => i.GetInventory(0))
-                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
+            //                                    .Select(i => i.GetInventory(0))
+            //                                    .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            var targetItemInventory = partsInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             if (!targetItemInventory.Any())
             {
@@ -2170,9 +2195,7 @@ namespace IngameScript.BaseManager.BaseNew
             var nonAmmoInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(ammoStorageName))
                                                .Select(i => i.GetInventory(0));
 
-            var targetAmmoInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
-                                                .Select(i => i.GetInventory(0))
-                                                .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetAmmoInventory = ammoInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             if (!targetAmmoInventory.Any())
             {
