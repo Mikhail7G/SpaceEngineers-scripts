@@ -93,7 +93,7 @@ namespace IngameScript.BaseManager.BaseNew
         MyIni dataSystem;
         //дисплеи
         IMyTextPanel debugPanel;
-        IMyTextPanel ingnotPanel;
+        IMyTextPanel ingotPanel;
         IMyTextPanel powerPanel;
         IMyTextPanel detailedPowerPanel;
         IMyTextPanel autoBuildPanel;
@@ -284,7 +284,7 @@ namespace IngameScript.BaseManager.BaseNew
             updateStateMachine = Update();
         }
 
-      
+
         public void Main(string args, UpdateType updateType)
         {
 
@@ -293,7 +293,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             monitor.AddRuntime();
 
-           if (globalTick == globalTickLimit)
+            if (globalTick == globalTickLimit)
             {
                 globalTick = 0;
                 DrawEcho();
@@ -621,7 +621,7 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set(tagSection, specAssTagName, assemblersSpecialOperationsName);
                 dataSystem.Set(tagSection, bpcLearnTagName, assemblersBlueprintLeanerName);
 
-              //  dataSystem.AddSection("OrePriority");
+                //  dataSystem.AddSection("OrePriority");
 
                 dataSystem.AddSection(bpcSection);
 
@@ -725,26 +725,111 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void FindLcds()
         {
-            if ((debugPanel == null) || (debugPanel.Closed))
-            {
-                debugPanel = GridTerminalSystem.GetBlockWithName(lcdInventoryDebugName) as IMyTextPanel;
-            }
+            //if ((debugPanel == null) || (debugPanel.Closed))
+            //{
+            //    debugPanel = GridTerminalSystem.GetBlockWithName(lcdInventoryDebugName) as IMyTextPanel;
+            //}
 
-            if ((ingnotPanel == null) || (ingnotPanel.Closed))
+            //if ((ingotPanel == null) || (ingotPanel.Closed))
+            //{
+            //    //Echo($"Try find:{lcdInventoryIngnotsName}");
+            //    ingotPanel = GridTerminalSystem.GetBlockWithName(lcdInventoryIngotsName) as IMyTextPanel;
+            //    if (ingotPanel != null)
+            //    {
+            //        ingotPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+            //        ingotPanel.FontSize = fontSize;
+            //    }
+            //}
+
+            //if ((powerPanel == null) || (powerPanel.Closed))
+            //{
+            //    // Echo($"Try find:{lcdPowerSystemName}");
+            //    powerPanel = GridTerminalSystem.GetBlockWithName(lcdPowerSystemName) as IMyTextPanel;
+            //    if (powerPanel != null)
+            //    {
+            //        powerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+            //        powerPanel.FontSize = fontSize;
+            //    }
+            //}
+
+            //if ((detailedPowerPanel == null) || (detailedPowerPanel.Closed))
+            //{
+            //    //Echo($"Try find:{lcdPowerDetailedName}");
+            //    detailedPowerPanel = GridTerminalSystem.GetBlockWithName(lcdPowerDetailedName) as IMyTextPanel;
+            //    if (detailedPowerPanel != null)
+            //    {
+            //        detailedPowerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+            //        detailedPowerPanel.FontSize = fontSize;
+            //    }
+            //}
+
+            //if ((autoBuildPanel == null) || (autoBuildPanel.Closed))
+            //{
+            //    //Echo($"Try find:{lcdPartsName}");
+            //    autoBuildPanel = GridTerminalSystem.GetBlockWithName(lcdPartsName) as IMyTextPanel;
+            //    if (autoBuildPanel != null)
+            //    {
+            //        autoBuildPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+            //        autoBuildPanel.FontSize = fontSize;
+            //    }
+            //}
+
+            //if ((nanobotDisplay == null) || (nanobotDisplay.Closed))
+            //{
+            //    // Echo($"Try find:{lcdNanobotName}");
+            //    nanobotDisplay = GridTerminalSystem.GetBlockWithName(lcdNanobotName) as IMyTextPanel;
+            //    if (nanobotDisplay != null)
+            //    {
+            //        nanobotDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+            //        nanobotDisplay.FontSize = fontSize;
+            //    }
+            //}
+
+            //if ((refinereysDisplay == null) || (refinereysDisplay.Closed))
+            //{
+            //    // Echo($"Try find:{lcdRefinereyName}");
+            //    refinereysDisplay = GridTerminalSystem.GetBlockWithName(lcdRefinereyName) as IMyTextPanel;
+            //    if (refinereysDisplay != null)
+            //    {
+            //        refinereysDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+            //        refinereysDisplay.FontSize = fontSize;
+            //    }
+            //}
+
+            //if ((oreDisplay == null) || (oreDisplay.Closed))
+            //{
+            //    // Echo($"Try find:{lcdInventoryOresName}");
+            //    oreDisplay = GridTerminalSystem.GetBlockWithName(lcdInventoryOresName) as IMyTextPanel;
+            //    if (oreDisplay != null)
+            //    {
+            //        oreDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+            //        oreDisplay.FontSize = fontSize;
+            //    }
+            //}
+
+            if ((ingotPanel == null) || !ingotPanel.CustomName.Contains(lcdInventoryIngotsName) || (ingotPanel.Closed))
             {
-                //Echo($"Try find:{lcdInventoryIngnotsName}");
-                ingnotPanel = GridTerminalSystem.GetBlockWithName(lcdInventoryIngotsName) as IMyTextPanel;
-                if (ingnotPanel != null)
+                ingotPanel = null;
+
+                ingotPanel = allBlocks.Where(b => b is IMyTextPanel)
+                                      .Where(r => r.IsFunctional && r.CustomName.Contains(lcdInventoryIngotsName))
+                                      .Select(t => t as IMyTextPanel).FirstOrDefault();
+
+                if (ingotPanel != null)
                 {
-                    ingnotPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    ingnotPanel.FontSize = fontSize;
+                    ingotPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    ingotPanel.FontSize = fontSize;
                 }
             }
 
-            if ((powerPanel == null) || (powerPanel.Closed))
+            if ((powerPanel == null) || !powerPanel.CustomName.Contains(lcdPowerSystemName) || (powerPanel.Closed))
             {
-                // Echo($"Try find:{lcdPowerSystemName}");
-                powerPanel = GridTerminalSystem.GetBlockWithName(lcdPowerSystemName) as IMyTextPanel;
+                powerPanel = null;
+
+                powerPanel = allBlocks.Where(b => b is IMyTextPanel)
+                                      .Where(r => r.IsFunctional && r.CustomName.Contains(lcdPowerSystemName))
+                                      .Select(t => t as IMyTextPanel).FirstOrDefault();
+
                 if (powerPanel != null)
                 {
                     powerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
@@ -752,58 +837,18 @@ namespace IngameScript.BaseManager.BaseNew
                 }
             }
 
-            if ((detailedPowerPanel == null) || (detailedPowerPanel.Closed))
+            if ((detailedPowerPanel == null) || !detailedPowerPanel.CustomName.Contains(lcdPowerDetailedName) || (detailedPowerPanel.Closed))
             {
-                //Echo($"Try find:{lcdPowerDetailedName}");
-                detailedPowerPanel = GridTerminalSystem.GetBlockWithName(lcdPowerDetailedName) as IMyTextPanel;
+                detailedPowerPanel = null;
+
+                detailedPowerPanel = allBlocks.Where(b => b is IMyTextPanel)
+                                              .Where(r => r.IsFunctional && r.CustomName.Contains(lcdPowerDetailedName))
+                                              .Select(t => t as IMyTextPanel).FirstOrDefault();
+
                 if (detailedPowerPanel != null)
                 {
                     detailedPowerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
                     detailedPowerPanel.FontSize = fontSize;
-                }
-            }
-
-            if ((autoBuildPanel == null) || (autoBuildPanel.Closed))
-            {
-                //Echo($"Try find:{lcdPartsName}");
-                autoBuildPanel = GridTerminalSystem.GetBlockWithName(lcdPartsName) as IMyTextPanel;
-                if (autoBuildPanel != null)
-                {
-                    autoBuildPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    autoBuildPanel.FontSize = fontSize;
-                }
-            }
-
-            if ((nanobotDisplay == null) || (nanobotDisplay.Closed))
-            {
-                // Echo($"Try find:{lcdNanobotName}");
-                nanobotDisplay = GridTerminalSystem.GetBlockWithName(lcdNanobotName) as IMyTextPanel;
-                if (nanobotDisplay != null)
-                {
-                    nanobotDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    nanobotDisplay.FontSize = fontSize;
-                }
-            }
-
-            if ((refinereysDisplay == null) || (refinereysDisplay.Closed))
-            {
-                // Echo($"Try find:{lcdRefinereyName}");
-                refinereysDisplay = GridTerminalSystem.GetBlockWithName(lcdRefinereyName) as IMyTextPanel;
-                if (refinereysDisplay != null)
-                {
-                    refinereysDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    refinereysDisplay.FontSize = fontSize;
-                }
-            }
-
-            if ((oreDisplay == null) || (oreDisplay.Closed))
-            {
-                // Echo($"Try find:{lcdInventoryOresName}");
-                oreDisplay = GridTerminalSystem.GetBlockWithName(lcdInventoryOresName) as IMyTextPanel;
-                if (oreDisplay != null)
-                {
-                    oreDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    oreDisplay.FontSize = fontSize;
                 }
             }
 
@@ -826,7 +871,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
             Echo($"Nanobot:{nanoFinded}:{nanobotBuildModule?.CustomName}");
-         
+
 
             Echo(">>>-------------------------------<<<");
 
@@ -938,13 +983,13 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void SwitchAssemblers(bool turnOnOff)
         {
-            foreach(var ass in assemblers)
+            foreach (var ass in assemblers)
             {
                 if (!ass.Closed)
                     ass.Enabled = turnOnOff;
             }
 
-            foreach(var refs in refinereys)
+            foreach (var refs in refinereys)
             {
                 if (!refs.Closed)
                     refs.Enabled = turnOnOff;
@@ -1026,7 +1071,7 @@ namespace IngameScript.BaseManager.BaseNew
                         }
                     }
                 }
-                
+
             }
 
             //Отрисовка на дисплей
@@ -1121,7 +1166,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 if (refs.InputInventory.ItemCount == 0)
                 {
-                   
+
                 }
                 else
                 {   //Догрузка руды в печи
@@ -1238,7 +1283,7 @@ namespace IngameScript.BaseManager.BaseNew
                         //Добавляем только те слитки, у которых есть возомжность построить и которых нет в списке компонентов
                         if (partsDictionary.ContainsKey(item.Type.SubtypeId))
                         {//удаляем компонент из списка руд, если у него есть чертеж
-                            if(buildedIngotsDictionary.ContainsKey(item.Type.SubtypeId))
+                            if (buildedIngotsDictionary.ContainsKey(item.Type.SubtypeId))
                             {
                                 buildedIngotsDictionary.Remove(item.Type.SubtypeId);
                             }
@@ -1372,9 +1417,9 @@ namespace IngameScript.BaseManager.BaseNew
             TransferItems(assInventory, targetInventory);
         }
 
-      /// <summary>
-      /// Считывает данные с дисплея, с корутиной для potato серверов
-      /// </summary>
+        /// <summary>
+        /// Считывает данные с дисплея, с корутиной для potato серверов
+        /// </summary>
         public IEnumerator<bool> ReadPartsData()
         {
             if (autoBuildPanel == null)
@@ -1392,7 +1437,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 foreach (var str in strings)
                 {
-                    if (partsStateMachineCounter > maxPartsPerScan) 
+                    if (partsStateMachineCounter > maxPartsPerScan)
                     {
                         partsStateMachineCounter = 0;
                         yield return true;
@@ -1431,7 +1476,7 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void PrintAutobuildComponents()
         {
-           
+
             if (autoBuildPanel == null)
                 return;
 
@@ -1602,22 +1647,22 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void PrintIngots()
         {
-            if (ingnotPanel == null)
+            if (ingotPanel == null)
                 return;
 
             Echo("Update ingots LCD");
 
             //Вывод на дисплей
-            ingnotPanel?.WriteText("", false);
-            ingnotPanel?.WriteText($"<<-----------Ingots----------->>" +
+            ingotPanel?.WriteText("", false);
+            ingotPanel?.WriteText($"<<-----------Ingots----------->>" +
                                    $"\nContainers:{ingotInventorys.Count()}" +
                                    $"\nVolume: {precentageIngotsVolume} % {freeIngotStorageVolume} / {totalIngotStorageVolume} T", true);
 
-            ingnotPanel?.WriteText("\n<<-----------Ingots----------->>", true);
+            ingotPanel?.WriteText("\n<<-----------Ingots----------->>", true);
 
             foreach (var dict in ingotsDict.OrderBy(k => k.Key))
             {
-                ingnotPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} ", true);
+                ingotPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} ", true);
             }
         }
 
@@ -1685,7 +1730,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                         if (reactorPayloadLimitter)//ручная установка количества топлива
                         {
-                           
+
                         }
                     }
                 }
@@ -1715,7 +1760,7 @@ namespace IngameScript.BaseManager.BaseNew
             assemblerBlueprintGetter = !assemblerBlueprintGetter;
 
             if (assemblerBlueprintGetter)
-            { 
+            {
                 SpecialAssemblerLastName = ass.CustomName;
                 ass.CustomName = assemblersBlueprintLeanerName + "Assembler ready to copy bps";
                 ass.ClearQueue();
@@ -1877,7 +1922,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             MyDefinitionId blueprint;
 
-            if(!TryGetBlueprint(key.Key, out blueprint))
+            if (!TryGetBlueprint(key.Key, out blueprint))
             {
                 return;
             }
@@ -1944,7 +1989,7 @@ namespace IngameScript.BaseManager.BaseNew
         {
             if (nanobotBuildModule == null)
                 return;
-        
+
             Echo("Nanobot system working");
 
             nanobotBuildQueue.Clear();
@@ -2279,7 +2324,7 @@ namespace IngameScript.BaseManager.BaseNew
             public int Current { set; get; } = 0;
             public int Requested { set; get; } = 0;
         }
-      
+
         public class OrePriority
         {
             public MyItemType Type { set; get; }
