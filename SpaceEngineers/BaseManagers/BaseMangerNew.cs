@@ -43,7 +43,7 @@ namespace IngameScript.BaseManager.BaseNew
         string lcdPowerSystemName = "Power";
         string lcdAutobuildName = "Autobuild";
         string lcdInventoryDebugName = "Debug";
-        string lcdPowerDetailedName = "Power full";
+        string lcdPowerDetailedName = "Generator";
         string lcdNanobotName = "Nano";
         string lcdRefinereyName = "Refinerey";
 
@@ -176,6 +176,10 @@ namespace IngameScript.BaseManager.BaseNew
         float generatorsMaxOutputPower = 0;
         float generatorsOutputPower = 0;
         float powerLoadPercentage = 0;
+
+        double maxHydrogenCap = 1;
+        double totalHydrogenStored = 1;
+        double hydrogenPercentage = 1;
 
         double precentageOreVolume = 0;
         double precentageIngotsVolume = 0;
@@ -1035,15 +1039,6 @@ namespace IngameScript.BaseManager.BaseNew
             if (oreDisplay == null)
                 return;
 
-
-            int loadedSymb = (int)(maxContRenderSymbols * (precentageIngotsVolume / 100));
-            int freeSymb = (int)(maxContRenderSymbols * (1 - precentageIngotsVolume / 100));
-
-            string state = "[";
-            state += string.Concat(Enumerable.Repeat("|", loadedSymb));
-            state += string.Concat(Enumerable.Repeat("-", freeSymb));
-            state += "]";
-
             Echo("Update ores LCD");
 
             //Блок считывания приоритета с дисплея
@@ -1077,7 +1072,7 @@ namespace IngameScript.BaseManager.BaseNew
             oreDisplay?.WriteText($"<<-----------Ores----------->>" +
                                   $"\nUse prior:{useRefinereyPriorty}" +
                                   $"\nContainers:{oreInventories.Count()} " +
-                                  $"{state}" +
+                                  $"{NumberToStringConverter(precentageIngotsVolume)}" +
                                   $"\nVolume: {precentageOreVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
             foreach (var dict in oreDictionary.OrderBy(k => k.Key))
@@ -1649,21 +1644,13 @@ namespace IngameScript.BaseManager.BaseNew
             if (ingotPanel == null)
                 return;
 
-            int loadedSymb = (int)( maxContRenderSymbols * (precentageIngotsVolume / 100));
-            int freeSymb = (int)(maxContRenderSymbols * (1 - precentageIngotsVolume / 100));
-
-            string state = "[";
-            state += string.Concat(Enumerable.Repeat("|", loadedSymb));
-            state += string.Concat(Enumerable.Repeat("-", freeSymb));
-            state += "]";
-
             Echo("Update ingots LCD");
 
             //Вывод на дисплей
             ingotPanel?.WriteText("", false);
             ingotPanel?.WriteText($"<<-----------Ingots----------->>" +
                                    $"\nContainers:{ingotInventorys.Count()} " +
-                                   $"{state}" +
+                                   $"{NumberToStringConverter(precentageIngotsVolume)}" +
                                    $"\nVolume: {precentageIngotsVolume} % {freeIngotStorageVolume} / {totalIngotStorageVolume} T", true);
 
             ingotPanel?.WriteText("\n<<-----------Ingots----------->>", true);
@@ -1721,16 +1708,17 @@ namespace IngameScript.BaseManager.BaseNew
 
             var hydrogenTanks = gasTanks.Where(g => g.BlockDefinition.ToString().Contains("HydrogenTank"));
 
-            var maxHydrogenCap = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity) : 1;
-            var totalHydrogen = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio) : 1;
+            maxHydrogenCap = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity) : 1;
+            totalHydrogenStored = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio) : 1;
 
-            var hydrogenPercent = totalHydrogen / maxHydrogenCap * 100;
+            hydrogenPercentage = totalHydrogenStored / maxHydrogenCap * 100;
 
             detailedPowerPanel?.WriteText("", false);
             detailedPowerPanel?.WriteText("<--------Gens status--------->", true);
             detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} GasGens: {gasCount} GasTanks: {gasTanks.Count} ", true);
-            detailedPowerPanel?.WriteText($"\nHydTanks:{hydrogenTanks.Count()} Filled: {hydrogenPercent} % " +
-                                          $" {totalHydrogen / 1000} / {maxHydrogenCap / 1000} kL ", true);
+            detailedPowerPanel?.WriteText($"\nHydrogen:{hydrogenTanks.Count()} Filled: {hydrogenPercentage} % {NumberToStringConverter(hydrogenPercentage)} " +
+                                          $"\n{totalHydrogenStored / 1000} / {maxHydrogenCap / 1000} kL" +
+                                          $"-------------------", true);
 
             foreach (var react in reactorInventory)
             {
@@ -1798,9 +1786,6 @@ namespace IngameScript.BaseManager.BaseNew
             if (!assemblerBlueprintGetter)
                 return;
 
-            debugPanel?.WriteText("", false);
-            debugPanel?.WriteText("<--------Production blocks--------->\n", true);
-
             var targetInventory = containers.Where(c => c.CustomName.Contains(componentsStorageName))
                                             .Select(i => i.GetInventory(0))
                                             .Where(i => !i.IsFull);
@@ -1852,7 +1837,6 @@ namespace IngameScript.BaseManager.BaseNew
 
             foreach (var key in blueprintData)
             {
-                debugPanel?.WriteText($"ITEM:{key.Key} X BP: {key.Value} \n", true);
                 dataSystem.Set(bpcSection, key.Key, key.Value);
             }
 
@@ -1893,7 +1877,7 @@ namespace IngameScript.BaseManager.BaseNew
             if (!useAutoBuildSystem)
                 return;
 
-            Echo("uto build system");
+            Echo("Auto build system");
 
             var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed && !ass.CustomName.Contains(assemblersBlueprintLeanerName) && ass.Mode == MyAssemblerMode.Assembly).ToList();
 
@@ -2334,6 +2318,19 @@ namespace IngameScript.BaseManager.BaseNew
 
             }
 
+        }
+
+        public string NumberToStringConverter(double percent)
+        {
+            int loadedSymb = (int)(maxContRenderSymbols * (hydrogenPercentage / 100));
+            int freeSymb = (int)(maxContRenderSymbols * (1 - hydrogenPercentage / 100));
+
+            string state = "[";
+            state += string.Concat(Enumerable.Repeat("|", loadedSymb));
+            state += string.Concat(Enumerable.Repeat("-", freeSymb));
+            state += "]";
+
+            return state;
         }
 
 
