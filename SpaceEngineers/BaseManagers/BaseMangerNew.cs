@@ -163,6 +163,8 @@ namespace IngameScript.BaseManager.BaseNew
         int partsStateMachineCounter = 0;
         int maxPartsPerScan = 5;
 
+        int maxContRenderSymbols = 20;
+
         float fontSize = 0.8f;
 
         float maxStoredPower = 0;
@@ -1033,6 +1035,15 @@ namespace IngameScript.BaseManager.BaseNew
             if (oreDisplay == null)
                 return;
 
+
+            int loadedSymb = (int)(maxContRenderSymbols * (precentageIngotsVolume / 100));
+            int freeSymb = (int)(maxContRenderSymbols * (1 - precentageIngotsVolume / 100));
+
+            string state = "[";
+            state += string.Concat(Enumerable.Repeat("|", loadedSymb));
+            state += string.Concat(Enumerable.Repeat("-", freeSymb));
+            state += "]";
+
             Echo("Update ores LCD");
 
             //Блок считывания приоритета с дисплея
@@ -1065,7 +1076,8 @@ namespace IngameScript.BaseManager.BaseNew
             oreDisplay?.WriteText("", false);
             oreDisplay?.WriteText($"<<-----------Ores----------->>" +
                                   $"\nUse prior:{useRefinereyPriorty}" +
-                                  $"\nContainers:{oreInventories.Count()}" +
+                                  $"\nContainers:{oreInventories.Count()} " +
+                                  $"{state}" +
                                   $"\nVolume: {precentageOreVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
             foreach (var dict in oreDictionary.OrderBy(k => k.Key))
@@ -1637,12 +1649,21 @@ namespace IngameScript.BaseManager.BaseNew
             if (ingotPanel == null)
                 return;
 
+            int loadedSymb = (int)( maxContRenderSymbols * (precentageIngotsVolume / 100));
+            int freeSymb = (int)(maxContRenderSymbols * (1 - precentageIngotsVolume / 100));
+
+            string state = "[";
+            state += string.Concat(Enumerable.Repeat("|", loadedSymb));
+            state += string.Concat(Enumerable.Repeat("-", freeSymb));
+            state += "]";
+
             Echo("Update ingots LCD");
 
             //Вывод на дисплей
             ingotPanel?.WriteText("", false);
             ingotPanel?.WriteText($"<<-----------Ingots----------->>" +
-                                   $"\nContainers:{ingotInventorys.Count()}" +
+                                   $"\nContainers:{ingotInventorys.Count()} " +
+                                   $"{state}" +
                                    $"\nVolume: {precentageIngotsVolume} % {freeIngotStorageVolume} / {totalIngotStorageVolume} T", true);
 
             ingotPanel?.WriteText("\n<<-----------Ingots----------->>", true);
