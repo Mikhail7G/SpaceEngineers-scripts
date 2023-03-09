@@ -1689,15 +1689,25 @@ namespace IngameScript.BaseManager.BaseNew
             if (!useDetailedPowerMonitoring)
                 return;
 
-            detailedPowerPanel?.WriteText("", false);
-
             var reactorInventory = generators.Where(g => !g.Closed && g.HasInventory).Select(g => g.GetInventory(0)).ToList();
             int reactorsCount = generators.Where(g => g is IMyReactor).Count();
             int windCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_WindTurbine").Count();
             int gasCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_HydrogenEngine").Count();
 
+            var hydrogenTanks = gasTanks.Where(g => g.BlockDefinition.ToString().Contains("HydrogenTank"));
+
+            var maxHydrogenCap = hydrogenTanks.Sum(t => t.Capacity);
+            var totalHydrogen = hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio);
+            var hydrogenPercent = totalHydrogen / maxHydrogenCap * 100;
+
+            detailedPowerPanel?.WriteText("", false);
             detailedPowerPanel?.WriteText("<--------Gens status--------->", true);
             detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} GasGens: {gasCount} GasTanks: {gasTanks.Count} ", true);
+            detailedPowerPanel?.WriteText($"\nHydTanks:{hydrogenTanks.Count()} Filled: {hydrogenPercent} % " +
+                                          $" {totalHydrogen / 1000} / {maxHydrogenCap / 1000} kL ", true);
+
+          
+
 
             foreach (var react in reactorInventory)
             {
