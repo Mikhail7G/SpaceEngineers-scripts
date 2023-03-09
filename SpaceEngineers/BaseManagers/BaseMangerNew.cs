@@ -41,7 +41,7 @@ namespace IngameScript.BaseManager.BaseNew
         string lcdInventoryOresName = "Ore";
         string lcdInventoryIngotsName = "Ingot";
         string lcdPowerSystemName = "Power";
-        string lcdPartsName = "Autobuild";
+        string lcdAutobuildName = "Autobuild";
         string lcdInventoryDebugName = "Debug";
         string lcdPowerDetailedName = "Power full";
         string lcdNanobotName = "Nano";
@@ -547,7 +547,7 @@ namespace IngameScript.BaseManager.BaseNew
                 lcdInventoryOresName = dataSystem.Get(namesSection, oreLCDName).ToString();
                 lcdInventoryIngotsName = dataSystem.Get(namesSection, ingotLCDName).ToString();
                 lcdPowerSystemName = dataSystem.Get(namesSection, powerLCDName).ToString();
-                lcdPartsName = dataSystem.Get(namesSection, autobuildLCDName).ToString();
+                lcdAutobuildName = dataSystem.Get(namesSection, autobuildLCDName).ToString();
                 lcdInventoryDebugName = dataSystem.Get(namesSection, debugLCDName).ToString();
                 lcdPowerDetailedName = dataSystem.Get(namesSection, powerFullLCDName).ToString();
                 lcdNanobotName = dataSystem.Get(namesSection, nanoLCDName).ToString();
@@ -605,7 +605,7 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set(namesSection, ingotLCDName, lcdInventoryIngotsName);
                 dataSystem.Set(namesSection, powerLCDName, lcdPowerSystemName);
                 dataSystem.Set(namesSection, powerFullLCDName, lcdPowerDetailedName);
-                dataSystem.Set(namesSection, autobuildLCDName, lcdPartsName);
+                dataSystem.Set(namesSection, autobuildLCDName, lcdAutobuildName);
                 dataSystem.Set(namesSection, nanoLCDName, lcdNanobotName);
                 dataSystem.Set(namesSection, debugLCDName, lcdInventoryDebugName);
                 dataSystem.Set(namesSection, refinereysLCDName, lcdRefinereyName);
@@ -652,7 +652,7 @@ namespace IngameScript.BaseManager.BaseNew
             dataSystem.Set(namesSection, ingotLCDName, lcdInventoryIngotsName);
             dataSystem.Set(namesSection, powerLCDName, lcdPowerSystemName);
             dataSystem.Set(namesSection, powerFullLCDName, lcdPowerDetailedName);
-            dataSystem.Set(namesSection, autobuildLCDName, lcdPartsName);
+            dataSystem.Set(namesSection, autobuildLCDName, lcdAutobuildName);
             dataSystem.Set(namesSection, nanoLCDName, lcdNanobotName);
             dataSystem.Set(namesSection, debugLCDName, lcdInventoryDebugName);
             dataSystem.Set(namesSection, refinereysLCDName, lcdRefinereyName);
@@ -730,83 +730,6 @@ namespace IngameScript.BaseManager.BaseNew
             //    debugPanel = GridTerminalSystem.GetBlockWithName(lcdInventoryDebugName) as IMyTextPanel;
             //}
 
-            //if ((ingotPanel == null) || (ingotPanel.Closed))
-            //{
-            //    //Echo($"Try find:{lcdInventoryIngnotsName}");
-            //    ingotPanel = GridTerminalSystem.GetBlockWithName(lcdInventoryIngotsName) as IMyTextPanel;
-            //    if (ingotPanel != null)
-            //    {
-            //        ingotPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-            //        ingotPanel.FontSize = fontSize;
-            //    }
-            //}
-
-            //if ((powerPanel == null) || (powerPanel.Closed))
-            //{
-            //    // Echo($"Try find:{lcdPowerSystemName}");
-            //    powerPanel = GridTerminalSystem.GetBlockWithName(lcdPowerSystemName) as IMyTextPanel;
-            //    if (powerPanel != null)
-            //    {
-            //        powerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-            //        powerPanel.FontSize = fontSize;
-            //    }
-            //}
-
-            //if ((detailedPowerPanel == null) || (detailedPowerPanel.Closed))
-            //{
-            //    //Echo($"Try find:{lcdPowerDetailedName}");
-            //    detailedPowerPanel = GridTerminalSystem.GetBlockWithName(lcdPowerDetailedName) as IMyTextPanel;
-            //    if (detailedPowerPanel != null)
-            //    {
-            //        detailedPowerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-            //        detailedPowerPanel.FontSize = fontSize;
-            //    }
-            //}
-
-            //if ((autoBuildPanel == null) || (autoBuildPanel.Closed))
-            //{
-            //    //Echo($"Try find:{lcdPartsName}");
-            //    autoBuildPanel = GridTerminalSystem.GetBlockWithName(lcdPartsName) as IMyTextPanel;
-            //    if (autoBuildPanel != null)
-            //    {
-            //        autoBuildPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-            //        autoBuildPanel.FontSize = fontSize;
-            //    }
-            //}
-
-            //if ((nanobotDisplay == null) || (nanobotDisplay.Closed))
-            //{
-            //    // Echo($"Try find:{lcdNanobotName}");
-            //    nanobotDisplay = GridTerminalSystem.GetBlockWithName(lcdNanobotName) as IMyTextPanel;
-            //    if (nanobotDisplay != null)
-            //    {
-            //        nanobotDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-            //        nanobotDisplay.FontSize = fontSize;
-            //    }
-            //}
-
-            //if ((refinereysDisplay == null) || (refinereysDisplay.Closed))
-            //{
-            //    // Echo($"Try find:{lcdRefinereyName}");
-            //    refinereysDisplay = GridTerminalSystem.GetBlockWithName(lcdRefinereyName) as IMyTextPanel;
-            //    if (refinereysDisplay != null)
-            //    {
-            //        refinereysDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-            //        refinereysDisplay.FontSize = fontSize;
-            //    }
-            //}
-
-            //if ((oreDisplay == null) || (oreDisplay.Closed))
-            //{
-            //    // Echo($"Try find:{lcdInventoryOresName}");
-            //    oreDisplay = GridTerminalSystem.GetBlockWithName(lcdInventoryOresName) as IMyTextPanel;
-            //    if (oreDisplay != null)
-            //    {
-            //        oreDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-            //        oreDisplay.FontSize = fontSize;
-            //    }
-            //}
-
             if ((ingotPanel == null) || !ingotPanel.CustomName.Contains(lcdInventoryIngotsName) || (ingotPanel.Closed))
             {
                 ingotPanel = null;
@@ -849,6 +772,66 @@ namespace IngameScript.BaseManager.BaseNew
                 {
                     detailedPowerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
                     detailedPowerPanel.FontSize = fontSize;
+                }
+            }
+
+            if ((autoBuildPanel == null) || !autoBuildPanel.CustomName.Contains(lcdAutobuildName) || (autoBuildPanel.Closed))
+            {
+                autoBuildPanel = null;
+
+                autoBuildPanel = allBlocks.Where(b => b is IMyTextPanel)
+                                          .Where(r => r.IsFunctional && r.CustomName.Contains(lcdAutobuildName))
+                                          .Select(t => t as IMyTextPanel).FirstOrDefault();
+
+                if (autoBuildPanel != null)
+                {
+                    autoBuildPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    autoBuildPanel.FontSize = fontSize;
+                }
+            }
+
+            if ((nanobotDisplay == null) || !nanobotDisplay.CustomName.Contains(lcdNanobotName) || (nanobotDisplay.Closed))
+            {
+                nanobotDisplay = null;
+
+                nanobotDisplay = allBlocks.Where(b => b is IMyTextPanel)
+                                          .Where(r => r.IsFunctional && r.CustomName.Contains(lcdNanobotName))
+                                          .Select(t => t as IMyTextPanel).FirstOrDefault();
+
+                if (nanobotDisplay != null)
+                {
+                    nanobotDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    nanobotDisplay.FontSize = fontSize;
+                }
+            }
+
+            if ((refinereysDisplay == null) || !refinereysDisplay.CustomName.Contains(lcdRefinereyName) || (refinereysDisplay.Closed))
+            {
+                refinereysDisplay = null;
+
+                refinereysDisplay = allBlocks.Where(b => b is IMyTextPanel)
+                                             .Where(r => r.IsFunctional && r.CustomName.Contains(lcdRefinereyName))
+                                             .Select(t => t as IMyTextPanel).FirstOrDefault();
+                 
+                if (refinereysDisplay != null)
+                {
+                    refinereysDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    refinereysDisplay.FontSize = fontSize;
+                }
+            }
+
+            if ((oreDisplay == null) || !oreDisplay.CustomName.Contains(lcdInventoryOresName) || (oreDisplay.Closed))
+            {
+                oreDisplay = null;
+
+                oreDisplay = allBlocks.Where(b => b is IMyTextPanel)
+                                      .Where(r => r.IsFunctional && r.CustomName.Contains(lcdInventoryOresName))
+                                      .Select(t => t as IMyTextPanel).FirstOrDefault();
+
+                if (oreDisplay != null)
+                {
+                    oreDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    oreDisplay.FontSize = fontSize;
                 }
             }
 
@@ -1404,7 +1387,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             var targetInventory = ingotInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-            var freeAssInv = specialAssemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName) && a.IsQueueEmpty && a.Mode == MyAssemblerMode.Disassembly);
+            var freeAssInv = specialAssemblers.Where(a => !a.Closed && a.IsQueueEmpty && !a.CustomName.Contains(assemblersBlueprintLeanerName) && a.Mode == MyAssemblerMode.Disassembly);
 
             foreach (var ass in freeAssInv)
             {
@@ -1714,7 +1697,7 @@ namespace IngameScript.BaseManager.BaseNew
             int gasCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_HydrogenEngine").Count();
 
             detailedPowerPanel?.WriteText("<--------Gens status--------->", true);
-            detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} Gas: {gasCount}", true);
+            detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} GasGens: {gasCount} GasTanks: {gasTanks.Count} ", true);
 
             foreach (var react in reactorInventory)
             {
@@ -1879,7 +1862,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             Echo("uto build system");
 
-            var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed && ass.Mode == MyAssemblerMode.Assembly && !ass.CustomName.Contains(assemblersBlueprintLeanerName)).ToList();
+            var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed && !ass.CustomName.Contains(assemblersBlueprintLeanerName) && ass.Mode == MyAssemblerMode.Assembly).ToList();
 
             var reqItems = partsDictionary.Where(k => k.Value.Current < k.Value.Requested);
             var reqIngnotsItem = buildedIngotsDictionary.Where(k => k.Value.Current < k.Value.Requested);
@@ -2282,9 +2265,11 @@ namespace IngameScript.BaseManager.BaseNew
             var nonEquipInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(equipStorageName))
                                                 .Select(i => i.GetInventory(0));
 
-            var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
-                                                 .Select(i => i.GetInventory(0))
-                                                 .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
+            //                                     .Select(i => i.GetInventory(0))
+            //                                     .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            var targetEquipInventory = itemInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             if (!targetEquipInventory.Any())
             {
