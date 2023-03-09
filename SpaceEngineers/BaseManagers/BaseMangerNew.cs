@@ -102,6 +102,7 @@ namespace IngameScript.BaseManager.BaseNew
         IMyTextPanel oreDisplay;
 
         //все объекты, содержащие инвентарь
+        IEnumerable<IMyInventory> nonContainerInventories;
         IEnumerable<IMyInventory> containerInventories;
         IEnumerable<IMyInventory> oreInventories;
         IEnumerable<IMyInventory> partsInventories;
@@ -913,6 +914,9 @@ namespace IngameScript.BaseManager.BaseNew
 
             containerInventories = containers.Where(b => !b.Closed && !b.CustomName.Contains(ignoreStorageName))
                                              .Select(b => b.GetInventory(0));
+
+            //nonContainerInventories = allBlocks.Where(b => b.IsFunctional && b.HasInventory && !b.CustomName.Contains(ignoreStorageName))
+            //                                   .Select(i => i.GetInventory(0));
         }
 
         /// <summary>
@@ -1696,8 +1700,9 @@ namespace IngameScript.BaseManager.BaseNew
 
             var hydrogenTanks = gasTanks.Where(g => g.BlockDefinition.ToString().Contains("HydrogenTank"));
 
-            var maxHydrogenCap = hydrogenTanks.Sum(t => t.Capacity);
-            var totalHydrogen = hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio);
+            var maxHydrogenCap = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity) : 1;
+            var totalHydrogen = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio) : 1;
+
             var hydrogenPercent = totalHydrogen / maxHydrogenCap * 100;
 
             detailedPowerPanel?.WriteText("", false);
@@ -1705,9 +1710,6 @@ namespace IngameScript.BaseManager.BaseNew
             detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} GasGens: {gasCount} GasTanks: {gasTanks.Count} ", true);
             detailedPowerPanel?.WriteText($"\nHydTanks:{hydrogenTanks.Count()} Filled: {hydrogenPercent} % " +
                                           $" {totalHydrogen / 1000} / {maxHydrogenCap / 1000} kL ", true);
-
-          
-
 
             foreach (var react in reactorInventory)
             {
