@@ -22,6 +22,8 @@ using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRage.Game.ObjectBuilders.Definitions;
 using VRageMath;
+using static Sandbox.Game.Entities.MyExportModel;
+
 
 namespace IngameScript.BaseManager.BaseNew
 {
@@ -118,6 +120,7 @@ namespace IngameScript.BaseManager.BaseNew
         List<IMyBatteryBlock> batteries;
         List<IMyGasTank> gasTanks;
         List<IMyPowerProducer> generators;
+        List<IMyShipConnector> connectors;
 
         List<IMyAssembler> specialAssemblers;
 
@@ -253,6 +256,7 @@ namespace IngameScript.BaseManager.BaseNew
             batteries = new List<IMyBatteryBlock>();
             generators = new List<IMyPowerProducer>();
             gasTanks = new List<IMyGasTank>();
+            connectors = new List<IMyShipConnector>();
             specialAssemblers = new List<IMyAssembler>();
 
             partsDisplayData = new StringBuilder();
@@ -507,6 +511,8 @@ namespace IngameScript.BaseManager.BaseNew
                     yield return true;
                     NanobotOperations();
                     PrintNanobotQueue();
+                    yield return true;
+                    ConnectorSorting();
                     break;
 
             }
@@ -912,6 +918,10 @@ namespace IngameScript.BaseManager.BaseNew
                                   .Where(r => r.IsFunctional)
                                   .Select(t => t as IMyPowerProducer).ToList();
 
+            connectors = allBlocks.Where(b => b is IMyShipConnector)
+                                  .Where(r => r.IsFunctional)
+                                  .Select(t => t as IMyShipConnector).ToList();
+
             nanobotBuildModule = allBlocks.Where(b => b.IsFunctional)
                                           .Where(g => g.BlockDefinition.SubtypeName.ToString() == "SELtdLargeNanobotBuildAndRepairSystem")
                                           .FirstOrDefault();
@@ -1072,14 +1082,13 @@ namespace IngameScript.BaseManager.BaseNew
             oreDisplay?.WriteText($"<<-----------Ores----------->>" +
                                   $"\nUse prior:{useRefinereyPriorty}" +
                                   $"\nContainers:{oreInventories.Count()} " +
-                                  $"{NumberToStringConverter(precentageIngotsVolume)}" +
+                                  $"{NumberToStringConverter(precentageOreVolume)}" +
                                   $"\nVolume: {precentageOreVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
             foreach (var dict in oreDictionary.OrderBy(k => k.Key))
             {
                 oreDisplay?.WriteText($"\n{dict.Key} : {dict.Value.Amount} P {dict.Value.Priority} ", true);
             }
-
         }
 
         /// <summary>
@@ -1718,7 +1727,7 @@ namespace IngameScript.BaseManager.BaseNew
             detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} GasGens: {gasCount} GasTanks: {gasTanks.Count} ", true);
             detailedPowerPanel?.WriteText($"\nHydrogen:{hydrogenTanks.Count()} Filled: {hydrogenPercentage} % {NumberToStringConverter(hydrogenPercentage)} " +
                                           $"\n{totalHydrogenStored / 1000} / {maxHydrogenCap / 1000} kL" +
-                                          $"-------------------", true);
+                                          $"\n-------------------", true);
 
             foreach (var react in reactorInventory)
             {
@@ -2002,36 +2011,33 @@ namespace IngameScript.BaseManager.BaseNew
                 AddNanobotPartsToProduct();
             }
 
-            var nanoInventory = nanobotBuildModule.GetInventory(0);
+            //var nanoInventory = nanobotBuildModule.GetInventory(0);
 
-            var freeNanoStorageVolume = nanoInventory.CurrentVolume.ToIntSafe();
-            var totalNanoStorageVolume = nanoInventory.MaxVolume.ToIntSafe();
+            //var freeNanoStorageVolume = nanoInventory.CurrentVolume.ToIntSafe();
+            //var totalNanoStorageVolume = nanoInventory.MaxVolume.ToIntSafe();
 
-            var precentageNanoVolume = Math.Round(((double)freeNanoStorageVolume / (double)totalNanoStorageVolume) * 100, 1);
+            //var precentageNanoVolume = Math.Round(((double)freeNanoStorageVolume / (double)totalNanoStorageVolume) * 100, 1);
 
-            if (precentageNanoVolume > 70)
-            {
-                var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
-                                                    .Select(i => i.GetInventory(0))
-                                                    .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //if (precentageNanoVolume > 70)
+            //{
+            //    var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
+            //                                        .Select(i => i.GetInventory(0))
+            //                                        .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-                var currentCargo = nanoInventory.ItemCount;
+            //    var currentCargo = nanoInventory.ItemCount;
 
-                for (int i = 0; i <= currentCargo; i++)
-                {
-                    var getItem = nanoInventory.GetItemAt(0);
+            //    for (int i = 0; i <= currentCargo; i++)
+            //    {
+            //        var getItem = nanoInventory.GetItemAt(0);
 
-                    if (getItem == null)
-                        continue;
+            //        if (getItem == null)
+            //            continue;
 
-                    var item = getItem.Value;
+            //        var item = getItem.Value;
 
-                    TransferItem(item, nanoInventory, targetItemInventory);
-                }
-            }
-
-
-
+            //        TransferItem(item, nanoInventory, targetItemInventory);
+            //    }
+            //}
         }
 
         public void AddNanobotPartsToProduct()
@@ -2272,6 +2278,9 @@ namespace IngameScript.BaseManager.BaseNew
 
         }
 
+        /// <summary>
+        /// Перенос всех используемых игроком предметов в заданный контейнер
+        /// </summary>
         public void ContainersSortingItems()
         {
             if (!containerSorting)
@@ -2320,10 +2329,104 @@ namespace IngameScript.BaseManager.BaseNew
 
         }
 
+        public void ConnectorSorting()
+        {
+            Echo("Connectors sorting");
+
+            var connInv = connectors.Where(c => !c.Closed && c.HasInventory)
+                                    .Select(i => i.GetInventory(0))
+                                    .Where(c => c.ItemCount > 0);
+
+            if (!connInv.Any())
+                return;
+
+            //var targetOreInventory = oreInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetIngotInventory = ingotInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetItemInventory = partsInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetAmmoInventory = ammoInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            //var targetEquipInventory = itemInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            foreach(var inv in connInv)
+            {
+                var currentCargo = inv.ItemCount;
+
+                for (int i = currentCargo; i >= 0; i--)
+                {
+                    var getItem = inv.GetItemAt(i);
+
+                    if (getItem == null)
+                        continue;
+
+                    var item = getItem.Value;
+
+                    SortingItem(item, inv, i);
+
+                    //if (item.Type.TypeId == "MyObjectBuilder_Ore")//Построенные слитки 
+                    //{
+                    //    TransferItem(item, inv, targetOreInventory, i);
+                    //}
+                    //else if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Построенные слитки 
+                    //{
+                    //    TransferItem(item, inv, targetIngotInventory, i);
+                    //}
+                    //else if (item.Type.TypeId == "MyObjectBuilder_Component")//части
+                    //{
+                    //    TransferItem(item, inv, targetItemInventory, i);
+                    //}
+                    //else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+                    //{
+                    //    TransferItem(item, inv, targetAmmoInventory, i);
+                    //}
+                    //else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
+                    //{
+                    //    TransferItem(item, inv, targetEquipInventory, i);
+                    //}
+                }
+            }
+        }
+
+        /// <summary>
+        /// Сортировка вещей по типу
+        /// </summary>
+        public void SortingItem(MyInventoryItem item, IMyInventory from, int pos = 0)
+        {
+            var targetOreInventory = oreInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetIngotInventory = ingotInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetItemInventory = partsInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetAmmoInventory = ammoInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+            var targetEquipInventory = itemInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
+
+            if (item.Type.TypeId == "MyObjectBuilder_Ore")//Построенные слитки 
+            {
+                TransferItem(item, from, targetOreInventory, pos);
+            }
+            else if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Построенные слитки 
+            {
+                TransferItem(item, from, targetIngotInventory, pos);
+            }
+            else if (item.Type.TypeId == "MyObjectBuilder_Component")//части
+            {
+                TransferItem(item, from, targetItemInventory, pos);
+            }
+            else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+            {
+                TransferItem(item, from, targetAmmoInventory, pos);
+            }
+            else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
+            {
+                TransferItem(item, from, targetEquipInventory, pos);
+            }
+
+        }
+
+        /// <summary>
+        /// Преобразует число % в строковый тип
+        /// </summary>
+        /// <returns></returns>
         public string NumberToStringConverter(double percent)
         {
-            int loadedSymb = (int)(maxContRenderSymbols * (hydrogenPercentage / 100));
-            int freeSymb = (int)(maxContRenderSymbols * (1 - hydrogenPercentage / 100));
+            int loadedSymb = (int)(maxContRenderSymbols * (percent / 100));
+            int freeSymb = (int)(maxContRenderSymbols * (1 - percent / 100));
 
             string state = "[";
             state += string.Concat(Enumerable.Repeat("|", loadedSymb));
