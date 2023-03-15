@@ -32,13 +32,14 @@ namespace IngameScript.BaseManager.BaseNew
         #region mdk preserve
         // Когда нибудь тут будет детальное описание, но не сегодня
         #endregion
-
+        //Названия контейнеров и список для игнорирования
         string oreStorageName = "Ore";
         string ingotStorageName = "Ingot";
         string componentsStorageName = "Part";
         string ammoStorageName = "Ammo";
         string equipStorageName = "Item";
-        string ignoreStorageName = "Ignore";
+        string[] ignoreStorageName = new[] { "Ignore", "Ignore", "Ignore" };
+        // string ignoreStorageName = "Ignore";
 
         string lcdInventoryOresName = "Ore";
         string lcdInventoryIngotsName = "Ingot";
@@ -168,6 +169,8 @@ namespace IngameScript.BaseManager.BaseNew
 
         int maxContRenderSymbols = 20;
 
+        int gasTanksDivider = 1000;
+
         float fontSize = 0.8f;
 
         float maxStoredPower = 0;
@@ -244,6 +247,9 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public Program()
         {
+            if (gasTanksDivider < 0)
+                gasTanksDivider = 1;
+
             Echo($"Script first init starting");
             Runtime.UpdateFrequency = UpdateFrequency.None;
 
@@ -928,8 +934,11 @@ namespace IngameScript.BaseManager.BaseNew
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
-            containerInventories = containers.Where(b => !b.Closed && !b.CustomName.Contains(ignoreStorageName))
+            containerInventories = containers.Where(b => !b.Closed && !ignoreStorageName.Any(txt => b.CustomName.Contains(txt)))
                                              .Select(b => b.GetInventory(0));
+
+            //containerInventories = containers.Where(b => !b.Closed && !b.CustomName.Contains(ignoreStorageName))
+            //                                 .Select(b => b.GetInventory(0));
 
             //nonContainerInventories = allBlocks.Where(b => b.IsFunctional && b.HasInventory && !b.CustomName.Contains(ignoreStorageName))
             //                                   .Select(i => i.GetInventory(0));
@@ -1725,8 +1734,8 @@ namespace IngameScript.BaseManager.BaseNew
             detailedPowerPanel?.WriteText("", false);
             detailedPowerPanel?.WriteText("<--------Gens status--------->", true);
             detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} GasGens: {gasCount} GasTanks: {gasTanks.Count} ", true);
-            detailedPowerPanel?.WriteText($"\nHydrogen:{hydrogenTanks.Count()} Filled: {hydrogenPercentage} % {NumberToStringConverter(hydrogenPercentage)} " +
-                                          $"\n{totalHydrogenStored / 1000} / {maxHydrogenCap / 1000} kL" +
+            detailedPowerPanel?.WriteText($"\nHydrogen: {hydrogenTanks.Count()} Filled: {hydrogenPercentage} % {NumberToStringConverter(hydrogenPercentage)} " +
+                                          $"\n{totalHydrogenStored / gasTanksDivider} / {maxHydrogenCap / gasTanksDivider} kL" +
                                           $"\n-------------------", true);
 
             foreach (var react in reactorInventory)
@@ -1754,8 +1763,6 @@ namespace IngameScript.BaseManager.BaseNew
                     detailedPowerPanel?.WriteText($"\nR:{targInv?.CustomName} EMPTY!!", true);
                 }
             }
-
-            // monitor.AddInstructions("");
         }
 
         /// <summary>
@@ -2010,34 +2017,6 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 AddNanobotPartsToProduct();
             }
-
-            //var nanoInventory = nanobotBuildModule.GetInventory(0);
-
-            //var freeNanoStorageVolume = nanoInventory.CurrentVolume.ToIntSafe();
-            //var totalNanoStorageVolume = nanoInventory.MaxVolume.ToIntSafe();
-
-            //var precentageNanoVolume = Math.Round(((double)freeNanoStorageVolume / (double)totalNanoStorageVolume) * 100, 1);
-
-            //if (precentageNanoVolume > 70)
-            //{
-            //    var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
-            //                                        .Select(i => i.GetInventory(0))
-            //                                        .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-
-            //    var currentCargo = nanoInventory.ItemCount;
-
-            //    for (int i = 0; i <= currentCargo; i++)
-            //    {
-            //        var getItem = nanoInventory.GetItemAt(0);
-
-            //        if (getItem == null)
-            //            continue;
-
-            //        var item = getItem.Value;
-
-            //        TransferItem(item, nanoInventory, targetItemInventory);
-            //    }
-            //}
         }
 
         public void AddNanobotPartsToProduct()
@@ -2329,8 +2308,14 @@ namespace IngameScript.BaseManager.BaseNew
 
         }
 
+        /// <summary>
+        /// Выгрузка ресурсов и коннекторов
+        /// </summary>
         public void ConnectorSorting()
         {
+            if (!containerSorting)
+                return;
+
             Echo("Connectors sorting");
 
             var connInv = connectors.Where(c => !c.Closed && c.HasInventory)
@@ -2416,7 +2401,6 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 TransferItem(item, from, targetEquipInventory, pos);
             }
-
         }
 
         /// <summary>
