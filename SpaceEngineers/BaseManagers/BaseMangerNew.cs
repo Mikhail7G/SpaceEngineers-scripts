@@ -20,9 +20,8 @@ using VRage.Game.Components;
 using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
-using VRage.Game.ObjectBuilders.Definitions;
 using VRageMath;
-using static Sandbox.Game.Entities.MyExportModel;
+
 
 
 namespace IngameScript.BaseManager.BaseNew
@@ -38,7 +37,7 @@ namespace IngameScript.BaseManager.BaseNew
         string componentsStorageName = "Part";
         string ammoStorageName = "Ammo";
         string equipStorageName = "Item";
-        string[] ignoreStorageName = new[] { "Ignore", "Ignore", "Ignore" };
+        string[] ignoreStorageNames = new[] { "Ignore", "Req", "Ignore" };
         // string ignoreStorageName = "Ignore";
 
         string lcdInventoryOresName = "Ore";
@@ -473,6 +472,8 @@ namespace IngameScript.BaseManager.BaseNew
                     yield return true;
                     RefinereysGetData();
                     yield return true;
+                    GetOreBlueprints();
+                    yield return true;
                     ContainersSortingOres();
                     break;
                 case 2:
@@ -744,10 +745,10 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void FindLcds()
         {
-            //if ((debugPanel == null) || (debugPanel.Closed))
-            //{
-            //    debugPanel = GridTerminalSystem.GetBlockWithName(lcdInventoryDebugName) as IMyTextPanel;
-            //}
+            if ((debugPanel == null) || (debugPanel.Closed))
+            {
+                debugPanel = GridTerminalSystem.GetBlockWithName(lcdInventoryDebugName) as IMyTextPanel;
+            }
 
             if ((ingotPanel == null) || !ingotPanel.CustomName.Contains(lcdInventoryIngotsName) || (ingotPanel.Closed))
             {
@@ -934,7 +935,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
-            containerInventories = containers.Where(b => !b.Closed && !ignoreStorageName.Any(txt => b.CustomName.Contains(txt)))
+            containerInventories = containers.Where(b => !b.Closed && !ignoreStorageNames.Any(txt => b.CustomName.Contains(txt)))
                                              .Select(b => b.GetInventory(0));
 
             //containerInventories = containers.Where(b => !b.Closed && !b.CustomName.Contains(ignoreStorageName))
@@ -964,9 +965,6 @@ namespace IngameScript.BaseManager.BaseNew
             freeIngotStorageVolume = ingotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalIngotStorageVolume = ingotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
             precentageIngotsVolume = Math.Round(((double)freeIngotStorageVolume / (double)totalIngotStorageVolume) * 100, 1);
-
-            //partsInventories = containers.Where(c => (!c.Closed) && (c.CustomName.Contains(componentsStorageName) || c.CustomName.Contains(ammoStorageName) || c.CustomName.Contains(equipStorageName)))
-            //                             .Select(i => i.GetInventory(0));
 
             partsInventories = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
                                          .Select(i => i.GetInventory(0));
@@ -1032,15 +1030,16 @@ namespace IngameScript.BaseManager.BaseNew
                         if (oreDictionary.ContainsKey(item.Type.SubtypeId))
                         {
                             oreDictionary[item.Type.SubtypeId].Amount += item.Amount.ToIntSafe();
-                            oreDictionary[item.Type.SubtypeId].Type = item.Type;
+                           // oreDictionary[item.Type.SubtypeId].Type = item.Type.ToString();
                         }
                         else
                         {
                             oreDictionary.Add(item.Type.SubtypeId, new OrePriority
                             {
-                                Type = item.Type,
+                                Type = item.Type.ToString(),
                                 Amount = item.Amount.ToIntSafe(),
-                                Priority = 0
+                                Priority = 0,
+                                Blueprint = "none"
                             });
 
                         }
@@ -1132,6 +1131,9 @@ namespace IngameScript.BaseManager.BaseNew
 
             foreach (var refs in refineryData)
             {
+                if (refs.Key.Closed)
+                    continue;
+
                 double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
                 double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
 
@@ -1148,6 +1150,42 @@ namespace IngameScript.BaseManager.BaseNew
             }
             refinereysItems.Clear();
         }
+
+
+        public void GetOreBlueprints()
+        {
+            if (!useRefinereysOperations)
+                return;
+
+            foreach (var refs in refineryData)
+            {
+                if (refs.Key.Closed)
+                    continue;
+
+                refinereysItems.Clear();
+
+                refs.Key.GetQueue(refinereysItems);
+
+                if (refinereysItems.Count > 0)
+                {
+                    var item = refinereysItems[0];
+
+                    var refsItem = refs.Key.InputInventory.GetItemAt(0);
+
+                    if (refsItem == null)
+                        continue;
+
+                    if(oreDictionary.ContainsKey(refsItem.Value.Type.SubtypeId))
+                    {
+                        if (oreDictionary[refsItem.Value.Type.SubtypeId].Blueprint.Equals("none"))
+                        {
+                            oreDictionary[refsItem.Value.Type.SubtypeId].Blueprint = item.BlueprintId.SubtypeName;
+                        }
+                    }                   
+                }
+            }         
+        }
+
 
         /// <summary>
         /// Загрузка руды в печи
@@ -2325,12 +2363,6 @@ namespace IngameScript.BaseManager.BaseNew
             if (!connInv.Any())
                 return;
 
-            //var targetOreInventory = oreInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-            //var targetIngotInventory = ingotInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-            //var targetItemInventory = partsInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-            //var targetAmmoInventory = ammoInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-            //var targetEquipInventory = itemInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-
             foreach(var inv in connInv)
             {
                 var currentCargo = inv.ItemCount;
@@ -2345,27 +2377,6 @@ namespace IngameScript.BaseManager.BaseNew
                     var item = getItem.Value;
 
                     SortingItem(item, inv, i);
-
-                    //if (item.Type.TypeId == "MyObjectBuilder_Ore")//Построенные слитки 
-                    //{
-                    //    TransferItem(item, inv, targetOreInventory, i);
-                    //}
-                    //else if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Построенные слитки 
-                    //{
-                    //    TransferItem(item, inv, targetIngotInventory, i);
-                    //}
-                    //else if (item.Type.TypeId == "MyObjectBuilder_Component")//части
-                    //{
-                    //    TransferItem(item, inv, targetItemInventory, i);
-                    //}
-                    //else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
-                    //{
-                    //    TransferItem(item, inv, targetAmmoInventory, i);
-                    //}
-                    //else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
-                    //{
-                    //    TransferItem(item, inv, targetEquipInventory, i);
-                    //}
                 }
             }
         }
@@ -2381,15 +2392,15 @@ namespace IngameScript.BaseManager.BaseNew
             var targetAmmoInventory = ammoInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
             var targetEquipInventory = itemInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
-            if (item.Type.TypeId == "MyObjectBuilder_Ore")//Построенные слитки 
+            if (item.Type.TypeId == "MyObjectBuilder_Ore")//Руда
             {
                 TransferItem(item, from, targetOreInventory, pos);
             }
-            else if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Построенные слитки 
+            else if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Слитки 
             {
                 TransferItem(item, from, targetIngotInventory, pos);
             }
-            else if (item.Type.TypeId == "MyObjectBuilder_Component")//части
+            else if (item.Type.TypeId == "MyObjectBuilder_Component")//Части
             {
                 TransferItem(item, from, targetItemInventory, pos);
             }
@@ -2429,10 +2440,12 @@ namespace IngameScript.BaseManager.BaseNew
 
         public class OrePriority
         {
-            public MyItemType Type { set; get; }
-            public MyDefinitionId Blueprint { set; get; }
+            public string Type { set; get; }
+            public string Blueprint { set; get; }
             public int Priority { set; get; } = 0;
             public int Amount { set; get; } = 0;
+
+            public List<string> OreNames = new List<string>();
 
         }
 
