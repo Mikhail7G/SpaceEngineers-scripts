@@ -598,6 +598,35 @@ namespace IngameScript.BaseManager.BaseNew
                         blueprintData.Add(key.Name, dataSystem.Get(key).ToString());
                     }
                 }
+                //Ore Blueprints
+                keys.Clear();
+                dataSystem.GetKeys(oreBpcSection, keys);
+
+                foreach (var key in keys)
+                {
+                    string[] splitedStrings = dataSystem.Get(key).ToString().Split('|');
+                    string blueprintName = emptyOreBlueprint;
+
+                    if (splitedStrings.Length > 0)
+                        blueprintName = splitedStrings[0];
+
+                    oreDictionary.Add(key.Name, new OreData
+                    {
+                       Ready = false,
+                       Type = "MyObjectBuilder_Ore/"+key.Name,
+                       Blueprint = blueprintName
+                    });
+
+                    if (splitedStrings.Length > 1)
+                    {
+                        oreDictionary[key.Name].Ready = true;
+                        for (int i = 1; i < splitedStrings.Length; i++)
+                        {
+                            oreDictionary[key.Name].OreNames.Add(splitedStrings[i]);
+                        }
+                    }
+                }
+
 
             }
 
@@ -1101,6 +1130,12 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 string sysState = dict.Value.Ready == true ? "." : "";
                 oreDisplay?.WriteText($"\n{dict.Key}{sysState} : {dict.Value.Amount}", true);
+
+                foreach(var ing in dict.Value.OreNames)
+                {
+                    oreDisplay?.WriteText($" {ing}", true);
+                }
+
             }
         }
 
@@ -1211,23 +1246,22 @@ namespace IngameScript.BaseManager.BaseNew
                                     oreDictionary[refsItem.Value.Type.SubtypeId].OreNames.Add(ingn.Type.SubtypeId);
                                 }
                             }
-
                         }
                     }                   
                 }
             }
 
-            debugPanel?.WriteText("", false);
+            //debugPanel?.WriteText("", false);
             
-            foreach(var ore in oreDictionary)
-            {
-                debugPanel?.WriteText($"\n {ore.Key} x {ore.Value.Type} x {ore.Value.Blueprint}\n---------", true);
+            //foreach(var ore in oreDictionary)
+            //{
+            //    debugPanel?.WriteText($"\n {ore.Key} x {ore.Value.Type} x {ore.Value.Blueprint}\n---------", true);
 
-                foreach(var ing in ore.Value.OreNames)
-                {
-                    debugPanel?.WriteText($"\n!{ing} ", true);
-                }
-            }
+            //    foreach(var ing in ore.Value.OreNames)
+            //    {
+            //        debugPanel?.WriteText($"\n!{ing} ", true);
+            //    }
+            //}
 
             if(needSaveNewOreData)
             {
