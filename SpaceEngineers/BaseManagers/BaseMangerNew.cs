@@ -60,6 +60,7 @@ namespace IngameScript.BaseManager.BaseNew
         string contSection = "ContainerNames";
         string tagSection = "TagsNames";
         string bpcSection = "Blueprints";
+        string oreBpcSection = "OreBlueprints";
 
         string autorunDataName = "Autorun";
         string replaceIngotsName = "ReplaceIngots";
@@ -69,7 +70,7 @@ namespace IngameScript.BaseManager.BaseNew
         string autoBuildSystem = "AutoBuildSystem";
         string nanobotOrerationsName = "UseNanobotAutoBuild";
         string refinereyOperationsName = "UseRefinereyOperations";
-        string refinereyPriorityName = "UseRefinereyPriortty";
+        //string refinereyPriorityName = "UseRefinereyPriortty";
         string reactorFuelLimitterName = "ReactorFuelLimitter";
         string containerSortingName = "SortingContainers";
 
@@ -90,6 +91,8 @@ namespace IngameScript.BaseManager.BaseNew
 
         string specAssTagName = "AssemblersSpecialOperationsTagName";
         string bpcLearnTagName = "AssemblersBlueprintLeanerName";
+
+        string emptyOreBlueprint = "none";
 
         PerformanceMonitor monitor;
         MyIni dataSystem;
@@ -135,9 +138,11 @@ namespace IngameScript.BaseManager.BaseNew
         bool useAutoBuildSystem = false;
         bool useNanobotAutoBuild = false;
         bool useRefinereysOperations = false;
-        bool useRefinereyPriorty = false;
+       // bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
         bool containerSorting = false;
+
+        bool needSaveNewOreData = false;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -160,7 +165,7 @@ namespace IngameScript.BaseManager.BaseNew
 
         //int maxReactorPayload = 50;
 
-        int refinereyReloadPrecentage = 70;
+        //int refinereyReloadPrecentage = 70;
         int maxVolumeContainerPercentage = 95;
 
         int partsStateMachineCounter = 0;
@@ -204,7 +209,7 @@ namespace IngameScript.BaseManager.BaseNew
         Dictionary<string, ItemBalanser> buildedIngotsDictionary;
         Dictionary<string, ItemBalanser> equipmentDictionary;
 
-        Dictionary<string, OrePriority> oreDictionary;
+        Dictionary<string, OreData> oreDictionary;
 
         Dictionary<string, string> blueprintData;
 
@@ -267,7 +272,7 @@ namespace IngameScript.BaseManager.BaseNew
             partsDisplayData = new StringBuilder();
             oreDisplayData = new StringBuilder();
 
-            oreDictionary = new Dictionary<string, OrePriority>();
+            oreDictionary = new Dictionary<string, OreData>();
             ingotsDict = new Dictionary<string, ItemBalanser>();
             partsDictionary = new Dictionary<string, ItemBalanser>();
             nanobotBuildQueue = new Dictionary<MyDefinitionId, int>();
@@ -346,7 +351,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             foreach (var dict in oreDictionary)
             {
-                SaveData.Set("Ores", dict.Key, dict.Value.Priority);
+              //  SaveData.Set("Ores", dict.Key, dict.Value.Priority);
             }
 
             //Ingot
@@ -389,7 +394,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 foreach (var key in keys)
                 {
-                    oreDictionary.Add(key.Name, new OrePriority() { Priority = LoadData.Get(key).ToInt32() });
+                 //   oreDictionary.Add(key.Name, new OrePriority() { Priority = LoadData.Get(key).ToInt32() });
                 }
 
                 keys.Clear();
@@ -472,7 +477,7 @@ namespace IngameScript.BaseManager.BaseNew
                     yield return true;
                     RefinereysGetData();
                     yield return true;
-                    GetOreBlueprints();
+                    RefinereysManagment();
                     yield return true;
                     ContainersSortingOres();
                     break;
@@ -552,7 +557,7 @@ namespace IngameScript.BaseManager.BaseNew
                 useAutoBuildSystem = dataSystem.Get(operationSection, autoBuildSystem).ToBoolean();
                 useNanobotAutoBuild = dataSystem.Get(operationSection, nanobotOrerationsName).ToBoolean();
                 useRefinereysOperations = dataSystem.Get(operationSection, refinereyOperationsName).ToBoolean();
-                useRefinereyPriorty = dataSystem.Get(operationSection, refinereyPriorityName).ToBoolean();
+                //useRefinereyPriorty = dataSystem.Get(operationSection, refinereyPriorityName).ToBoolean();
                 reactorPayloadLimitter = dataSystem.Get(operationSection, reactorFuelLimitterName).ToBoolean();
                 containerSorting = dataSystem.Get(operationSection, containerSortingName).ToBoolean();
 
@@ -616,7 +621,7 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set(operationSection, autoBuildSystem, false);
                 dataSystem.Set(operationSection, nanobotOrerationsName, false);
                 dataSystem.Set(operationSection, refinereyOperationsName, false);
-                dataSystem.Set(operationSection, refinereyPriorityName, false);
+               // dataSystem.Set(operationSection, refinereyPriorityName, false);
                 dataSystem.Set(operationSection, reactorFuelLimitterName, false);
                 dataSystem.Set(operationSection, containerSortingName, false);
 
@@ -644,6 +649,7 @@ namespace IngameScript.BaseManager.BaseNew
                 //  dataSystem.AddSection("OrePriority");
 
                 dataSystem.AddSection(bpcSection);
+                dataSystem.AddSection(oreBpcSection);
 
                 Me.CustomData = dataSystem.ToString();
             }
@@ -664,7 +670,7 @@ namespace IngameScript.BaseManager.BaseNew
             dataSystem.Set(operationSection, autoBuildSystem, useAutoBuildSystem);
             dataSystem.Set(operationSection, nanobotOrerationsName, useNanobotAutoBuild);
             dataSystem.Set(operationSection, refinereyOperationsName, useRefinereysOperations);
-            dataSystem.Set(operationSection, refinereyPriorityName, useRefinereyPriorty);
+           // dataSystem.Set(operationSection, refinereyPriorityName, useRefinereyPriorty);
             dataSystem.Set(operationSection, reactorFuelLimitterName, reactorPayloadLimitter);
             dataSystem.Set(operationSection, containerSortingName, containerSorting);
 
@@ -1034,12 +1040,12 @@ namespace IngameScript.BaseManager.BaseNew
                         }
                         else
                         {
-                            oreDictionary.Add(item.Type.SubtypeId, new OrePriority
+                            oreDictionary.Add(item.Type.SubtypeId, new OreData
                             {
                                 Type = item.Type.ToString(),
                                 Amount = item.Amount.ToIntSafe(),
                                 Priority = 0,
-                                Blueprint = "none"
+                                Blueprint = emptyOreBlueprint
                             });
 
                         }
@@ -1060,42 +1066,41 @@ namespace IngameScript.BaseManager.BaseNew
             Echo("Update ores LCD");
 
             //Блок считывания приоритета с дисплея
-            if (useRefinereyPriorty)
-            {
-                oreDisplayData.Clear();
-                oreDisplay?.ReadText(oreDisplayData);
+            //{
+            //    oreDisplayData.Clear();
+            //    oreDisplay?.ReadText(oreDisplayData);
 
-                System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
+            //    System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
 
-                if (matches.Count > 0)
-                {
-                    foreach (System.Text.RegularExpressions.Match match in matches)
-                    {
-                        if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
-                        {
-                            int prior = 0;
+            //    if (matches.Count > 0)
+            //    {
+            //        foreach (System.Text.RegularExpressions.Match match in matches)
+            //        {
+            //            if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
+            //            {
+            //                int prior = 0;
 
-                            if (int.TryParse(match.Groups["Prior"].Value, out prior))
-                            {
-                                oreDictionary[match.Groups["Name"].Value].Priority = prior;
-                            }
-                        }
-                    }
-                }
+            //                if (int.TryParse(match.Groups["Prior"].Value, out prior))
+            //                {
+            //                    oreDictionary[match.Groups["Name"].Value].Priority = prior;
+            //                }
+            //            }
+            //        }
+            //    }
 
-            }
+            //}
 
             //Отрисовка на дисплей
             oreDisplay?.WriteText("", false);
             oreDisplay?.WriteText($"<<-----------Ores----------->>" +
-                                  $"\nUse prior:{useRefinereyPriorty}" +
                                   $"\nContainers:{oreInventories.Count()} " +
                                   $"{NumberToStringConverter(precentageOreVolume)}" +
                                   $"\nVolume: {precentageOreVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
 
             foreach (var dict in oreDictionary.OrderBy(k => k.Key))
             {
-                oreDisplay?.WriteText($"\n{dict.Key} : {dict.Value.Amount} P {dict.Value.Priority} ", true);
+                string sysState = dict.Value.Ready == true ? "." : "";
+                oreDisplay?.WriteText($"\n{dict.Key}{sysState} : {dict.Value.Amount}", true);
             }
         }
 
@@ -1104,7 +1109,6 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void RefinereysGetData()
         {
-
             Echo("Get refinereys data");
 
             foreach (var refs in refinereys.Where(refs => (!refs.Closed) && (refs is IMyUpgradableBlock)))
@@ -1152,15 +1156,28 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
 
-        public void GetOreBlueprints()
+        public void RefinereysManagment()
         {
             if (!useRefinereysOperations)
                 return;
+
+            Echo("Refinereys managment");
 
             foreach (var refs in refineryData)
             {
                 if (refs.Key.Closed)
                     continue;
+
+                refs.Key.UseConveyorSystem = false;
+
+                //if ((double)refs.Key.OutputInventory.CurrentVolume * 100 / (double)refs.Key.OutputInventory.MaxVolume > 90)
+                //{
+                //    refs.Key.Enabled = false;
+                //}
+                //else
+                //{
+                //    refs.Key.Enabled = true;
+                //}
 
                 refinereysItems.Clear();
 
@@ -1172,18 +1189,63 @@ namespace IngameScript.BaseManager.BaseNew
 
                     var refsItem = refs.Key.InputInventory.GetItemAt(0);
 
+                    List<MyInventoryItem> ingots = new List<MyInventoryItem>();
+                    refs.Key.OutputInventory.GetItems(ingots);
+
                     if (refsItem == null)
                         continue;
 
                     if(oreDictionary.ContainsKey(refsItem.Value.Type.SubtypeId))
                     {
-                        if (oreDictionary[refsItem.Value.Type.SubtypeId].Blueprint.Equals("none"))
+                        if (oreDictionary[refsItem.Value.Type.SubtypeId].Ready == false)
                         {
                             oreDictionary[refsItem.Value.Type.SubtypeId].Blueprint = item.BlueprintId.SubtypeName;
+
+                            if (ingots.Count > 0)
+                            {
+                                oreDictionary[refsItem.Value.Type.SubtypeId].Ready = true;
+                                needSaveNewOreData = true;
+
+                                foreach (var ingn in ingots)
+                                {
+                                    oreDictionary[refsItem.Value.Type.SubtypeId].OreNames.Add(ingn.Type.SubtypeId);
+                                }
+                            }
+
                         }
                     }                   
                 }
-            }         
+            }
+
+            debugPanel?.WriteText("", false);
+            
+            foreach(var ore in oreDictionary)
+            {
+                debugPanel?.WriteText($"\n {ore.Key} x {ore.Value.Type} x {ore.Value.Blueprint}\n---------", true);
+
+                foreach(var ing in ore.Value.OreNames)
+                {
+                    debugPanel?.WriteText($"\n!{ing} ", true);
+                }
+            }
+
+            if(needSaveNewOreData)
+            {
+                needSaveNewOreData = false;
+
+                foreach (var ore in oreDictionary)
+                {
+                    string data = ore.Value.Blueprint;
+
+                    foreach (var ing in ore.Value.OreNames)
+                    {
+                        data += "|" + ing;
+                    }
+
+                    dataSystem.Set(oreBpcSection, ore.Key, data);
+                }
+                ReloadData();
+            }
         }
 
 
@@ -1192,59 +1254,7 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void LoadRefinereys()
         {
-            if (!useRefinereysOperations)
-                return;
-
-            Echo("Try to load refinereys");
-
-            var oreInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(oreStorageName))
-                                         .Select(i => i.GetInventory(0))
-                                         .Where(i => i.ItemCount > 0);
-
-            var oreList = oreDictionary.Where(oreItem => oreItem.Value.Amount > 0)
-                                       .OrderByDescending(k => k.Value.Priority);
-
-            if (!oreInventory.Any())
-                return;
-
-            foreach (var refs in refinereys)
-            {
-                if (refs.Closed)
-                    continue;
-
-                refs.UseConveyorSystem = false;
-
-                if (refs.InputInventory.ItemCount == 0)
-                {
-
-                }
-                else
-                {   //Догрузка руды в печи
-                    var load = (double)refs.InputInventory.CurrentVolume * 100 / (double)refs.InputInventory.MaxVolume;
-
-                    if (load < refinereyReloadPrecentage)
-                    {
-                        var refsItem = refs.InputInventory.GetItemAt(0);
-
-                        if (refsItem == null)
-                            continue;
-
-                        foreach (var inv in oreInventory)
-                        {
-                            var targItem = inv.FindItem(refsItem.Value.Type);
-
-                            if (targItem.HasValue)
-                            {
-                                if (!inv.TransferItemTo(refs.InputInventory, targItem.Value, null))
-                                {
-                                    Echo($"Ore loaded: {targItem.GetValueOrDefault()} to {refs?.CustomName}");
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+           
         }
 
         /// <summary>
@@ -2438,8 +2448,9 @@ namespace IngameScript.BaseManager.BaseNew
             public int Requested { set; get; } = 0;
         }
 
-        public class OrePriority
+        public class OreData
         {
+            public bool Ready { set; get; } = false;
             public string Type { set; get; }
             public string Blueprint { set; get; }
             public int Priority { set; get; } = 0;
