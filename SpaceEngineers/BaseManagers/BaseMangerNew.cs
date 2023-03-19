@@ -37,7 +37,7 @@ namespace IngameScript.BaseManager.BaseNew
         string componentsStorageName = "Part";
         string ammoStorageName = "Ammo";
         string equipStorageName = "Item";
-        string[] ignoreStorageNames = new[] { "Ignore", "Req", "Ignore" };
+        string[] ignoreNames = new[] { "Ignore", "Req", "Ignore" };
         // string ignoreStorageName = "Ignore";
 
         string lcdInventoryOresName = "Ore";
@@ -595,34 +595,33 @@ namespace IngameScript.BaseManager.BaseNew
                 }
 
                 //Ore Blueprints
-                //keys.Clear();
-                //dataSystem.GetKeys(oreBpcSection, keys);
+                keys.Clear();
+                dataSystem.GetKeys(oreBpcSection, keys);
 
-                //foreach (var key in keys)
-                //{
-                //    string[] splitedStrings = dataSystem.Get(key).ToString().Split('|');
-                //    string blueprintName = emptyOreBlueprint;
+                foreach (var key in keys)
+                {
+                    string[] splitedStrings = dataSystem.Get(key).ToString().Split('|');
+                    string blueprintName = emptyOreBlueprint;
 
-                //    if (splitedStrings.Length > 0)
-                //        blueprintName = splitedStrings[0];
+                    if (splitedStrings.Length > 0)
+                        blueprintName = splitedStrings[0];
 
-                //    oreDictionary.Add(key.Name, new OreData
-                //    {
-                //        Ready = false,
-                //        Type = "MyObjectBuilder_Ore/" + key.Name,
-                //        Blueprint = blueprintName
-                //    });
+                    if (oreDictionary.ContainsKey(key.Name))
+                    {
+                        oreDictionary[key.Name].Ready = false;
+                        oreDictionary[key.Name].Type = "MyObjectBuilder_Ore/" + key.Name;
+                        oreDictionary[key.Name].Blueprint = blueprintName;
 
-                //    if (splitedStrings.Length > 1)
-                //    {
-                //        oreDictionary[key.Name].Ready = true;
-                //        for (int i = 1; i < splitedStrings.Length; i++)
-                //        {
-                //            oreDictionary[key.Name].OreNames.Add(splitedStrings[i]);
-                //        }
-                //    }
-                //}
-
+                        if (splitedStrings.Length > 1)
+                        {
+                            oreDictionary[key.Name].Ready = true;
+                            for (int i = 1; i < splitedStrings.Length; i++)
+                            {
+                                oreDictionary[key.Name].IngotNames.Add(splitedStrings[i]);
+                            }
+                        }
+                    }
+                }
             }
 
             Echo("Script ready to run");
@@ -965,7 +964,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
-            containerInventories = containers.Where(b => !b.Closed && !ignoreStorageNames.Any(txt => b.CustomName.Contains(txt)))
+            containerInventories = containers.Where(b => !b.Closed && !ignoreNames.Any(txt => b.CustomName.Contains(txt)))
                                              .Select(b => b.GetInventory(0));
 
             //containerInventories = containers.Where(b => !b.Closed && !b.CustomName.Contains(ignoreStorageName))
@@ -987,35 +986,35 @@ namespace IngameScript.BaseManager.BaseNew
 
             freeOreStorageVolume = oreInventories.Sum(i => i.CurrentVolume.ToIntSafe());
             totalOreStorageVolume = oreInventories.Sum(i => i.MaxVolume.ToIntSafe());
-            precentageOreVolume = Math.Round((double)freeOreStorageVolume / Math.Max(1, (double)totalOreStorageVolume * 100), 1);
+            precentageOreVolume = Math.Round((double)freeOreStorageVolume / Math.Max(1, (double)totalOreStorageVolume) * 100, 1);
 
             ingotInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ingotStorageName))
                                         .Select(i => i.GetInventory(0));
 
             freeIngotStorageVolume = ingotInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalIngotStorageVolume = ingotInventorys.Sum(i => i.MaxVolume.ToIntSafe());
-            precentageIngotsVolume = Math.Round(((double)freeIngotStorageVolume / Math.Max(1, (double)totalIngotStorageVolume) * 100), 1);
+            precentageIngotsVolume = Math.Round((double)freeIngotStorageVolume / Math.Max(1, (double)totalIngotStorageVolume) * 100, 1);
 
             partsInventories = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
                                          .Select(i => i.GetInventory(0));
 
             freePartsStorageVolume = partsInventories.Sum(i => i.CurrentVolume.ToIntSafe());
             totalPartsStorageVolume = partsInventories.Sum(i => i.MaxVolume.ToIntSafe());
-            precentagePartsVolume = Math.Round((double)freePartsStorageVolume / Math.Max(1, (double)totalPartsStorageVolume * 100), 1);
+            precentagePartsVolume = Math.Round((double)freePartsStorageVolume / Math.Max(1, (double)totalPartsStorageVolume) * 100, 1);
 
             ammoInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
                                        .Select(i => i.GetInventory(0));
 
             freeAmmoStorageVolume = ammoInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalAmmoStorageVolume = ammoInventorys.Sum(i => i.MaxVolume.ToIntSafe());
-            precentageAmmoVolume = Math.Round((double)freeAmmoStorageVolume / Math.Max(1, (double)totalAmmoStorageVolume * 100), 1);
+            precentageAmmoVolume = Math.Round((double)freeAmmoStorageVolume / Math.Max(1, (double)totalAmmoStorageVolume) * 100, 1);
 
             itemInventorys = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
                                        .Select(i => i.GetInventory(0));
 
             freeItemStorageVolume = itemInventorys.Sum(i => i.CurrentVolume.ToIntSafe());
             totalItemStorageVolume = itemInventorys.Sum(i => i.MaxVolume.ToIntSafe());
-            precentageItemVolume = Math.Round((double)freeItemStorageVolume / Math.Max(1, (double)totalItemStorageVolume * 100), 1);
+            precentageItemVolume = Math.Round((double)freeItemStorageVolume / Math.Max(1, (double)totalItemStorageVolume) * 100, 1);
         }
 
         /// <summary>
@@ -1059,7 +1058,6 @@ namespace IngameScript.BaseManager.BaseNew
                         if (oreDictionary.ContainsKey(item.Type.SubtypeId))
                         {
                             oreDictionary[item.Type.SubtypeId].Amount += item.Amount.ToIntSafe();
-                           // oreDictionary[item.Type.SubtypeId].Type = item.Type.ToString();
                         }
                         else
                         {
@@ -1089,29 +1087,30 @@ namespace IngameScript.BaseManager.BaseNew
             Echo("Update ores LCD");
 
             //Блок считывания приоритета с дисплея
-            //{
-            //    oreDisplayData.Clear();
-            //    oreDisplay?.ReadText(oreDisplayData);
+            if (useRefinereysOperations)
+            {
+                oreDisplayData.Clear();
+                oreDisplay?.ReadText(oreDisplayData);
 
-            //    System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
+                System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
 
-            //    if (matches.Count > 0)
-            //    {
-            //        foreach (System.Text.RegularExpressions.Match match in matches)
-            //        {
-            //            if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
-            //            {
-            //                int prior = 0;
+                if (matches.Count > 0)
+                {
+                    foreach (System.Text.RegularExpressions.Match match in matches)
+                    {
+                        if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
+                        {
+                            int prior = 0;
 
-            //                if (int.TryParse(match.Groups["Prior"].Value, out prior))
-            //                {
-            //                    oreDictionary[match.Groups["Name"].Value].Priority = prior;
-            //                }
-            //            }
-            //        }
-            //    }
+                            if (int.TryParse(match.Groups["Prior"].Value, out prior))
+                            {
+                                oreDictionary[match.Groups["Name"].Value].Priority = prior;
+                            }
+                        }
+                    }
+                }
 
-            //}
+            }
 
             //Отрисовка на дисплей
             oreDisplay?.WriteText("", false);
@@ -1122,8 +1121,8 @@ namespace IngameScript.BaseManager.BaseNew
 
             foreach (var dict in oreDictionary.OrderBy(k => k.Key))
             {
-                string sysState = dict.Value.Ready == true ? "." : "";
-                oreDisplay?.WriteText($"\n{dict.Key}{sysState} : {dict.Value.Amount}", true);
+                //string sysState = dict.Value.Ready == true ? "." : "";
+                oreDisplay?.WriteText($"\n{dict.Key} : {dict.Value.Amount} P {dict.Value.Priority} ", true);
             }
         }
 
@@ -1185,7 +1184,7 @@ namespace IngameScript.BaseManager.BaseNew
             if (!useRefinereysOperations)
                 return;
 
-            Echo("Refinereys managment");
+            Echo("Refinereys get ores");
 
             foreach (var refs in refineryData)
             {
