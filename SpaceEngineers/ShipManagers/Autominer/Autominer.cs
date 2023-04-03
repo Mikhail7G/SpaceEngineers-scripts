@@ -39,11 +39,8 @@ namespace SpaceEngineers.Autominer.Autominer
         MovementCommander mover;
         Navigation navigation;
 
-        bool navigating;
-        bool saving;
         Waypoint point;
 
-        Vector3D testPoos = new Vector3D(-92767.57, 364647.79, 238904.54);
 
         public Program()
         {
@@ -69,9 +66,6 @@ namespace SpaceEngineers.Autominer.Autominer
 
             mover.Update();
 
-            if (saving)
-                SaveWaypoint();
-
      
             monitor.AddInstructions("");
             monitor.EndOfFrameCalc();
@@ -87,19 +81,11 @@ namespace SpaceEngineers.Autominer.Autominer
             switch (comm)
             {
                 case "START":
-                    //navigation.Relase();
-                    //navigation.ReversePoints();
                     break;
 
                 case "STOP":
                     mover.FullStop();
                     break;
-
-                //case "ADD":
-                //    saving = !saving;
-                //    point = new Waypoint(mover.GetPosition(), mover.GetOrientation(), 10);
-                //    navigation.WaypointAdd(point);
-                //    break;
 
                 case "FLY":
                     SavePosAndRotation();
@@ -115,24 +101,10 @@ namespace SpaceEngineers.Autominer.Autominer
             mover.FlyToWP(point);
             mover.ForwardMove(1.0f);
             mover.AlignOnWP(MovementCommander.RotateType.Matrix);
-
-            //  mover.FlyTo(testPoos, 50);
-
         }
 
 
-        public void SaveWaypoint()
-        {
-            if (point != null)
-            {
-                if (Vector3D.Distance(point.Position, mover.GetPosition()) > 50)
-                {
-                    point = new Waypoint(mover.GetPosition(), mover.GetOrientation(), (float)mover.GetSpeed());
-                    navigation.WaypointAdd(point);
-                }
-            }
-        }
-
+      
 
         public class MovementCommander
         {
@@ -412,7 +384,6 @@ namespace SpaceEngineers.Autominer.Autominer
             {
                 MoveToTarget = true;
                 ForwardMiningSpeed = speed;
-               // targetPos = shipController.GetPosition() + shipController.WorldMatrix.Forward * 1000;
                 FlyMode = FlyType.ForwardConst;
             }
 
@@ -424,7 +395,6 @@ namespace SpaceEngineers.Autominer.Autominer
                 MoveToTarget = false;
                 Rotate = false;
                 FlyMode = FlyType.Normal;
-
 
                 ReleaseEngines();
                 OverrideGyro(false);
@@ -548,8 +518,6 @@ namespace SpaceEngineers.Autominer.Autominer
 
                 maxFrc = GetMaxThrust(pathNormal) - ((Vector3D.Dot(force, pathNormal) > 0) ? Vector3D.ProjectOnVector(ref force, ref pathNormal).Length() : 0.0);
                 maxVel = Math.Sqrt(2.0 * PathLen * maxFrc / mass);
-                //smooth = (DesiredSpeed - directVel.Length()) / 10;
-                //maxAcc = (maxFrc / mass) * smooth;
                 smooth = Math.Min(Math.Max((DesiredSpeed + 1.0f - directVel.Length()) / 2.0f, 0.0f), 1.0f);
                 maxAcc = 1.0f + (maxFrc / mass) * smooth * smooth * (3.0f - 2.0f * smooth);
                 timeToEnd = Math.Max(TIME_STEP, Math.Abs(maxVel / maxAcc));
@@ -900,8 +868,8 @@ namespace SpaceEngineers.Autominer.Autominer
 
             public void Draw()
             {
-                mainDisplay.WriteText("", false);
-                mainDisplay.WriteText($"CUR ins: {TotalInstructions} / Max: {MaxInstructions}" +
+                mainDisplay?.WriteText("", false);
+                mainDisplay?.WriteText($"CUR ins: {TotalInstructions} / Max: {MaxInstructions}" +
                                       $"\nAV inst: {AverageInstructionsPerTick} / {MaxInstructionsPerTick}" +
                                       $"\nAV time:{UpdateTime}", true);
             }
