@@ -1165,7 +1165,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                 refs.Key.GetQueue(refinereysItems);
                 refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
-                                             $"\nEffectivity: ID: {refs.Key.EntityId} {refs.Value} Load: {Math.Round(loadInput, 1)} / {Math.Round(loadOuptut, 1)} %", true);
+                                             $"\nEffectivity: {refs.Value} Load: {Math.Round(loadInput, 1)} / {Math.Round(loadOuptut, 1)} %", true);
 
                 foreach (var bp in refinereysItems)
                 {
@@ -2177,8 +2177,6 @@ namespace IngameScript.BaseManager.BaseNew
                 nanobotDisplay?.WriteText($"\n{comp.Key.SubtypeName} X {comp.Value}", true);
             }
         }
-
-        //Данные блоки заенить на общую сортировку через функцкию SortingItem как в сортировке коннекторов
 
         /// <summary>
         /// Поиск руд в контейнерах не для руд и перенос куда надо

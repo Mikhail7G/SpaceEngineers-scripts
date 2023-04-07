@@ -14,19 +14,13 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
+using Sandbox.Game.Entities;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 {
     public sealed class Program : MyGridProgram
     {
-        //Lcd's
-        string cargoLCDName = "CargoShipLCD";
-        string drillLCDName = "DrillShipLCD";
-
-        string oreContainersName = "Ore";
-
-        string largeNanoName = "SELtdLargeNanobotDrillSystem";//NOT EDIT
-        string smallNanoName = "SELtdSmallNanobotDrillSystem";//NOT EDIT
 
         /////////////DO NOT EDIT BELOW THE LINE//////////////////
 
@@ -39,16 +33,11 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
 
-
             dataSystem = new MyIni();
 
             ShipComplexMonitor = new ShipMonitor(this)
             {
-                CargoLCDName = cargoLCDName,
-                DrillLCDName = drillLCDName,
-                LargeNanoName = largeNanoName,
-                SmallNanoName = smallNanoName,
-                OreContainersName = oreContainersName
+
             };
             ShipComplexMonitor.Init(blocks);
 
@@ -68,11 +57,12 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
         public void Update()
         {
             ShipComplexMonitor.Update();
+
         }
 
         public class ShipMonitor
         {
-
+            public string StatusLCDName = "StatusShipLCD";
             public string CargoLCDName = "CargoShipLCD";
             public string DrillLCDName = "DrillShipLCD";
 
@@ -85,10 +75,18 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             double totalCargoStorageVolume;
             double cargoPrecentageVolume;
 
+            double MTOW;//макс взлетный вес корабля
+            double availTakeoffThrust;
+            double gravity;
+            float mass;
+
             Program program;
 
+            IMyTextPanel statusPanel;
             IMyTextPanel cargoPanel;
             IMyTextPanel drillPanel;
+
+            IMyShipController shipController;
 
             List<MyInventoryItem> oreItems;
             List<IMyCargoContainer> containers;
@@ -97,6 +95,18 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             List<IMyTerminalBlock> nanoDrill;
             List<IMyShipConnector> connectors;
             Dictionary<string, int> ores;
+
+            //Двигатели
+            List<IMyThrust> thrusters;
+            List<IMyThrust> upThrusters = new List<IMyThrust>();
+            List<IMyThrust> downThrusters = new List<IMyThrust>();
+            List<IMyThrust> leftThrusters = new List<IMyThrust>();
+            List<IMyThrust> rightThrusters = new List<IMyThrust>();
+            List<IMyThrust> forwardThrusters = new List<IMyThrust>();
+            List<IMyThrust> backwardThrusters = new List<IMyThrust>();
+
+            Dictionary<Base6Directions.Direction, double> engThrust = new Dictionary<Base6Directions.Direction, double>() { { Base6Directions.Direction.Backward, 0 }, { Base6Directions.Direction.Down, 0 }, { Base6Directions.Direction.Forward, 0 }, { Base6Directions.Direction.Left, 0 }, { Base6Directions.Direction.Right, 0 }, { Base6Directions.Direction.Up, 0 }, };
+
 
             List<List<object>> miningFields;
             //Dictionary<string, double> miningTargets; TimeSpan
@@ -134,7 +144,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 switch(com)
                 {
                     case "UNLOAD":
-                        UnloadOre();
+                       
                         break;
                 }
             }
@@ -142,7 +152,6 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             public void Init(List<IMyTerminalBlock> shipBlocks)
             {
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-                // program.GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == program.Me.CubeGrid);
                 blocks = shipBlocks;
 
                 containers = blocks.Where(b => b is IMyCargoContainer)
@@ -161,6 +170,56 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                                   .Where(c => c.IsFunctional)
                                   .Select(t => t as IMyShipConnector).ToList();
 
+                thrusters = blocks.Where(b => b is IMyThrust)
+                                .Where(c => c.IsFunctional)
+                                .Select(t => t as IMyThrust).ToList();
+
+                shipController = blocks.Where(b => b is IMyShipController)
+                                     .Where(c => c.IsFunctional)
+                                     .Select(t => t as IMyShipController).FirstOrDefault();
+
+                if (shipController == null)
+                    return;
+
+
+                Matrix engRot = new Matrix();
+                Matrix cocpitRot = new Matrix();
+
+                shipController.Orientation.GetMatrix(out cocpitRot);
+
+                for (int i = 0; i < thrusters.Count; i++)
+                {
+                    IMyThrust Thrust = thrusters[i];
+                    Thrust.Orientation.GetMatrix(out engRot);
+                    //Y
+                    if (engRot.Backward == cocpitRot.Up)
+                    {
+                        upThrusters.Add(Thrust);
+                    }
+                    else if (engRot.Backward == cocpitRot.Down)
+                    {
+                        downThrusters.Add(Thrust);
+                    }
+                    //X
+                    else if (engRot.Backward == cocpitRot.Left)
+                    {
+                        leftThrusters.Add(Thrust);
+                    }
+                    else if (engRot.Backward == cocpitRot.Right)
+                    {
+                        rightThrusters.Add(Thrust);
+                    }
+                    //Z
+                    else if (engRot.Backward == cocpitRot.Forward)
+                    {
+                        forwardThrusters.Add(Thrust);
+                    }
+                    else if (engRot.Backward == cocpitRot.Backward)
+                    {
+                        backwardThrusters.Add(Thrust);
+                    }
+                }
+
                 if (program.Me.CubeGrid.GridSizeEnum == MyCubeSize.Large)
                 {
                     nanoDrill = blocks.Where(g => g.BlockDefinition.SubtypeName.ToString() == LargeNanoName).ToList();
@@ -178,6 +237,10 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                                    .Where(c => c.IsFunctional)
                                    .Select(t => t as IMyTextPanel).FirstOrDefault();
 
+                statusPanel = blocks.Where(b => b is IMyTextPanel && b.CustomName.Contains(StatusLCDName))
+                                    .Where(c => c.IsFunctional)
+                                    .Select(t => t as IMyTextPanel).FirstOrDefault();
+
 
                 if (cargoPanel != null)
                 {
@@ -190,6 +253,13 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                     drillPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
                     drillPanel.FontSize = 1;
                 }
+
+                if (statusPanel != null)
+                {
+                    statusPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    statusPanel.FontSize = 1;
+                }
+
 
             }
 
@@ -204,8 +274,45 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 ScanCargo();
                 PrintOres();
 
-                GetDrillData();
+                //GetDrillData();
                 PrintMiningOres();
+
+                GetShipData();
+                PrintShipData();
+            }
+
+            public void GetShipData()
+            { 
+                RefreshEngines();
+
+                gravity = shipController.GetNaturalGravity().Length();
+                mass = shipController.CalculateShipMass().PhysicalMass;
+                MTOW =  1.0f * mass;
+                availTakeoffThrust = MTOW * 100 / engThrust[Base6Directions.Direction.Up];
+
+            }
+
+            public void PrintShipData()
+            {
+                if (statusPanel == null)
+                    return;
+
+                statusPanel?.WriteText("", false);
+                statusPanel?.WriteText("<-------------Ship Status------------->" +
+                                      $"\nMTOW(1g): {MTOW} kg" +
+                                      $"\nAvail take off thrust: {Math.Round(availTakeoffThrust,1)} %", true);
+            }
+
+            void RefreshEngines()
+            {
+                engThrust[Base6Directions.Direction.Forward] = forwardThrusters.Sum(t => t.MaxEffectiveThrust);
+                engThrust[Base6Directions.Direction.Backward] = backwardThrusters.Sum(t => t.MaxEffectiveThrust);
+
+                engThrust[Base6Directions.Direction.Up] = upThrusters.Sum(t => t.MaxEffectiveThrust);
+                engThrust[Base6Directions.Direction.Down] = downThrusters.Sum(t => t.MaxEffectiveThrust);
+
+                engThrust[Base6Directions.Direction.Left] = leftThrusters.Sum(t => t.MaxEffectiveThrust);
+                engThrust[Base6Directions.Direction.Right] = rightThrusters.Sum(t => t.MaxEffectiveThrust);
             }
 
             public void ScanCargo()
@@ -324,55 +431,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 }
             }
 
-            /// <summary>
-            /// Выгрузка руды в контейнеры базы
-            /// </summary>
-            public void UnloadOre()
-            {
-                var connected = connectors.Where(c => c.Status == MyShipConnectorStatus.Connected);
-                if (!connected.Any())
-                    return;
-
-                List<IMyCargoContainer> blocks = new List<IMyCargoContainer>();
-                program.GridTerminalSystem.GetBlocksOfType(blocks, (IMyCargoContainer b) => b.CubeGrid != program.Me.CubeGrid && b.CustomName.Contains(OreContainersName));
-                var availInv = blocks.Where(b => b.IsFunctional)
-                                     .Select(b => b.GetInventory(0))
-                                     .Where(i => !i.IsFull);
-
-                if (!availInv.Any())
-                    return;
-
-                var myInventroy = containers.Select(c => c.GetInventory(0));
-
-                foreach(var inv in myInventroy)
-                {
-                    var count = inv.ItemCount;
-
-                    for (int i = 0; i <= count; i++)
-                    {
-                        var item = inv.GetItemAt(i);
-
-                        if (item == null)
-                            continue;
-
-                        if (item.Value.Type.TypeId != "MyObjectBuilder_Ore")
-                            continue;
-
-                        foreach(var targetInv in availInv)
-                        {
-                            if (item == null)
-                                break;
-
-                            if (inv.TransferItemTo(targetInv, i, null, true))
-                            {
-                            }  
-                        }
-                    }
-                }
-
-            }
-
-
+        
             public class OreMiningFieldData
             {
                 public string FieldId = "";
