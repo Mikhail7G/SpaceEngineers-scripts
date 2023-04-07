@@ -365,15 +365,12 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 if (cargoPanel == null)
                     return;
 
-                int symbols = (int)((cargoPanel.SurfaceSize.X / 8.82) / cargoPanel.FontSize);
+                //int symbols = (int)((cargoPanel.SurfaceSize.X / 8.82) / cargoPanel.FontSize);
 
-                string str = string.Concat(Enumerable.Repeat("-", symbols));
-                string name = "Ores";
-
+                //string str = string.Concat(Enumerable.Repeat("-", symbols));
+              
                 cargoPanel?.WriteText("", false);
-                cargoPanel?.WriteText($"v: {cargoPanel.SurfaceSize.X} {cargoPanel.FontSize} {symbols}", true);
-                cargoPanel?.WriteText($"\n{str}" +
-                                      $"\nPayload: {cargoPrecentageVolume} %" +
+                cargoPanel?.WriteText($"Payload: {cargoPrecentageVolume} %" +
                                       $"\n<------------------Ores------------------>", true);
               
                 foreach (var key in ores)

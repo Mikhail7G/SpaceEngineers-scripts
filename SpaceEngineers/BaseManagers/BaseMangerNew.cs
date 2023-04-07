@@ -29,16 +29,15 @@ namespace IngameScript.BaseManager.BaseNew
     public sealed class Program : MyGridProgram
     {
         #region mdk preserve
-        // Когда нибудь тут будет детальное описание, но не сегодня
+        //Названия тегов для игнорирования системой поиска и управления инвентарем
+        string[] ignoreNames = new[] { "Ignore", "Req", "Ignore" };
         #endregion
-        //Названия контейнеров и список для игнорирования
+        //Названия контейнеров 
         string oreStorageName = "Ore";
         string ingotStorageName = "Ingot";
         string componentsStorageName = "Part";
         string ammoStorageName = "Ammo";
         string equipStorageName = "Item";
-        string[] ignoreNames = new[] { "Ignore", "Req", "Ignore" };
-        // string ignoreStorageName = "Ignore";
 
         string lcdInventoryOresName = "Ore";
         string lcdInventoryIngotsName = "Ingot";
@@ -223,6 +222,8 @@ namespace IngameScript.BaseManager.BaseNew
         List<MyInventoryItem> ingotItems;
         List<MyProductionItem> refinereysItems;
         List<MyInventoryItem> productionItems;
+
+        IMyAssembler learnerAss;
 
         StringBuilder partsDisplayData;
         StringBuilder oreDisplayData;
@@ -442,7 +443,7 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 case "SAVEBPS":
                     Echo("Try save bps names");
-                    SwitchBlueprintGetter();
+                    BlueprintLearnerSwitcher();
                     break;
                 case "INGOT":
                     SwitchIngotMode();
@@ -522,6 +523,7 @@ namespace IngameScript.BaseManager.BaseNew
                     PrintNanobotQueue();
                     yield return true;
                     ConnectorSorting();
+                    BlueprintLearnerSwitcher();
                     break;
 
             }
@@ -1117,7 +1119,8 @@ namespace IngameScript.BaseManager.BaseNew
             oreDisplay?.WriteText($"<<-----------Ores----------->>" +
                                   $"\nContainers:{oreInventories.Count()} " +
                                   $"{NumberToStringConverter(precentageOreVolume)}" +
-                                  $"\nVolume: {precentageOreVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T", true);
+                                  $"\nVolume: {precentageOreVolume} % {freeOreStorageVolume} / {totalOreStorageVolume} T" +
+                                  $"\n<<-----------Ores----------->>", true);
 
             foreach (var dict in oreDictionary.OrderBy(k => k.Key))
             {
@@ -1133,47 +1136,47 @@ namespace IngameScript.BaseManager.BaseNew
         {
             Echo("Get refinereys data");
 
-            foreach (var refs in refinereys.Where(refs => (!refs.Closed) && (refs is IMyUpgradableBlock)))
-            {
-                var upgradeBlock = refs as IMyUpgradableBlock;
-                upgradeBlock?.GetUpgrades(out refsUpgradeList);
+            //foreach (var refs in refinereys.Where(refs => (!refs.Closed) && (refs is IMyUpgradableBlock)))
+            //{
+            //    var upgradeBlock = refs as IMyUpgradableBlock;
+            //    upgradeBlock?.GetUpgrades(out refsUpgradeList);
 
-                if (refineryData.ContainsKey(refs))
-                {
-                    refineryData[refs] = refsUpgradeList["Effectiveness"];
-                }
-                else
-                {
-                    refineryData.Add(refs, refsUpgradeList["Effectiveness"]);
-                }
-            }
+            //    if (refineryData.ContainsKey(refs))
+            //    {
+            //        refineryData[refs] = refsUpgradeList["Effectiveness"];
+            //    }
+            //    else
+            //    {
+            //        refineryData.Add(refs, refsUpgradeList["Effectiveness"]);
+            //    }
+            //}
 
-            //
-            if (refinereysDisplay == null)
-                return;
+            ////
+            //if (refinereysDisplay == null)
+            //    return;
 
-            refinereysDisplay?.WriteText("", false);
-            refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
+            //refinereysDisplay?.WriteText("", false);
+            //refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
 
-            foreach (var refs in refineryData)
-            {
-                if (refs.Key.Closed)
-                    continue;
+            //foreach (var refs in refineryData)
+            //{
+            //    if (refs.Key.Closed)
+            //        continue;
 
-                double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
-                double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
+            //    double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
+            //    double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
 
-                refs.Key.GetQueue(refinereysItems);
-                refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
-                                             $"\nEffectivity: {refs.Value} Load: {Math.Round(loadInput, 1)} / {Math.Round(loadOuptut, 1)} %", true);
+            //    refs.Key.GetQueue(refinereysItems);
+            //    refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
+            //                                 $"\nEffectivity: {refs.Value} Load: {Math.Round(loadInput, 1)} / {Math.Round(loadOuptut, 1)} %", true);
 
-                foreach (var bp in refinereysItems)
-                {
-                    refinereysDisplay?.WriteText($"\n{bp.BlueprintId.SubtypeName} X Ore:{bp.Amount.ToIntSafe()}", true);
-                }
-                refinereysDisplay?.WriteText("\n----------", true);
-            }
-            refinereysItems.Clear();
+            //    foreach (var bp in refinereysItems)
+            //    {
+            //        refinereysDisplay?.WriteText($"\n{bp.BlueprintId.SubtypeName} X Ore:{bp.Amount.ToIntSafe()}", true);
+            //    }
+            //    refinereysDisplay?.WriteText("\n----------", true);
+            //}
+            //refinereysItems.Clear();
         }
 
         /// <summary>
@@ -1441,18 +1444,6 @@ namespace IngameScript.BaseManager.BaseNew
             if (!needReplaceParts)
                 return;
 
-            //var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
-            //                                    .Select(i => i.GetInventory(0))
-            //                                    .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-
-            //var targetAmmoInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(ammoStorageName))
-            //                                   .Select(i => i.GetInventory(0))
-            //                                   .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);ammoInventorys
-
-            //var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
-            //                                     .Select(i => i.GetInventory(0))
-            //                                     .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);itemInventorys
-
             var targetItemInventory = partsInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
             var targetAmmoInventory = ammoInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
             var targetEquipInventory = itemInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
@@ -1482,25 +1473,27 @@ namespace IngameScript.BaseManager.BaseNew
 
                     var item = getItem.Value;
 
-                    if (item.Type.TypeId == "MyObjectBuilder_Component")//части
-                    {
-                        TransferItem(item, ass, targetItemInventory, i);
-                    }
+                    SortingItem(item, ass, i);
 
-                    else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
-                    {
-                        TransferItem(item, ass, targetAmmoInventory, i);
-                    }
+                    //if (item.Type.TypeId == "MyObjectBuilder_Component")//части
+                    //{
+                    //    TransferItem(item, ass, targetItemInventory, i);
+                    //}
 
-                    else if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
-                    {
-                        TransferItem(item, ass, targetItemInventory, i);
-                    }
+                    //else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
+                    //{
+                    //    TransferItem(item, ass, targetAmmoInventory, i);
+                    //}
 
-                    else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
-                    {
-                        TransferItem(item, ass, targetEquipInventory, i);
-                    }
+                    //else if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
+                    //{
+                    //    TransferItem(item, ass, targetItemInventory, i);
+                    //}
+
+                    //else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
+                    //{
+                    //    TransferItem(item, ass, targetEquipInventory, i);
+                    //}
                 }
 
             }
@@ -1830,7 +1823,7 @@ namespace IngameScript.BaseManager.BaseNew
             var hydrogenTanks = gasTanks.Where(g => g.BlockDefinition.ToString().Contains("HydrogenTank"));
 
             maxHydrogenCap = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity) : 1;
-            totalHydrogenStored = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio) : 1;
+            totalHydrogenStored = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio) : 0;
 
             hydrogenPercentage = totalHydrogenStored / maxHydrogenCap * 100;
 
@@ -1871,29 +1864,28 @@ namespace IngameScript.BaseManager.BaseNew
         /// <summary>
         /// Начать/остановить поиск черчежей
         /// </summary>
-        public void SwitchBlueprintGetter()
+        public void BlueprintLearnerSwitcher()
         {
-            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).FirstOrDefault();
-
-            if (ass == null)
+            if (learnerAss == null)
             {
-                return;
-            }
+                var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).FirstOrDefault();
 
-            assemblerBlueprintGetter = !assemblerBlueprintGetter;
+                if (ass == null)
+                {
+                    return;
+                }
 
-            if (assemblerBlueprintGetter)
-            {
-                SpecialAssemblerLastName = ass.CustomName;
-                ass.CustomName = assemblersBlueprintLeanerName + "Assembler ready to copy bps";
-                ass.ClearQueue();
-                ass.Enabled = false;
-            }
-            else
-            {
-                ass.CustomName = SpecialAssemblerLastName;
-                ass.ClearQueue();
-                ass.Enabled = true;
+                learnerAss = ass;
+                SpecialAssemblerLastName = learnerAss.CustomName.Replace(assemblersBlueprintLeanerName,"");
+                learnerAss.CustomName = assemblersBlueprintLeanerName + " Assembler ready to copy bps";
+                learnerAss.ClearQueue();
+                learnerAss.Enabled = false;
+                assemblerBlueprintGetter = true;
+
+                if(!learnerAss.CustomName.Contains(assemblersBlueprintLeanerName))
+                {
+                    assemblerBlueprintGetter = false;
+                }
             }
         }
 
@@ -1910,13 +1902,26 @@ namespace IngameScript.BaseManager.BaseNew
                                             .Where(i => !i.IsFull);
 
             var blueprints = new List<MyProductionItem>();
-            var ass = assemblers.Where(q => q.CustomName.Contains(assemblersBlueprintLeanerName)).FirstOrDefault();
+            var ass = learnerAss;
             if (ass == null)
                 return;
 
+            if (!targetInventory.Any())
+                return;
+
+            if (!learnerAss.CustomName.Contains(assemblersBlueprintLeanerName))
+            {
+                learnerAss.CustomName = SpecialAssemblerLastName;
+                learnerAss.ClearQueue();
+                learnerAss.Enabled = true;
+                learnerAss = null;
+                assemblerBlueprintGetter = false;
+                return;
+            }
+
             var assInv = ass.GetInventory(1);
 
-            ass.CustomName = assemblersBlueprintLeanerName + "Assembler ready to copy bps";
+            ass.CustomName = assemblersBlueprintLeanerName + " Assembler ready to copy bps";
             ass.GetQueue(blueprints);
 
             if (blueprints.Count > 1)
@@ -2555,6 +2560,12 @@ namespace IngameScript.BaseManager.BaseNew
                 avrInst = 0;
                 avrTime = 0;
                 mainDisplay = display;
+
+                if (mainDisplay != null)
+                {
+                    mainDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                    mainDisplay.FontSize = 1;
+                }
 
             }
 
