@@ -287,8 +287,18 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                 gravity = shipController.GetNaturalGravity().Length();
                 mass = shipController.CalculateShipMass().PhysicalMass;
-                MTOW =  1.0f * mass;
-                availTakeoffThrust = MTOW * 100 / engThrust[Base6Directions.Direction.Up];
+
+                if (gravity > 0.5f)
+                {
+                    MTOW = engThrust[Base6Directions.Direction.Up] / gravity;
+                }
+                else
+                {
+                    MTOW = engThrust[Base6Directions.Direction.Up];
+                }
+
+                availTakeoffThrust = 100 - ((mass * 100) / MTOW);
+
 
             }
 
@@ -299,7 +309,7 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
 
                 statusPanel?.WriteText("", false);
                 statusPanel?.WriteText("<-------------Ship Status------------->" +
-                                      $"\nMTOW(1g): {MTOW} kg" +
+                                      $"\nMTOW/Mass: {Math.Round(MTOW,1)} / {mass} kg" +
                                       $"\nAvail take off thrust: {Math.Round(availTakeoffThrust,1)} %", true);
             }
 
@@ -355,12 +365,18 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
                 if (cargoPanel == null)
                     return;
 
+                int symbols = (int)((cargoPanel.SurfaceSize.X / 8.82) / cargoPanel.FontSize);
+
+                string str = string.Concat(Enumerable.Repeat("-", symbols));
+                string name = "Ores";
+
                 cargoPanel?.WriteText("", false);
-                cargoPanel?.WriteText("<------------------Cargo------------------->" +
+                cargoPanel?.WriteText($"v: {cargoPanel.SurfaceSize.X} {cargoPanel.FontSize} {symbols}", true);
+                cargoPanel?.WriteText($"\n{str}" +
                                       $"\nPayload: {cargoPrecentageVolume} %" +
                                       $"\n<------------------Ores------------------>", true);
-
-                foreach(var key in ores)
+              
+                foreach (var key in ores)
                 {
                     cargoPanel?.WriteText($"\n{key.Key} x {key.Value}", true);
                 }
