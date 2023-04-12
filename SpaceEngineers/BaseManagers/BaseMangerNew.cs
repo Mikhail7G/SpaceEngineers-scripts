@@ -511,7 +511,7 @@ namespace IngameScript.BaseManager.BaseNew
                     ContainersSortingItems();
                     break;
                 case 4:
-                    PowerMangment();
+                    GetPowerData();
                     PowerSystemDetailed();
                     yield return true;
                     PartsAutoBuild();
@@ -981,7 +981,7 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void GetContainers()
         {
-            Echo("Find containers");
+            Echo("Get containers data");
 
             oreInventories = containers.Where(c => (!c.Closed) && c.CustomName.Contains(oreStorageName))
                                        .Select(i => i.GetInventory(0));
@@ -1778,31 +1778,32 @@ namespace IngameScript.BaseManager.BaseNew
         /// <summary>
         /// Система управления питанием базы
         /// </summary>
-        public void PowerMangment()
+        public void GetPowerData()
         {
             if (!usePowerManagmentSystem)
                 return;
 
-            Echo("Power managment system");
+            Echo("Get power data");
             Echo($"Batt:{batteries.Count}");
             Echo($"Gens:{generators.Count}");
 
-            maxStoredPower = batteries.Where(b => !b.Closed).Sum(b => b.MaxStoredPower);
-            currentStoredPower = batteries.Where(b => !b.Closed).Sum(b => b.CurrentStoredPower);
+            maxStoredPower = batteries.Any() ? batteries.Where(b => !b.Closed).Sum(b => b.MaxStoredPower) : 1;
+            currentStoredPower = batteries.Any() ? batteries.Where(b => !b.Closed).Sum(b => b.CurrentStoredPower) : 0;
 
             inputPower = batteries.Where(b => !b.Closed).Sum(b => b.CurrentInput);
             outputPower = batteries.Where(b => !b.Closed).Sum(b => b.CurrentOutput);
 
-            generatorsMaxOutputPower = generators.Where(g => !g.Closed && g.IsWorking).Sum(g => g.MaxOutput);
-            generatorsOutputPower = generators.Where(g => !g.Closed && g.IsWorking).Sum(g => g.CurrentOutput);
+            generatorsMaxOutputPower = generators.Any() ? generators.Where(g => !g.Closed && g.IsWorking).Sum(g => g.MaxOutput) : 1;
+            generatorsOutputPower = generators.Any() ? generators.Where(g => !g.Closed && g.IsWorking).Sum(g => g.CurrentOutput) : 1;
 
             powerLoadPercentage = (float)Math.Round(generatorsOutputPower / generatorsMaxOutputPower * 100, 1);
+            var storedPrecentage = Math.Round(currentStoredPower / maxStoredPower * 100, 1);
 
             powerPanel?.WriteText("", false);
             powerPanel?.WriteText("<--------Power status--------->", true);
             powerPanel?.WriteText($"\nBatteryStatus:" +
-                                   $"\nPower Load: {powerLoadPercentage} %" +
-                                   $"\nTotal/Max stored:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {Math.Round(currentStoredPower / maxStoredPower * 100, 1)} %"
+                                   $"\nPower Load: {powerLoadPercentage} % {NumberToStringConverter(powerLoadPercentage)}" +
+                                   $"\nTotal/Max stored:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {storedPrecentage} % {NumberToStringConverter(storedPrecentage)}"
                                  + $"\nInput/Output:{Math.Round(inputPower, 2)} / {Math.Round(outputPower, 2)} {(inputPower > outputPower ? "+" : "-")} MWt/h "
                                  + $"\nGens maxOut/Out: {Math.Round(generatorsMaxOutputPower, 2)} / {Math.Round(generatorsOutputPower, 2)} MWT", true);
         }
@@ -1825,13 +1826,13 @@ namespace IngameScript.BaseManager.BaseNew
             maxHydrogenCap = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity) : 1;
             totalHydrogenStored = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio) : 0;
 
-            hydrogenPercentage = totalHydrogenStored / maxHydrogenCap * 100;
+            hydrogenPercentage = Math.Round(totalHydrogenStored / maxHydrogenCap * 100, 1);
 
             detailedPowerPanel?.WriteText("", false);
             detailedPowerPanel?.WriteText("<--------Gens status--------->", true);
             detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} GasGens: {gasCount} GasTanks: {gasTanks.Count} ", true);
             detailedPowerPanel?.WriteText($"\nHydrogen: {hydrogenTanks.Count()} Filled: {hydrogenPercentage} % {NumberToStringConverter(hydrogenPercentage)} " +
-                                          $"\n{totalHydrogenStored / gasTanksDivider} / {maxHydrogenCap / gasTanksDivider} kL" +
+                                          $"\n{Math.Round(totalHydrogenStored / gasTanksDivider,1)} / {Math.Round(maxHydrogenCap / gasTanksDivider,1)} kL" +
                                           $"\n-------------------", true);
 
             foreach (var react in reactorInventory)
@@ -1881,11 +1882,6 @@ namespace IngameScript.BaseManager.BaseNew
                 learnerAss.ClearQueue();
                 learnerAss.Enabled = false;
                 assemblerBlueprintGetter = true;
-
-                if(!learnerAss.CustomName.Contains(assemblersBlueprintLeanerName))
-                {
-                    assemblerBlueprintGetter = false;
-                }
             }
         }
 
@@ -2490,7 +2486,7 @@ namespace IngameScript.BaseManager.BaseNew
         /// <returns></returns>
         public string NumberToStringConverter(double percent)
         {
-
+           
             int loadedSymb = (int)(maxContRenderSymbols * (percent / 100));
             int freeSymb = (int)(maxContRenderSymbols * (1 - percent / 100));
 
