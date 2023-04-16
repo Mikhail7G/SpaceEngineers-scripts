@@ -133,11 +133,11 @@ namespace IngameScript.BaseManager.BaseNew
         bool needReplaceIngots = false;
         bool needReplaceParts = false;
         bool usePowerManagmentSystem = false;
-        bool useDetailedPowerMonitoring = false;
+        //bool useDetailedPowerMonitoring = false;
         bool useAutoBuildSystem = false;
         bool useNanobotAutoBuild = false;
         bool useRefinereysOperations = false;
-       // bool useRefinereyPriorty = false;
+       //bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
         bool containerSorting = false;
 
@@ -178,6 +178,7 @@ namespace IngameScript.BaseManager.BaseNew
 
         float maxStoredPower = 0;
         float currentStoredPower = 0;
+        float battsStoredPrecentage = 0;
 
         float inputPower = 0;
         float outputPower = 0;
@@ -551,7 +552,7 @@ namespace IngameScript.BaseManager.BaseNew
                 needReplaceIngots = dataSystem.Get(operationSection, replaceIngotsName).ToBoolean();
                 needReplaceParts = dataSystem.Get(operationSection, replacePartsName).ToBoolean();
                 usePowerManagmentSystem = dataSystem.Get(operationSection, powerManagmentName).ToBoolean();
-                useDetailedPowerMonitoring = dataSystem.Get(operationSection, detailedPowerManagmentName).ToBoolean();
+                //useDetailedPowerMonitoring = dataSystem.Get(operationSection, detailedPowerManagmentName).ToBoolean();
                 useAutoBuildSystem = dataSystem.Get(operationSection, autoBuildSystem).ToBoolean();
                 useNanobotAutoBuild = dataSystem.Get(operationSection, nanobotOrerationsName).ToBoolean();
                 useRefinereysOperations = dataSystem.Get(operationSection, refinereyOperationsName).ToBoolean();
@@ -642,11 +643,11 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set(operationSection, replaceIngotsName, false);
                 dataSystem.Set(operationSection, replacePartsName, false);
                 dataSystem.Set(operationSection, powerManagmentName, false);
-                dataSystem.Set(operationSection, detailedPowerManagmentName, false);
+                //dataSystem.Set(operationSection, detailedPowerManagmentName, false);
                 dataSystem.Set(operationSection, autoBuildSystem, false);
                 dataSystem.Set(operationSection, nanobotOrerationsName, false);
                 dataSystem.Set(operationSection, refinereyOperationsName, false);
-               // dataSystem.Set(operationSection, refinereyPriorityName, false);
+               //dataSystem.Set(operationSection, refinereyPriorityName, false);
                 dataSystem.Set(operationSection, reactorFuelLimitterName, false);
                 dataSystem.Set(operationSection, containerSortingName, false);
 
@@ -691,11 +692,11 @@ namespace IngameScript.BaseManager.BaseNew
             dataSystem.Set(operationSection, replaceIngotsName, needReplaceIngots);
             dataSystem.Set(operationSection, replacePartsName, needReplaceParts);
             dataSystem.Set(operationSection, powerManagmentName, usePowerManagmentSystem);
-            dataSystem.Set(operationSection, detailedPowerManagmentName, useDetailedPowerMonitoring);
+            //dataSystem.Set(operationSection, detailedPowerManagmentName, useDetailedPowerMonitoring);
             dataSystem.Set(operationSection, autoBuildSystem, useAutoBuildSystem);
             dataSystem.Set(operationSection, nanobotOrerationsName, useNanobotAutoBuild);
             dataSystem.Set(operationSection, refinereyOperationsName, useRefinereysOperations);
-           // dataSystem.Set(operationSection, refinereyPriorityName, useRefinereyPriorty);
+           //dataSystem.Set(operationSection, refinereyPriorityName, useRefinereyPriorty);
             dataSystem.Set(operationSection, reactorFuelLimitterName, reactorPayloadLimitter);
             dataSystem.Set(operationSection, containerSortingName, containerSorting);
 
@@ -1797,15 +1798,23 @@ namespace IngameScript.BaseManager.BaseNew
             generatorsOutputPower = generators.Any() ? generators.Where(g => !g.Closed && g.IsWorking).Sum(g => g.CurrentOutput) : 1;
 
             powerLoadPercentage = (float)Math.Round(generatorsOutputPower / generatorsMaxOutputPower * 100, 1);
-            var storedPrecentage = Math.Round(currentStoredPower / maxStoredPower * 100, 1);
+            battsStoredPrecentage = (float)Math.Round(currentStoredPower / maxStoredPower * 100, 1);
+           
+        }
+
+        public void PrintPowerData()
+        {
+            if (powerPanel == null)
+                return;
 
             powerPanel?.WriteText("", false);
             powerPanel?.WriteText("<--------Power status--------->", true);
             powerPanel?.WriteText($"\nBatteryStatus:" +
                                    $"\nPower Load: {powerLoadPercentage} % {NumberToStringConverter(powerLoadPercentage)}" +
-                                   $"\nTotal/Max stored:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {storedPrecentage} % {NumberToStringConverter(storedPrecentage)}"
+                                   $"\nTotal/Max stored:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {battsStoredPrecentage} % {NumberToStringConverter(battsStoredPrecentage)}"
                                  + $"\nInput/Output:{Math.Round(inputPower, 2)} / {Math.Round(outputPower, 2)} {(inputPower > outputPower ? "+" : "-")} MWt/h "
                                  + $"\nGens maxOut/Out: {Math.Round(generatorsMaxOutputPower, 2)} / {Math.Round(generatorsOutputPower, 2)} MWT", true);
+
         }
 
         /// <summary>
@@ -1813,7 +1822,7 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void PowerSystemDetailed()
         {
-            if (!useDetailedPowerMonitoring)
+            if (!usePowerManagmentSystem)
                 return;
 
             var reactorInventory = generators.Where(g => !g.Closed && g.HasInventory).Select(g => g.GetInventory(0)).ToList();
