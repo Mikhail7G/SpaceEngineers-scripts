@@ -34,11 +34,10 @@ namespace SpaceEngineers.ShipManagers.ShieldInfo
 
             shieldWrapper = new PbApiWrapper(Me);
 
-            GridTerminalSystem.GetBlocksOfType(blocks);
+            GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
 
             display = blocks.Where(b => b is IMyTextPanel)
                             .Where(r => r.IsFunctional)
-                            .Where(b => b.CubeGrid == Me.CubeGrid)
                             .Where(d => d.CustomName.Contains("Display"))
                             .Select(t => t as IMyTextPanel).FirstOrDefault();
         }

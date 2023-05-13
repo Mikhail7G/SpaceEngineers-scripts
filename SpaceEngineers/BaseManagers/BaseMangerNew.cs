@@ -4,6 +4,7 @@ using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI.Ingame;
 using Sandbox.ModAPI.Interfaces;
+using SpaceEngineers.Game.Entities.Blocks;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections;
@@ -119,6 +120,7 @@ namespace IngameScript.BaseManager.BaseNew
         List<IMyRefinery> refinereys;
         List<IMyAssembler> assemblers;
         List<IMyCargoContainer> containers;
+        List<IMyCargoContainer> nonSpecContainers;
         List<IMyBatteryBlock> batteries;
         List<IMyGasTank> gasTanks;
         List<IMyPowerProducer> generators;
@@ -127,6 +129,8 @@ namespace IngameScript.BaseManager.BaseNew
         List<IMyAssembler> specialAssemblers;
 
         IMyTerminalBlock nanobotBuildModule;
+
+        IMyEventControllerBlock eventControllerBlock;
 
         bool autorun = false;
         bool switchProdModulesAsScript = false;
@@ -236,11 +240,11 @@ namespace IngameScript.BaseManager.BaseNew
         Dictionary<MyDefinitionId, int> nanobotBuildQueue;
 
         // ^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$ общий имя + необходимое кол-во
-        System.Text.RegularExpressions.Regex NameRegex = new System.Text.RegularExpressions.Regex(@"(?<Name>\w*\-?\w*)\s:");//(?<Name>\w*)\s: || (?<Name>^\w*\-*\s*\w*)\s: - c пробелами и подчеркиваниями
-        System.Text.RegularExpressions.Regex AmountRegex = new System.Text.RegularExpressions.Regex(@"(?<Amount>\d+)$");
+        //System.Text.RegularExpressions.Regex NameRegex = new System.Text.RegularExpressions.Regex(@"(?<Name>\w*\-?\w*)\s:");//(?<Name>\w*)\s: || (?<Name>^\w*\-*\s*\w*)\s: - c пробелами и подчеркиваниями
+       // System.Text.RegularExpressions.Regex AmountRegex = new System.Text.RegularExpressions.Regex(@"(?<Amount>\d+)$");
 
         //Имя и приоритет руды, ищет по всем строкам
-        System.Text.RegularExpressions.Regex OrePriorRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\w*?\sP\s?(?<Prior>\d+)\s?$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+        //System.Text.RegularExpressions.Regex OrePriorRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\w*?\sP\s?(?<Prior>\d+)\s?$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
         //Имя и количество компонентов для автостройки
         System.Text.RegularExpressions.Regex ProdItemFullRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -265,6 +269,7 @@ namespace IngameScript.BaseManager.BaseNew
             refinereys = new List<IMyRefinery>();
             assemblers = new List<IMyAssembler>();
             containers = new List<IMyCargoContainer>();
+            nonSpecContainers = new List<IMyCargoContainer>();
             batteries = new List<IMyBatteryBlock>();
             generators = new List<IMyPowerProducer>();
             gasTanks = new List<IMyGasTank>();
@@ -476,18 +481,18 @@ namespace IngameScript.BaseManager.BaseNew
                     yield return true;
                     PrintOres();
                     yield return true;
+                    ContainersSortingOres();
+                    yield return true;
                     RefinereysGetData();
                     yield return true;
                     RefinereysSaveOreData();
-                    yield return true;
-                    ContainersSortingOres();
                     break;
                 case 2:
                     FindIngots();
                     yield return true;
                     PrintIngots();
                     yield return true;
-                    ReplaceIngots();
+                    UnloadRefinereys();
                     yield return true;
                     ContainersSortingIngots();
                     break;
@@ -514,6 +519,7 @@ namespace IngameScript.BaseManager.BaseNew
                 case 4:
                     GetPowerData();
                     PowerSystemDetailed();
+                    PrintPowerData();
                     yield return true;
                     PartsAutoBuild();
                     break;
@@ -907,6 +913,8 @@ namespace IngameScript.BaseManager.BaseNew
             string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
             Echo($"Nanobot:{nanoFinded}:{nanobotBuildModule?.CustomName}");
 
+            string eventFinded = eventControllerBlock != null ? "OK" : "NO module";
+            Echo($"Event controller:{eventFinded}:{eventControllerBlock?.CustomName}");
 
             Echo(">>>-------------------------------<<<");
 
@@ -932,6 +940,10 @@ namespace IngameScript.BaseManager.BaseNew
             allBlocks.Clear();
 
             GridTerminalSystem.GetBlocksOfType(allBlocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
+
+            eventControllerBlock = allBlocks.Where(b => b is IMyEventControllerBlock)
+                                            .Where(r => r.IsFunctional)
+                                            .Select(t => t as IMyEventControllerBlock).FirstOrDefault();
 
             refinereys = allBlocks.Where(b => b is IMyRefinery)
                                   .Where(r => r.IsFunctional)
@@ -970,11 +982,8 @@ namespace IngameScript.BaseManager.BaseNew
             containerInventories = containers.Where(b => !b.Closed && !ignoreNames.Any(txt => b.CustomName.Contains(txt)))
                                              .Select(b => b.GetInventory(0));
 
-            //containerInventories = containers.Where(b => !b.Closed && !b.CustomName.Contains(ignoreStorageName))
-            //                                 .Select(b => b.GetInventory(0));
-
-            //nonContainerInventories = allBlocks.Where(b => b.IsFunctional && b.HasInventory && !b.CustomName.Contains(ignoreStorageName))
-            //                                   .Select(i => i.GetInventory(0));
+            nonSpecContainers = containers.Where(b => !b.Closed && !ignoreNames.Any(txt => b.CustomName.Contains(txt)))
+                                          .ToList();
         }
 
         /// <summary>
@@ -1090,30 +1099,29 @@ namespace IngameScript.BaseManager.BaseNew
             Echo("Update ores LCD");
 
             //Блок считывания приоритета с дисплея
-            if (useRefinereysOperations)
-            {
-                oreDisplayData.Clear();
-                oreDisplay?.ReadText(oreDisplayData);
+            //if (useRefinereysOperations)
+            //{
+            //    oreDisplayData.Clear();
+            //    oreDisplay?.ReadText(oreDisplayData);
 
-                System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
+            //    System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
 
-                if (matches.Count > 0)
-                {
-                    foreach (System.Text.RegularExpressions.Match match in matches)
-                    {
-                        if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
-                        {
-                            int prior = 0;
+            //    if (matches.Count > 0)
+            //    {
+            //        foreach (System.Text.RegularExpressions.Match match in matches)
+            //        {
+            //            if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
+            //            {
+            //                int prior = 0;
 
-                            if (int.TryParse(match.Groups["Prior"].Value, out prior))
-                            {
-                                oreDictionary[match.Groups["Name"].Value].Priority = prior;
-                            }
-                        }
-                    }
-                }
-
-            }
+            //                if (int.TryParse(match.Groups["Prior"].Value, out prior))
+            //                {
+            //                    oreDictionary[match.Groups["Name"].Value].Priority = prior;
+            //                }
+            //            }
+            //        }
+            //    }
+            //}
 
             //Отрисовка на дисплей
             oreDisplay?.WriteText("", false);
@@ -1125,8 +1133,15 @@ namespace IngameScript.BaseManager.BaseNew
 
             foreach (var dict in oreDictionary.OrderBy(k => k.Key))
             {
-                //string sysState = dict.Value.Ready == true ? "." : "";
-                oreDisplay?.WriteText($"\n{dict.Key} : {dict.Value.Amount} P {dict.Value.Priority} ", true);
+                double amount = dict.Value.Amount;
+                string amountStr = amount.ToString();
+
+                if (amount > 1000000)
+                    amountStr = Math.Round(amount /= 1000000, 2).ToString() + " M";
+                else if (amount > 100000)
+                    amountStr = Math.Round(amount /= 1000, 2).ToString() + " K";
+
+                oreDisplay?.WriteText($"\n{dict.Key} : {amountStr}", true);
             }
         }
 
@@ -1188,23 +1203,12 @@ namespace IngameScript.BaseManager.BaseNew
             if (!useRefinereysOperations)
                 return;
 
-            Echo("Refinereys get ores");
+            Echo("Refinereys get ore data");
 
             foreach (var refs in refineryData)
             {
                 if (refs.Key.Closed)
                     continue;
-
-                refs.Key.UseConveyorSystem = false;
-
-                //if ((double)refs.Key.OutputInventory.CurrentVolume * 100 / (double)refs.Key.OutputInventory.MaxVolume > 90)
-                //{
-                //    refs.Key.Enabled = false;
-                //}
-                //else
-                //{
-                //    refs.Key.Enabled = true;
-                //}
 
                 refinereysItems.Clear();
 
@@ -1309,7 +1313,7 @@ namespace IngameScript.BaseManager.BaseNew
                 {
                     inv.TransferItemTo(refinerey.InputInventory, item.Value);
 
-                    if (refinerey.InputInventory.ItemCount > 0)
+                    if (refinerey.InputInventory.FindItem(ore).HasValue)
                         return true;
                 }
             }
@@ -1319,7 +1323,7 @@ namespace IngameScript.BaseManager.BaseNew
         /// <summary>
         /// Перекладываем слитки из печек по контейнерам
         /// </summary>
-        public void ReplaceIngots()
+        public void UnloadRefinereys()
         {
             if (!needReplaceIngots)
                 return;
@@ -1476,25 +1480,6 @@ namespace IngameScript.BaseManager.BaseNew
 
                     SortingItem(item, ass, i);
 
-                    //if (item.Type.TypeId == "MyObjectBuilder_Component")//части
-                    //{
-                    //    TransferItem(item, ass, targetItemInventory, i);
-                    //}
-
-                    //else if (item.Type.TypeId == "MyObjectBuilder_AmmoMagazine")//Боеприпасы
-                    //{
-                    //    TransferItem(item, ass, targetAmmoInventory, i);
-                    //}
-
-                    //else if ((item.Type.TypeId == "MyObjectBuilder_Ingot") || (item.Type.TypeId == "MyObjectBuilder_Ore"))//Построенные слитки 
-                    //{
-                    //    TransferItem(item, ass, targetItemInventory, i);
-                    //}
-
-                    //else if ((item.Type.TypeId == "MyObjectBuilder_PhysicalGunObject") || (item.Type.TypeId == "MyObjectBuilder_ConsumableItem") || (item.Type.TypeId == "MyObjectBuilder_PhysicalObject") || (item.Type.TypeId == "MyObjectBuilder_OxygenContainerObject") || (item.Type.TypeId == "MyObjectBuilder_GasContainerObject"))//Испльзуемые вещи
-                    //{
-                    //    TransferItem(item, ass, targetEquipInventory, i);
-                    //}
                 }
 
             }
@@ -1772,7 +1757,15 @@ namespace IngameScript.BaseManager.BaseNew
 
             foreach (var dict in ingotsDict.OrderBy(k => k.Key))
             {
-                ingotPanel?.WriteText($"\n{dict.Key} : {dict.Value.Current} ", true);
+                double amount = dict.Value.Current;
+                string amountStr = amount.ToString();
+
+                if (amount > 1000000)
+                    amountStr = Math.Round(amount /= 1000000, 2).ToString() + " M";
+                else if (amount > 100000)
+                    amountStr = Math.Round(amount /= 1000, 2).ToString() + " K";
+
+                ingotPanel?.WriteText($"\n{dict.Key} : {amountStr} ", true);
             }
         }
 
@@ -1802,6 +1795,9 @@ namespace IngameScript.BaseManager.BaseNew
            
         }
 
+        /// <summary>
+        /// Вывод инфорации о энергосистемы базы на дисплей
+        /// </summary>
         public void PrintPowerData()
         {
             if (powerPanel == null)
@@ -1809,9 +1805,9 @@ namespace IngameScript.BaseManager.BaseNew
 
             powerPanel?.WriteText("", false);
             powerPanel?.WriteText("<--------Power status--------->", true);
-            powerPanel?.WriteText($"\nBatteryStatus:" +
-                                   $"\nPower Load: {powerLoadPercentage} % {NumberToStringConverter(powerLoadPercentage)}" +
-                                   $"\nTotal/Max stored:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWt {battsStoredPrecentage} % {NumberToStringConverter(battsStoredPrecentage)}"
+            powerPanel?.WriteText($"\nPower Load: {powerLoadPercentage} % {NumberToStringConverter(powerLoadPercentage)}"
+                                 +  "\nBatteryStatus:"
+                                 + $"\nTotal/Max stored:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWh {battsStoredPrecentage} % {NumberToStringConverter(battsStoredPrecentage)}"
                                  + $"\nInput/Output:{Math.Round(inputPower, 2)} / {Math.Round(outputPower, 2)} {(inputPower > outputPower ? "+" : "-")} MWt/h "
                                  + $"\nGens maxOut/Out: {Math.Round(generatorsMaxOutputPower, 2)} / {Math.Round(generatorsOutputPower, 2)} MWT", true);
 
@@ -1844,31 +1840,31 @@ namespace IngameScript.BaseManager.BaseNew
                                           $"\n{Math.Round(totalHydrogenStored / gasTanksDivider,1)} / {Math.Round(maxHydrogenCap / gasTanksDivider,1)} kL" +
                                           $"\n-------------------", true);
 
-            foreach (var react in reactorInventory)
-            {
-                if (react.ItemCount != 0)
-                {
-                    var block = react.Owner as IMyReactor;
+            //foreach (var react in reactorInventory)
+            //{
+            //    if (react.ItemCount != 0)
+            //    {
+            //        var block = react.Owner as IMyReactor;
 
-                    var item = react.GetItemAt(0);
+            //        var item = react.GetItemAt(0);
 
-                    if (item != null)
-                    {
-                        detailedPowerPanel?.WriteText($"\nR:{item.Value.Type.SubtypeId} / {item.Value.Amount.ToIntSafe()} {block?.IsWorking}", true);
+            //        if (item != null)
+            //        {
+            //            detailedPowerPanel?.WriteText($"\nR:{item.Value.Type.SubtypeId} / {item.Value.Amount.ToIntSafe()} {block?.IsWorking}", true);
 
-                        if (reactorPayloadLimitter)//ручная установка количества топлива
-                        {
+            //            if (reactorPayloadLimitter)//ручная установка количества топлива
+            //            {
 
-                        }
-                    }
-                }
-                else
-                {
-                    var targInv = react.Owner as IMyReactor;
-                    targInv.UseConveyorSystem = true;
-                    detailedPowerPanel?.WriteText($"\nR:{targInv?.CustomName} EMPTY!!", true);
-                }
-            }
+            //            }
+            //        }
+            //    }
+            //    else
+            //    {
+            //        var targInv = react.Owner as IMyReactor;
+            //        targInv.UseConveyorSystem = true;
+            //        detailedPowerPanel?.WriteText($"\nR:{targInv?.CustomName} EMPTY!!", true);
+            //    }
+            //}
         }
 
         /// <summary>
@@ -2175,7 +2171,7 @@ namespace IngameScript.BaseManager.BaseNew
             }
 
             //сообщение об ощибке модуля сборки
-            string sysState = nanobuildReady == true ? $"\nStatus:All blueprint finded!" : "nStatus:Nanobuild failed!!! no BP??";
+            string sysState = nanobuildReady == true ? $"\nStatus:No unknown components" : "\nStatus:Some components are unknown";
 
             nanobotDisplay?.WriteText("", false);
             nanobotDisplay?.WriteText("<<-----------Nanobot module----------->>", true);
@@ -2289,10 +2285,6 @@ namespace IngameScript.BaseManager.BaseNew
             var nonPartsInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(componentsStorageName))
                                                 .Select(i => i.GetInventory(0));
 
-            //var targetItemInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(componentsStorageName))
-            //                                    .Select(i => i.GetInventory(0))
-            //                                    .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-
             var targetItemInventory = partsInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             if (!targetItemInventory.Any())
@@ -2382,10 +2374,6 @@ namespace IngameScript.BaseManager.BaseNew
 
             var nonEquipInventories = containers.Where(c => (!c.Closed) && !c.CustomName.Contains(equipStorageName))
                                                 .Select(i => i.GetInventory(0));
-
-            //var targetEquipInventory = containers.Where(c => (!c.Closed) && c.CustomName.Contains(equipStorageName))
-            //                                     .Select(i => i.GetInventory(0))
-            //                                     .Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
             var targetEquipInventory = itemInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
 
@@ -2492,7 +2480,6 @@ namespace IngameScript.BaseManager.BaseNew
         /// <summary>
         /// Преобразует число % в строковый тип
         /// </summary>
-        /// <returns></returns>
         public string NumberToStringConverter(double percent)
         {
            

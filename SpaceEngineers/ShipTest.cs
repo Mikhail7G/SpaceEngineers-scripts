@@ -20,6 +20,7 @@ namespace SpaceEngineers.Turret
         IMyInteriorLight _panelLight;
         IMyTextPanel _textPanel;
         IEnumerator<bool> _stateMachine;
+        IMyShipWelder welder;
 
         public Program()
         {
@@ -27,21 +28,33 @@ namespace SpaceEngineers.Turret
 
             _panelLight = GridTerminalSystem.GetBlockWithName("Interior Light") as IMyInteriorLight;
             _textPanel = GridTerminalSystem.GetBlockWithName("LCD Panel") as IMyTextPanel;
+            welder = GridTerminalSystem.GetBlockWithName("Welder") as IMyShipWelder;
 
 
-            _stateMachine = RunStuffOverTime();
+           // _stateMachine = RunStuffOverTime();
 
 
-            Runtime.UpdateFrequency |= UpdateFrequency.Update10;
+            Runtime.UpdateFrequency |= UpdateFrequency.None;
         }
 
         public void Main(string argument, UpdateType updateType)
         {
 
+            List<ITerminalProperty> props=new List<ITerminalProperty>();
+            welder.GetProperties(props);
+
+          //  Dictionary<MyDefinitionId, int> nanobotBuildQueue = welder.GetValue<Dictionary<MyDefinitionId, int>>("BuildAndRepair.MissingComponents");
+
             // if ((updateType & UpdateType.Once) == UpdateType.Once)
             {
-                RunStateMachine();
+              //  RunStateMachine();
             }
+            _textPanel.WriteText("\n" + props.Count  , true);
+            foreach (var prop in props)
+            {
+                _textPanel.WriteText("\n" +  prop.ToString() +"::::" + prop.Id, true);
+            }
+
         }
 
         public void RunStateMachine()
@@ -78,7 +91,7 @@ namespace SpaceEngineers.Turret
 
             while (cont)
             {
-                _textPanel.WriteText(i.ToString());
+               // _textPanel.WriteText(i.ToString());
                 i++;
                 if (i < 500)
                 {
