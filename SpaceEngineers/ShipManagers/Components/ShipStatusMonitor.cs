@@ -364,10 +364,6 @@ namespace SpaceEngineers.ShipManagers.Components.ShipMonitor
             {
                 if (cargoPanel == null)
                     return;
-
-                //int symbols = (int)((cargoPanel.SurfaceSize.X / 8.82) / cargoPanel.FontSize);
-
-                //string str = string.Concat(Enumerable.Repeat("-", symbols));
               
                 cargoPanel?.WriteText("", false);
                 cargoPanel?.WriteText($"Payload: {cargoPrecentageVolume} %" +

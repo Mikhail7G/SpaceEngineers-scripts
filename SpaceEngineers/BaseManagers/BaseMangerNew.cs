@@ -31,8 +31,11 @@ namespace IngameScript.BaseManager.BaseNew
     {
         #region mdk preserve
         //Названия тегов для игнорирования системой поиска и управления инвентарем
-        string[] ignoreNames = new[] { "Ignore", "Req", "Ignore" };
+        string[] ignoreNames = new[] { "[Ignore]", "[Req]", "[Unload]" };
         #endregion
+
+        //string[] blueprintAddedNames = new[] { "BP", "Component", "" };
+
         //Названия контейнеров 
         string oreStorageName = "Ore";
         string ingotStorageName = "Ingot";
@@ -120,7 +123,6 @@ namespace IngameScript.BaseManager.BaseNew
         List<IMyRefinery> refinereys;
         List<IMyAssembler> assemblers;
         List<IMyCargoContainer> containers;
-        List<IMyCargoContainer> nonSpecContainers;
         List<IMyBatteryBlock> batteries;
         List<IMyGasTank> gasTanks;
         List<IMyPowerProducer> generators;
@@ -222,7 +224,6 @@ namespace IngameScript.BaseManager.BaseNew
 
         //Печки
         Dictionary<IMyRefinery, float> refineryData;
-        Dictionary<string, float> refsUpgradeList;
         List<MyInventoryItem> oreItems;
         List<MyInventoryItem> ingotItems;
         List<MyProductionItem> refinereysItems;
@@ -269,7 +270,6 @@ namespace IngameScript.BaseManager.BaseNew
             refinereys = new List<IMyRefinery>();
             assemblers = new List<IMyAssembler>();
             containers = new List<IMyCargoContainer>();
-            nonSpecContainers = new List<IMyCargoContainer>();
             batteries = new List<IMyBatteryBlock>();
             generators = new List<IMyPowerProducer>();
             gasTanks = new List<IMyGasTank>();
@@ -289,7 +289,6 @@ namespace IngameScript.BaseManager.BaseNew
 
             blueprintData = new Dictionary<string, string>();
 
-            refsUpgradeList = new Dictionary<string, float>();
             refinereysItems = new List<MyProductionItem>();
             productionItems = new List<MyInventoryItem>();
             ingotItems = new List<MyInventoryItem>();
@@ -981,9 +980,6 @@ namespace IngameScript.BaseManager.BaseNew
 
             containerInventories = containers.Where(b => !b.Closed && !ignoreNames.Any(txt => b.CustomName.Contains(txt)))
                                              .Select(b => b.GetInventory(0));
-
-            nonSpecContainers = containers.Where(b => !b.Closed && !ignoreNames.Any(txt => b.CustomName.Contains(txt)))
-                                          .ToList();
         }
 
         /// <summary>
@@ -1134,14 +1130,8 @@ namespace IngameScript.BaseManager.BaseNew
             foreach (var dict in oreDictionary.OrderBy(k => k.Key))
             {
                 double amount = dict.Value.Amount;
-                string amountStr = amount.ToString();
 
-                if (amount > 1000000)
-                    amountStr = Math.Round(amount /= 1000000, 2).ToString() + " M";
-                else if (amount > 100000)
-                    amountStr = Math.Round(amount /= 1000, 2).ToString() + " K";
-
-                oreDisplay?.WriteText($"\n{dict.Key} : {amountStr}", true);
+                oreDisplay?.WriteText($"\n{dict.Key} : {NumberConverter(amount)}", true);
             }
         }
 
@@ -1237,9 +1227,9 @@ namespace IngameScript.BaseManager.BaseNew
                                 oreDictionary[refsItem.Value.Type.SubtypeId].Ready = true;
                                 needSaveNewOreData = true;
 
-                                foreach (var ingn in ingots)
+                                foreach (var ingot in ingots)
                                 {
-                                    oreDictionary[refsItem.Value.Type.SubtypeId].IngotNames.Add(ingn.Type.SubtypeId);
+                                    oreDictionary[refsItem.Value.Type.SubtypeId].IngotNames.Add(ingot.Type.SubtypeId);
                                 }
                             }
                         }
@@ -1758,14 +1748,8 @@ namespace IngameScript.BaseManager.BaseNew
             foreach (var dict in ingotsDict.OrderBy(k => k.Key))
             {
                 double amount = dict.Value.Current;
-                string amountStr = amount.ToString();
-
-                if (amount > 1000000)
-                    amountStr = Math.Round(amount /= 1000000, 2).ToString() + " M";
-                else if (amount > 100000)
-                    amountStr = Math.Round(amount /= 1000, 2).ToString() + " K";
-
-                ingotPanel?.WriteText($"\n{dict.Key} : {amountStr} ", true);
+               
+                ingotPanel?.WriteText($"\n{dict.Key} : {NumberConverter(amount)} ", true);
             }
         }
 
@@ -2220,7 +2204,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                     var item = getItem.Value;
 
-                    if (item.Type.TypeId == "MyObjectBuilder_Ore")//Построенные слитки 
+                    if (item.Type.TypeId == "MyObjectBuilder_Ore")//Руда
                     {
                         TransferItem(item, inv, targetOreInventory, i);
                     }
@@ -2264,7 +2248,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                     var item = getItem.Value;
 
-                    if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Построенные слитки 
+                    if (item.Type.TypeId == "MyObjectBuilder_Ingot")//Слитки 
                     {
                         TransferItem(item, inv, targetIngotInventory, i);
                     }
@@ -2308,7 +2292,7 @@ namespace IngameScript.BaseManager.BaseNew
 
                     var item = getItem.Value;
 
-                    if (item.Type.TypeId == "MyObjectBuilder_Component")//части
+                    if (item.Type.TypeId == "MyObjectBuilder_Component")//Части
                     {
                         TransferItem(item, inv, targetItemInventory, i);
                     }
@@ -2492,6 +2476,17 @@ namespace IngameScript.BaseManager.BaseNew
             state += "]";
 
             return state;
+        }
+
+        public string NumberConverter(double amount)
+        {
+            string result = amount.ToString();
+
+            if (amount > 1000000)
+                result = Math.Round(amount /= 1000000, 2).ToString() + " M";
+            else if (amount > 100000)
+                result = Math.Round(amount /= 1000, 2).ToString() + " K";
+            return result;
         }
 
 
