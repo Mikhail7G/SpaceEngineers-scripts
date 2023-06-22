@@ -168,6 +168,8 @@ namespace IngameScript.BaseManager.BaseNew
         int globalTick = 0;
         int globalTickLimit = 4;
 
+        int idleRefinereys = 0;
+
         //int maxReactorPayload = 50;
 
         //int refinereyReloadPrecentage = 70;
@@ -223,7 +225,7 @@ namespace IngameScript.BaseManager.BaseNew
         Dictionary<string, int> orePriority;
 
         //Печки
-        Dictionary<IMyRefinery, float> refineryData;
+        Dictionary<IMyRefinery, RefinereyData> refineryData;
         List<MyInventoryItem> oreItems;
         List<MyInventoryItem> ingotItems;
         List<MyProductionItem> refinereysItems;
@@ -292,7 +294,7 @@ namespace IngameScript.BaseManager.BaseNew
             refinereysItems = new List<MyProductionItem>();
             productionItems = new List<MyInventoryItem>();
             ingotItems = new List<MyInventoryItem>();
-            refineryData = new Dictionary<IMyRefinery, float>();
+            refineryData = new Dictionary<IMyRefinery, RefinereyData>();
             orePriority = new Dictionary<string, int>();
 
             dataSystem = new MyIni();
@@ -485,6 +487,8 @@ namespace IngameScript.BaseManager.BaseNew
                     RefinereysGetData();
                     yield return true;
                     RefinereysSaveOreData();
+                    yield return true;
+                    PrintRefinerysData();
                     break;
                 case 2:
                     FindIngots();
@@ -1142,47 +1146,70 @@ namespace IngameScript.BaseManager.BaseNew
         {
             Echo("Get refinereys data");
 
-            //foreach (var refs in refinereys.Where(refs => (!refs.Closed) && (refs is IMyUpgradableBlock)))
-            //{
-            //    var upgradeBlock = refs as IMyUpgradableBlock;
-            //    upgradeBlock?.GetUpgrades(out refsUpgradeList);
+            foreach(var refs in refinereys)
+            {
+                if (refs.Closed)
+                    continue;
 
-            //    if (refineryData.ContainsKey(refs))
-            //    {
-            //        refineryData[refs] = refsUpgradeList["Effectiveness"];
-            //    }
-            //    else
-            //    {
-            //        refineryData.Add(refs, refsUpgradeList["Effectiveness"]);
-            //    }
-            //}
+                if(refineryData.ContainsKey(refs))
+                {
+                    if (refs is IMyUpgradableBlock)
+                    {
+                        Dictionary<string, float> refsUpgradeList = new Dictionary<string, float>();
 
-            ////
-            //if (refinereysDisplay == null)
-            //    return;
+                        var upgradeBlock = refs as IMyUpgradableBlock;
+                        upgradeBlock?.GetUpgrades(out refsUpgradeList);
 
-            //refinereysDisplay?.WriteText("", false);
-            //refinereysDisplay?.WriteText("<<---------------Refinereys-------------->>", true);
+                        refineryData[refs].Effectiveness = (float)Math.Round(refsUpgradeList["Effectiveness"], 2);
+                    }
 
-            //foreach (var refs in refineryData)
-            //{
-            //    if (refs.Key.Closed)
-            //        continue;
+                    refineryData[refs].InputInventory = (float)Math.Round((double)refs.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.InputInventory.MaxVolume.ToIntSafe() * 100, 2);
+                    refineryData[refs].OutputInventory = (float)Math.Round((double)refs.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.OutputInventory.MaxVolume.ToIntSafe() * 100, 2);
 
-            //    double loadInput = (double)refs.Key.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.InputInventory.MaxVolume.ToIntSafe() * 100;
-            //    double loadOuptut = (double)refs.Key.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.Key.OutputInventory.MaxVolume.ToIntSafe() * 100;
+                    refs.GetQueue(refinereysItems);
+                    string str = "";
 
-            //    refs.Key.GetQueue(refinereysItems);
-            //    refinereysDisplay?.WriteText($"\n{refs.Key.CustomName}:" +
-            //                                 $"\nEffectivity: {refs.Value} Load: {Math.Round(loadInput, 1)} / {Math.Round(loadOuptut, 1)} %", true);
+                    foreach (var bp in refinereysItems)
+                    {
+                        str += bp.BlueprintId.SubtypeName + " X " + bp.Amount.ToIntSafe() + "\n";
+                    }
 
-            //    foreach (var bp in refinereysItems)
-            //    {
-            //        refinereysDisplay?.WriteText($"\n{bp.BlueprintId.SubtypeName} X Ore:{bp.Amount.ToIntSafe()}", true);
-            //    }
-            //    refinereysDisplay?.WriteText("\n----------", true);
-            //}
-            //refinereysItems.Clear();
+                    refineryData[refs].OreLoadName = str;
+                    refinereysItems.Clear();
+                }
+                else
+                {
+                    refineryData.Add(refs, new RefinereyData());
+                }
+
+            }
+
+            idleRefinereys = refineryData.Where(inv => inv.Value.InputInventory < 5).Count();
+
+        }
+
+        public void PrintRefinerysData()
+        {
+            if (refinereysDisplay == null)
+                return;
+
+            Echo("Update refinereys LCD");
+
+            refinereysDisplay.WriteText("", false);
+            refinereysDisplay.WriteText("<<------------Refinereys------------>>" +
+                                        $"\nTotal/Idle: {refineryData.Count} / {idleRefinereys} ", true);
+
+            foreach(var refs in refineryData)
+            {
+                if (refs.Key.Closed)
+                    continue;
+      
+                refinereysDisplay.WriteText("\n--------------" +
+                                      $"\n{refs.Key.CustomName}" +
+                                      $"\nEff: {refs.Value.Effectiveness}  Load: {refs.Value.InputInventory} / {refs.Value.OutputInventory} %" +
+                                      $"\n{refs.Value.OreLoadName}", true);
+
+            }
         }
 
         /// <summary>
@@ -2505,6 +2532,15 @@ namespace IngameScript.BaseManager.BaseNew
             public int Amount { set; get; } = 0;
 
             public List<string> IngotNames = new List<string>();
+
+        }
+
+        public class RefinereyData
+        {
+            public float Effectiveness { set; get; } = 0;
+            public float InputInventory { set; get; } = 0;
+            public float OutputInventory { set; get; } = 0;
+            public string OreLoadName { set; get; } = "";
 
         }
 

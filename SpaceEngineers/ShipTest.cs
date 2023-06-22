@@ -24,6 +24,12 @@ namespace SpaceEngineers.Turret
         string font;
         float fontSize;
 
+
+        /// <summary>
+        ///  Символ [ ] - 65 штук при маштабе X1 и без смещения
+        /// 
+        /// </summary>
+
         public Program()
         {
             Echo("");
