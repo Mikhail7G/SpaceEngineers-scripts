@@ -193,6 +193,10 @@ namespace SpaceEngineers.ShipManagers.INOP.Nanodrill
                     case "NANO.PWROFF":
                         PowerOff();
                         break;
+
+                    case "NANO.MOVE":
+                        Mover();
+                        break;
                 }
 
             }
@@ -223,6 +227,15 @@ namespace SpaceEngineers.ShipManagers.INOP.Nanodrill
                 foreach (var drill in Drills)
                 {
                     drill.PowerOn();
+                }
+            }
+
+            public void Mover()
+            {
+                Powered = true;
+                foreach (var drill in Drills)
+                {
+                    drill.MoveArea();
                 }
             }
 
@@ -578,6 +591,11 @@ namespace SpaceEngineers.ShipManagers.INOP.Nanodrill
             public void HideMiningArea()
             {
                 Drill.ApplyAction("ShowArea_Off");
+            }
+
+            public void MoveArea()
+            {
+                Drill.SetValue<Single>("Drill.AreaOffsetFrontBack", 500);
             }
 
             /// <summary>

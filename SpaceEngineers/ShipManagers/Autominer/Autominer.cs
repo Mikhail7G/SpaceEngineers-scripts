@@ -97,7 +97,7 @@ namespace SpaceEngineers.Autominer.Autominer
 
         public void SavePosAndRotation()
         {
-            point = new Waypoint(mover.GetShipLocalDrift(Base6Directions.Direction.Forward,100), mover.GetOrientation(), 10.0f);
+            point = new Waypoint(mover.GetShipLocalDrift(Base6Directions.Direction.Forward, 100), mover.GetOrientation(), 10.0f);
             mover.FlyToWP(point);
             mover.ForwardMove(1.0f);
             mover.AlignOnWP(MovementCommander.RotateType.Matrix);

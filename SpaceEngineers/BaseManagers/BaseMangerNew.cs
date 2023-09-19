@@ -168,7 +168,7 @@ namespace IngameScript.BaseManager.BaseNew
         int globalTick = 0;
         int globalTickLimit = 4;
 
-        int idleRefinereys = 0;
+        int workingRefinereys = 0;
 
         //int maxReactorPayload = 50;
 
@@ -1184,7 +1184,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             }
 
-            idleRefinereys = refineryData.Where(inv => inv.Value.InputInventory < 5).Count();
+            workingRefinereys = refineryData.Where(inv => inv.Value.InputInventory > 5).Count();
 
         }
 
@@ -1197,7 +1197,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             refinereysDisplay.WriteText("", false);
             refinereysDisplay.WriteText("<<------------Refinereys------------>>" +
-                                        $"\nTotal/Idle: {refineryData.Count} / {idleRefinereys} ", true);
+                                        $"\nTotal/Working: {refineryData.Count} / {workingRefinereys} ", true);
 
             foreach(var refs in refineryData)
             {
@@ -1817,8 +1817,8 @@ namespace IngameScript.BaseManager.BaseNew
             powerPanel?.WriteText("", false);
             powerPanel?.WriteText("<--------Power status--------->", true);
             powerPanel?.WriteText($"\nPower Load: {powerLoadPercentage} % {NumberToStringConverter(powerLoadPercentage)}"
-                                 +  "\nBatteryStatus:"
-                                 + $"\nTotal/Max stored:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWh {battsStoredPrecentage} % {NumberToStringConverter(battsStoredPrecentage)}"
+                                 + $"\nBatteryStatus: {battsStoredPrecentage} % {NumberToStringConverter(battsStoredPrecentage)} "
+                                 + $"\nTotal/Max stored:{Math.Round(currentStoredPower, 2)} / {maxStoredPower} MWh"
                                  + $"\nInput/Output:{Math.Round(inputPower, 2)} / {Math.Round(outputPower, 2)} {(inputPower > outputPower ? "+" : "-")} MWt/h "
                                  + $"\nGens maxOut/Out: {Math.Round(generatorsMaxOutputPower, 2)} / {Math.Round(generatorsOutputPower, 2)} MWT", true);
 
@@ -2141,36 +2141,36 @@ namespace IngameScript.BaseManager.BaseNew
 
         public void AddNanobotPartsToProduct()
         {
-            nanobuildReady = true;
+            //nanobuildReady = true;
 
-            var freeAssemblers = specialAssemblers.Where(ass => (!ass.Closed) && ass.IsQueueEmpty && !ass.CustomName.Contains(assemblersBlueprintLeanerName)).ToList();
+            //var freeAssemblers = specialAssemblers.Where(ass => (!ass.Closed) && ass.IsQueueEmpty && !ass.CustomName.Contains(assemblersBlueprintLeanerName)).ToList();
 
-            if (!freeAssemblers.Any())
-                return;
+            //if (!freeAssemblers.Any())
+            //    return;
 
-            foreach (var bps in nanobotBuildQueue)
-            {
-                MyDefinitionId blueprint;
+            //foreach (var bps in nanobotBuildQueue)
+            //{
+            //    MyDefinitionId blueprint;
 
-                if (!TryGetBlueprint(bps.Key.SubtypeName, out blueprint))
-                {
-                    continue;
-                }
+            //    if (!TryGetBlueprint(bps.Key.SubtypeName, out blueprint))
+            //    {
+            //        continue;
+            //    }
 
-                var availAss = freeAssemblers.Where(ass => ass.CanUseBlueprint(blueprint)).ToList();
-                if (!availAss.Any())
-                    return;
+            //    var availAss = freeAssemblers.Where(ass => ass.CanUseBlueprint(blueprint)).ToList();
+            //    if (!availAss.Any())
+            //        return;
 
-                var count = bps.Value / availAss.Count;
-                if (count < 1)
-                    count = 1;
+            //    var count = bps.Value / availAss.Count;
+            //    if (count < 1)
+            //        count = 1;
 
-                foreach (var ass in availAss)
-                {
-                    VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
-                    ass.AddQueueItem(blueprint, amount);
-                }
-            }
+            //    foreach (var ass in availAss)
+            //    {
+            //        VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
+            //        ass.AddQueueItem(blueprint, amount);
+            //    }
+            //}
         }
 
         public void PrintNanobotQueue()
