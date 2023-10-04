@@ -2087,10 +2087,10 @@ namespace IngameScript.BaseManager.BaseNew
                 }
             }
 
-            int count = needed / availAss.Count;
-            double div = needed % availAss.Count;
+            int count = needed / availAss.Count;//целое число компонентов
+            double div = needed % availAss.Count;//остаток от деления
 
-            if (count > 1)
+            if (count > 0)
             {
                 foreach (var ass in availAss)
                 {
@@ -2099,6 +2099,10 @@ namespace IngameScript.BaseManager.BaseNew
 
                     Echo($"Item added: {blueprint.SubtypeId} x {amount} to \n{ass.CustomName}");
                 }
+                if (div == 0)
+                    return;
+
+                availAss.First().AddQueueItem(blueprint, (MyFixedPoint)div);
             }
             else
             {
@@ -2142,35 +2146,6 @@ namespace IngameScript.BaseManager.BaseNew
                 AddItemToAutoProduct(component, freeAssemblers);
 
             }
-
-            //var freeAssemblers = specialAssemblers.Where(ass => (!ass.Closed) && ass.IsQueueEmpty && !ass.CustomName.Contains(assemblersBlueprintLeanerName)).ToList();
-
-            //if (!freeAssemblers.Any())
-            //    return;
-
-            //foreach (var bps in nanobotBuildQueue)
-            //{
-            //    MyDefinitionId blueprint;
-
-            //    if (!TryGetBlueprint(bps.Key.SubtypeName, out blueprint))
-            //    {
-            //        continue;
-            //    }
-
-            //    var availAss = freeAssemblers.Where(ass => ass.CanUseBlueprint(blueprint)).ToList();
-            //    if (!availAss.Any())
-            //        return;
-
-            //    var count = bps.Value / availAss.Count;
-            //    if (count < 1)
-            //        count = 1;
-
-            //    foreach (var ass in availAss)
-            //    {
-            //        VRage.MyFixedPoint amount = (VRage.MyFixedPoint)count;
-            //        ass.AddQueueItem(blueprint, amount);
-            //    }
-            //}
         }
 
         public void PrintNanobotQueue()
