@@ -58,7 +58,10 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
             Update();
 
             if ((updateType & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
+            {
                 ShipComplexMonitor.Command(args);
+                NanodrillController.Command(args);
+            }
         }
 
         public void Update()
@@ -458,7 +461,7 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
             string LargeNanoName = "SELtdLargeNanobotDrillSystem";
             string SmallNanoName = "SELtdSmallNanobotDrillSystem";
 
-
+            int maxDrillOffset = 25;
             float smallGridMod = 0.5f;
             float largeGridMod = 2.5f;
             float distMod = 1;
@@ -467,6 +470,7 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
 
             IMyTextPanel drillPanel;
 
+            IMyShipController shipController;
             List<IMyTerminalBlock> nanoDrill;
 
 
@@ -481,6 +485,9 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
                 List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
                 blocks = shipBlocks;
 
+                shipController = blocks.Where(b => b is IMyShipController)
+                                       .Where(c => c.IsFunctional)
+                                       .Select(t => t as IMyShipController).FirstOrDefault();
 
                 if (program.Me.CubeGrid.GridSizeEnum == MyCubeSize.Large)
                 {
@@ -505,16 +512,205 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
 
             }
 
+            /// <summary>
+            /// Выполнение комманд от пользователя
+            /// </summary>
+            public void Command(string command)
+            {
+                string com = command.ToUpper();
+
+                switch (com)
+                {
+                    case "RESET":
+                        ResetDrills();
+                        break;
+
+                    case "INIT":
+                        InitDrills();
+                        break;
+
+
+                    case "FWD":
+                        MoveFWD();
+                        break;
+
+                    case "BCK":
+                        MoveBCK();
+                        break;
+
+                    case "UP":
+                        MoveUp();
+                        break;
+
+                    case "DN":
+                        MoveDown();
+                        break;
+
+                    case "LT":
+                        MoveLeft();
+                        break;
+
+                    case "RT":
+                        MoveRirght();
+                        break;
+                }
+            }
+
+            public void ResetDrills()
+            {
+                foreach (var drill in nanoDrill)
+                {
+                    drill.SetValue<Single>("Drill.AreaOffsetLeftRight", 0);
+                    drill.SetValue<Single>("Drill.AreaOffsetUpDown", 0);
+                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", 0);
+                }
+            }
+
+            public void InitDrills()
+            {
+                foreach (var drill in nanoDrill)
+                {
+                    drill.SetValue<Single>("Drill.AreaOffsetLeftRight", ((shipController.Position.X - drill.Position.X) * distMod));
+                    drill.SetValue<Single>("Drill.AreaOffsetUpDown", ((shipController.Position.Y - drill.Position.Y) * distMod));
+                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", ((drill.Position.Z - shipController.Position.Z) * distMod));
+
+                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", drill.GetValue<Single>("Drill.AreaOffsetFrontBack") + (21));
+                }
+            }
+
             public void GetDrillParams()
             {
                 drillPanel?.WriteText("", false);
 
                 foreach (var drill in nanoDrill)
                 {
-                    drillPanel?.WriteText($"\nPos: {drill.Position} X {drill.Orientation}", true);
-                    drill.SetValue<Single>("Drill.AreaOffsetLeftRight", -1 * (drill.Position.Z * 0.5f));
-                    drill.SetValue<Single>("Drill.AreaOffsetUpDown", -1 * (drill.Position.Y * 0.5f));
-                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", -1 * (drill.Position.X * 0.5f));
+                    drillPanel?.WriteText($"\nPos: {drill.Position} X {drill.Orientation.Forward} X{shipController.Position} X {shipController.Orientation.Forward}", true);
+
+                    drillPanel?.WriteText($"\n {shipController.CubeGrid.Max} X {shipController.CubeGrid.Min}", true);
+
+                    drill.SetValue<Single>("Drill.AreaOffsetLeftRight", ((shipController.Position.X - drill.Position.X) * distMod));
+                    drill.SetValue<Single>("Drill.AreaOffsetUpDown", ((shipController.Position.Y - drill.Position.Y) * distMod));
+                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", ((drill.Position.Z - shipController.Position.Z) * distMod));
+
+                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", drill.GetValue<Single>("Drill.AreaOffsetFrontBack") + (21));
+
+                }
+            }
+
+            public void MoveFWD()
+            {
+                foreach (var drill in nanoDrill)
+                {
+                    var val = drill.GetValue<Single>("Drill.AreaOffsetFrontBack") + maxDrillOffset;
+
+                    if (val > 84)
+                        return;
+                }
+
+                foreach (var drill in nanoDrill)
+                {
+                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", drill.GetValue<Single>("Drill.AreaOffsetFrontBack") + maxDrillOffset);
+                }
+            }
+
+            public void MoveBCK()
+            {
+                foreach (var drill in nanoDrill)
+                {
+                    var val = drill.GetValue<Single>("Drill.AreaOffsetFrontBack") - maxDrillOffset;
+
+                    if (val < -84)
+                        return;
+                }
+
+                foreach (var drill in nanoDrill)
+                {
+                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", drill.GetValue<Single>("Drill.AreaOffsetFrontBack") - maxDrillOffset);
+                }
+            }
+
+            public void MoveUp()
+            {
+                foreach (var drill in nanoDrill)
+                {
+                    var val = drill.GetValue<Single>("Drill.AreaOffsetUpDown") + maxDrillOffset;
+
+                    if (val > 84)
+                        return;
+                }
+
+                foreach (var drill in nanoDrill)
+                {
+                    drill.SetValue<Single>("Drill.AreaOffsetUpDown", drill.GetValue<Single>("Drill.AreaOffsetUpDown") + maxDrillOffset);
+                }
+            }
+
+            public void MoveDown()
+            {
+                foreach (var drill in nanoDrill)
+                {
+                    var val = drill.GetValue<Single>("Drill.AreaOffsetUpDown") - maxDrillOffset;
+
+                    if (val < -84)
+                        return;
+                }
+
+                foreach (var drill in nanoDrill)
+                {
+                    drill.SetValue<Single>("Drill.AreaOffsetUpDown", drill.GetValue<Single>("Drill.AreaOffsetUpDown") - maxDrillOffset);
+                }
+            }
+
+            public void MoveRirght()
+            {
+                foreach (var drill in nanoDrill)
+                {
+                    var val = drill.GetValue<Single>("Drill.AreaOffsetLeftRight") + maxDrillOffset;
+
+                    if (val > 84)
+                        return;
+                }
+
+                foreach (var drill in nanoDrill)
+                {
+                    drill.SetValue<Single>("Drill.AreaOffsetLeftRight", drill.GetValue<Single>("Drill.AreaOffsetLeftRight") + maxDrillOffset);
+                }
+            }
+
+            public void MoveLeft()
+            {
+                foreach (var drill in nanoDrill)
+                {
+                    var val = drill.GetValue<Single>("Drill.AreaOffsetLeftRight") - maxDrillOffset;
+
+                    if (val < -84)
+                        return;
+                }
+
+                foreach (var drill in nanoDrill)
+                {
+                    drill.SetValue<Single>("Drill.AreaOffsetLeftRight", drill.GetValue<Single>("Drill.AreaOffsetLeftRight") - maxDrillOffset);
+                }
+            }
+
+
+            public class NanoDrill
+            {
+                Vector3I localPosition;
+
+                IMyTerminalBlock drill;
+
+                public NanoDrill(IMyTerminalBlock block)
+                {
+                    drill = block;
+                    localPosition = drill.Position;
+                }
+
+                public void Reset()
+                {
+                    drill.SetValue<Single>("Drill.AreaOffsetLeftRight", 0);
+                    drill.SetValue<Single>("Drill.AreaOffsetUpDown", 0);
+                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", 0);
                 }
             }
         }

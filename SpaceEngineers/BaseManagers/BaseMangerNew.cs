@@ -31,7 +31,7 @@ namespace IngameScript.BaseManager.BaseNew
     {
         #region mdk preserve
         //Названия тегов для игнорирования системой поиска и управления инвентарем
-        string[] ignoreNames = new[] { "[Ignore]", "[Req]", "[Unload]" };
+        string[] ignoreNames = new[] { "[Ignore]", "[None]", "[None]" };
         #endregion
 
         //string[] blueprintAddedNames = new[] { "BP", "Component", "" };
@@ -982,8 +982,6 @@ namespace IngameScript.BaseManager.BaseNew
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
 
-            containerInventories = containers.Where(b => !b.Closed && !ignoreNames.Any(txt => b.CustomName.Contains(txt)))
-                                             .Select(b => b.GetInventory(0));
         }
 
         /// <summary>
@@ -992,6 +990,9 @@ namespace IngameScript.BaseManager.BaseNew
         public void GetContainers()
         {
             Echo("Get containers data");
+
+            containerInventories = containers.Where(b => !b.Closed && !ignoreNames.Any(txt => b.CustomName.Contains(txt)))
+                                            .Select(b => b.GetInventory(0));
 
             oreInventories = containers.Where(c => (!c.Closed) && c.CustomName.Contains(oreStorageName))
                                        .Select(i => i.GetInventory(0));
@@ -1353,13 +1354,11 @@ namespace IngameScript.BaseManager.BaseNew
 
             Echo("Replace ingots starting");
 
-            if ((!targetIngotInventory.Any()) || (!refsInventory.Any()))
+            if  (!refsInventory.Any())
             {
                 Echo("------No items to transfer-----");
                 return;
             }
-
-            Echo($"Total ingot conts:{targetIngotInventory.Count()}");
 
             TransferItems(refsInventory, targetIngotInventory);
         }
@@ -1466,10 +1465,6 @@ namespace IngameScript.BaseManager.BaseNew
             if (!needReplaceParts)
                 return;
 
-            var targetItemInventory = partsInventories.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-            var targetAmmoInventory = ammoInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-            var targetEquipInventory = itemInventorys.Where(i => ((double)i.CurrentVolume * 100 / (double)i.MaxVolume) < maxVolumeContainerPercentage);
-
             var assInventory = assemblers.Where(a => !a.Closed && !a.CustomName.Contains(assemblersBlueprintLeanerName) && a.Mode == MyAssemblerMode.Assembly)
                                          .Select(i => i.GetInventory(1))
                                          .Where(i => i.ItemCount > 0);
@@ -1498,7 +1493,6 @@ namespace IngameScript.BaseManager.BaseNew
                     SortingItem(item, ass, i);
 
                 }
-
             }
         }
 
@@ -1657,7 +1651,7 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
-        /// Перенос из одного инвентаря в другой
+        /// Перенос из одного инвентаря в другой, возможно не за 1 цикл
         /// </summary>
         public void TransferItems(IEnumerable<IMyInventory> from, IEnumerable<IMyInventory> to)
         {
@@ -1674,9 +1668,9 @@ namespace IngameScript.BaseManager.BaseNew
                 var currentCargo = inventory.ItemCount;
                 var targInv = availConts.First().Owner as IMyCargoContainer;
 
-                for (int i = 0; i <= currentCargo; i++)
+                for (int i = currentCargo; i >= 0; i--)
                 {
-                    var item = inventory.GetItemAt(0);
+                    var item = inventory.GetItemAt(i);
 
                     if (item == null)
                         continue;
@@ -1986,23 +1980,20 @@ namespace IngameScript.BaseManager.BaseNew
         {
             blueprint = default(MyDefinitionId);
 
-            var bd = blueprintData.Where(k => k.Key.Contains(itemName));
+            string value = "";
 
-            if (!bd.Any())
+            if(blueprintData.TryGetValue(itemName, out value))
             {
-                Echo($"WARNING no blueprint: {itemName}");
-                return false;
+                string name = "MyObjectBuilder_BlueprintDefinition/" + value;
+
+                if (!MyDefinitionId.TryParse(name, out blueprint))
+                {
+                    Echo($"WARNING cant parse: {name}");
+                    return false;
+                }
+                return true;
             }
-
-            string name = "MyObjectBuilder_BlueprintDefinition/" + bd.FirstOrDefault().Value;
-
-            if (!MyDefinitionId.TryParse(name, out blueprint))
-            {
-                Echo($"WARNING cant parse: {name}");
-                return false;
-            }
-
-            return true;
+            return false;
         }
 
         /// <summary>
@@ -2141,7 +2132,16 @@ namespace IngameScript.BaseManager.BaseNew
 
         public void AddNanobotPartsToProduct()
         {
-            //nanobuildReady = true;
+
+            var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed && !ass.CustomName.Contains(assemblersBlueprintLeanerName) && ass.Mode == MyAssemblerMode.Assembly).ToList();
+
+            foreach (var bps in nanobotBuildQueue)
+            {
+                KeyValuePair<string, ItemBalanser> component = new KeyValuePair<string, ItemBalanser>(bps.Key.SubtypeName, new ItemBalanser { Requested = bps.Value });
+
+                AddItemToAutoProduct(component, freeAssemblers);
+
+            }
 
             //var freeAssemblers = specialAssemblers.Where(ass => (!ass.Closed) && ass.IsQueueEmpty && !ass.CustomName.Contains(assemblersBlueprintLeanerName)).ToList();
 
@@ -2181,13 +2181,9 @@ namespace IngameScript.BaseManager.BaseNew
                 return;
             }
 
-            //сообщение об ощибке модуля сборки
-            string sysState = nanobuildReady == true ? $"\nStatus:No unknown components" : "\nStatus:Some components are unknown";
-
             nanobotDisplay?.WriteText("", false);
             nanobotDisplay?.WriteText("<<-----------Nanobot module----------->>", true);
-            nanobotDisplay?.WriteText($"\nName:{nanobotBuildModule.CustomName}\nNanobuild: {useNanobotAutoBuild}" +
-                                        sysState, true);
+            nanobotDisplay?.WriteText($"\nName:{nanobotBuildModule.CustomName}\nAuto request: {useNanobotAutoBuild}", true);
 
             foreach (var comp in nanobotBuildQueue.OrderBy(c => c.Key.ToString()))
             {
