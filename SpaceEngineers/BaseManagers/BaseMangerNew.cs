@@ -21,6 +21,7 @@ using VRage.Game.Components;
 using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
+using VRage.Game.VisualScripting.Utils;
 using VRageMath;
 
 
@@ -180,8 +181,6 @@ namespace IngameScript.BaseManager.BaseNew
 
         int maxContRenderSymbols = 20;
 
-        int gasTanksDivider = 1000;
-
         float fontSize = 0.8f;
 
         float maxStoredPower = 0;
@@ -194,10 +193,6 @@ namespace IngameScript.BaseManager.BaseNew
         float generatorsMaxOutputPower = 0;
         float generatorsOutputPower = 0;
         float powerLoadPercentage = 0;
-
-        double maxHydrogenCap = 1;
-        double totalHydrogenStored = 1;
-        double hydrogenPercentage = 1;
 
         double precentageOreVolume = 0;
         double precentageIngotsVolume = 0;
@@ -220,6 +215,8 @@ namespace IngameScript.BaseManager.BaseNew
         Dictionary<string, OreData> oreDictionary;
 
         Dictionary<string, string> blueprintData;
+
+        Dictionary<string, List<IMyGasTank>> gasTanksDictoinary;
 
         // List<string> orePriority;
         Dictionary<string, int> orePriority;
@@ -260,8 +257,6 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public Program()
         {
-            if (gasTanksDivider < 0)
-                gasTanksDivider = 1;
 
             Echo($"Script first init starting");
             Runtime.UpdateFrequency = UpdateFrequency.None;
@@ -288,6 +283,7 @@ namespace IngameScript.BaseManager.BaseNew
             ammoDictionary = new Dictionary<string, ItemBalanser>();
             buildedIngotsDictionary = new Dictionary<string, ItemBalanser>();
             equipmentDictionary = new Dictionary<string, ItemBalanser>();
+            gasTanksDictoinary = new Dictionary<string, List<IMyGasTank>>();
 
             blueprintData = new Dictionary<string, string>();
 
@@ -537,6 +533,8 @@ namespace IngameScript.BaseManager.BaseNew
                     break;
 
             }
+
+            //AssemblersBalancing();
 
             currentTick++;
             if (currentTick == 6)
@@ -1826,24 +1824,72 @@ namespace IngameScript.BaseManager.BaseNew
             if (!usePowerManagmentSystem)
                 return;
 
-            var reactorInventory = generators.Where(g => !g.Closed && g.HasInventory).Select(g => g.GetInventory(0)).ToList();
-            int reactorsCount = generators.Where(g => g is IMyReactor).Count();
-            int windCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_WindTurbine").Count();
-            int gasCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_HydrogenEngine").Count();
+            gasTanksDictoinary.Clear();
 
-            var hydrogenTanks = gasTanks.Where(g => g.BlockDefinition.ToString().Contains("HydrogenTank"));
+            foreach (var gen in gasTanks)
+            {
+                if(gasTanksDictoinary.ContainsKey(gen.BlockDefinition.ToString()))
+                {
+                    gasTanksDictoinary[gen.BlockDefinition.ToString()].Add(gen);
+                }
+                else
+                {
+                    gasTanksDictoinary.Add(gen.BlockDefinition.ToString(), new List<IMyGasTank> { gen });
+                }
+            }
 
-            maxHydrogenCap = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity) : 1;
-            totalHydrogenStored = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio) : 0;
-
-            hydrogenPercentage = Math.Round(totalHydrogenStored / maxHydrogenCap * 100, 1);
+            // Print
 
             detailedPowerPanel?.WriteText("", false);
-            detailedPowerPanel?.WriteText("<--------Gens status--------->", true);
-            detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} GasGens: {gasCount} GasTanks: {gasTanks.Count} ", true);
-            detailedPowerPanel?.WriteText($"\nHydrogen: {hydrogenTanks.Count()} Filled: {hydrogenPercentage} % {NumberToStringConverter(hydrogenPercentage)} " +
-                                          $"\n{Math.Round(totalHydrogenStored / gasTanksDivider,1)} / {Math.Round(maxHydrogenCap / gasTanksDivider,1)} kL" +
-                                          $"\n-------------------", true);
+
+            detailedPowerPanel?.WriteText($"GAS:", true);
+
+            foreach (var tank in gasTanksDictoinary)
+            {
+                detailedPowerPanel?.WriteText($"\n----------------", true);
+
+                var name = System.Text.RegularExpressions.Regex.Replace(tank.Value.FirstOrDefault().CustomName, @"[\d-]", string.Empty);
+
+                var cap = tank.Value.Any() ? tank.Value.Sum(t => t.Capacity) : 1;
+                var totalStored = tank.Value.Any() ? tank.Value.Sum(t => t.Capacity * t.FilledRatio) : 0;
+
+                var percentage = Math.Round(totalStored / cap * 100, 1);
+
+                detailedPowerPanel?.WriteText($"\n{name} {NumberToStringConverter(percentage)}" +
+                                              $"\n{NumberConverter(cap)} / {NumberConverter(totalStored)}", true);
+
+            }
+
+            debugPanel?.WriteText("", false);
+
+            foreach(var gas in generators)
+            {
+                debugPanel?.WriteText($"\n{gas.BlockDefinition}", true);
+            }
+
+
+            //var reactorInventory = generators.Where(g => !g.Closed && g.HasInventory).Select(g => g.GetInventory(0)).ToList();
+            //int reactorsCount = generators.Where(g => g is IMyReactor).Count();
+            //int windCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_WindTurbine").Count();
+            //int gasCount = generators.Where(g => g.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_HydrogenEngine").Count();
+
+            //var hydrogenTanks = gasTanks.Where(g => g.BlockDefinition.ToString().Contains("HydrogenTank"));
+
+            //maxHydrogenCap = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity) : 1;
+            //totalHydrogenStored = hydrogenTanks.Any() ? hydrogenTanks.Sum(t => t.Capacity * t.FilledRatio) : 0;
+
+            //hydrogenPercentage = Math.Round(totalHydrogenStored / maxHydrogenCap * 100, 1);
+
+
+
+            //Print data
+
+            //detailedPowerPanel?.WriteText("", false);
+            //detailedPowerPanel?.WriteText("<--------Gens status--------->", true);// $"\n{Math.Round(totalHydrogenStored / gasTanksDivider,1)} / {Math.Round(maxHydrogenCap / gasTanksDivider,1)} kL"
+            //detailedPowerPanel?.WriteText($"\nWind: {windCount} React: {reactorsCount} GasGens: {gasCount} GasTanks: {gasTanks.Count} ", true);
+            //detailedPowerPanel?.WriteText($"\nHydrogen: {hydrogenTanks.Count()} Filled: {hydrogenPercentage} % {NumberToStringConverter(hydrogenPercentage)} " +
+            //                              $"\n{NumberConverter(totalHydrogenStored)} / {NumberConverter(maxHydrogenCap)}" +
+            //                              $"\n-------------------", true);
 
             //foreach (var react in reactorInventory)
             //{
@@ -2006,42 +2052,42 @@ namespace IngameScript.BaseManager.BaseNew
 
             Echo("Auto build system");
 
-            var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed && !ass.CustomName.Contains(assemblersBlueprintLeanerName) && ass.Mode == MyAssemblerMode.Assembly).ToList();
+            var assemblers = specialAssemblers.Where(ass => !ass.Closed && !ass.CustomName.Contains(assemblersBlueprintLeanerName) && ass.Mode == MyAssemblerMode.Assembly).ToList();
 
             var reqItems = partsDictionary.Where(k => k.Value.Current < k.Value.Requested);
             var reqIngnotsItem = buildedIngotsDictionary.Where(k => k.Value.Current < k.Value.Requested);
             var reqAmmoItem = ammoDictionary.Where(k => k.Value.Current < k.Value.Requested);
             var reqEqItem = equipmentDictionary.Where(k => k.Value.Current < k.Value.Requested);
 
-            if (reqItems.Any() || reqIngnotsItem.Any())
-            {
-                Echo($"Total to build:{reqItems.Count() + reqIngnotsItem.Count()}");
-            }
+            //if (reqItems.Any() || reqIngnotsItem.Any())
+            //{
+            //    Echo($"Total to build:{reqItems.Count() + reqIngnotsItem.Count()}");
+            //}
 
             foreach (var key in reqItems)
             {
-                AddItemToAutoProduct(key, freeAssemblers);
+                AddItemToAutoProduct(key, assemblers);
             }
 
             foreach (var key in reqIngnotsItem)
             {
-                AddItemToAutoProduct(key, freeAssemblers);
+                AddItemToAutoProduct(key, assemblers);
             }
 
             foreach (var key in reqAmmoItem)
             {
-                AddItemToAutoProduct(key, freeAssemblers);
+                AddItemToAutoProduct(key, assemblers);
             }
 
             foreach (var key in reqEqItem)
             {
-                AddItemToAutoProduct(key, freeAssemblers);
+                AddItemToAutoProduct(key, assemblers);
             }
 
         }
 
         /// <summary>
-        /// Добавить недостающий предмет на автосборку
+        /// Добавить  предмет на автосборку с учетом в очереди и предметов в сборщике
         /// </summary>
         private void AddItemToAutoProduct(KeyValuePair<string, ItemBalanser> key, List<IMyAssembler> availAssemblers)
         {
@@ -2114,6 +2160,47 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
+        /// Балансировка компонентов по сборщикам
+        /// </summary>
+        //public void AssemblersBalancing()
+        //{
+        //    var assemblers = specialAssemblers.Where(ass => !ass.Closed && !ass.CustomName.Contains(assemblersBlueprintLeanerName) && ass.Mode == MyAssemblerMode.Assembly);
+        //    var busyAssemblers = specialAssemblers.Where(a => !a.Closed && !a.IsQueueEmpty && !a.CustomName.Contains(assemblersBlueprintLeanerName) && a.Mode == MyAssemblerMode.Assembly);
+
+        //    if (!busyAssemblers.Any())
+        //        return;
+
+        //    List<MyProductionItem> items = new List<MyProductionItem>();
+
+        //    foreach (var assembler in busyAssemblers)
+        //    {
+        //        assembler.GetQueue(items);
+
+        //        for (int i = items.Count-1; i >= 0; i--)
+        //        {
+        //            var item = items[i];
+        //            var amount = item.Amount - 1;
+
+        //            var availAssemblers = assemblers.Where(ass => ass.CanUseBlueprint(item.BlueprintId));
+
+        //            if(availAssemblers.Any())
+        //            {
+                       
+        //                assembler.ClearQueue();
+        //                KeyValuePair<string, ItemBalanser> component = new KeyValuePair<string, ItemBalanser>("Construction", new ItemBalanser { Requested = amount.ToIntSafe() });
+
+        //                AddItemToAutoProduct(component, availAssemblers.ToList());
+        //            }
+
+        //            //assembler.RemoveQueueItem(i, amount);
+        //            //assembler.ClearQueue();
+
+        //        }
+        //        items.Clear();
+        //    }
+        //}
+
+        /// <summary>
         /// Автосборка с помощью мода Nanobot
         /// </summary>
         public void NanobotOperations()
@@ -2137,13 +2224,13 @@ namespace IngameScript.BaseManager.BaseNew
         public void AddNanobotPartsToProduct()
         {
 
-            var freeAssemblers = specialAssemblers.Where(ass => !ass.Closed && !ass.CustomName.Contains(assemblersBlueprintLeanerName) && ass.Mode == MyAssemblerMode.Assembly).ToList();
+            var assemblers = specialAssemblers.Where(ass => !ass.Closed && !ass.CustomName.Contains(assemblersBlueprintLeanerName) && ass.Mode == MyAssemblerMode.Assembly).ToList();
 
             foreach (var bps in nanobotBuildQueue)
             {
                 KeyValuePair<string, ItemBalanser> component = new KeyValuePair<string, ItemBalanser>(bps.Key.SubtypeName, new ItemBalanser { Requested = bps.Value });
 
-                AddItemToAutoProduct(component, freeAssemblers);
+                AddItemToAutoProduct(component, assemblers);
 
             }
         }
@@ -2158,7 +2245,8 @@ namespace IngameScript.BaseManager.BaseNew
 
             nanobotDisplay?.WriteText("", false);
             nanobotDisplay?.WriteText("<<-----------Nanobot module----------->>", true);
-            nanobotDisplay?.WriteText($"\nName:{nanobotBuildModule.CustomName}\nAuto request: {useNanobotAutoBuild}", true);
+            nanobotDisplay?.WriteText($"\nName:{nanobotBuildModule.CustomName}\nAuto request: {useNanobotAutoBuild}"
+                                      +"\n-------------------------", true);
 
             foreach (var comp in nanobotBuildQueue.OrderBy(c => c.Key.ToString()))
             {
