@@ -98,8 +98,14 @@ namespace IngameScript.BaseManager.BaseNew
 
         string emptyOreBlueprint = "none";
 
+        string hddBlockTag = "[HDD]";
+
         PerformanceMonitor monitor;
         MyIni dataSystem;
+
+        //Блок хранения информации, вместо внутреннего Storage
+        IMyTerminalBlock hddDataBlock;
+
         //дисплеи
         IMyTextPanel debugPanel;
         IMyTextPanel ingotPanel;
@@ -148,7 +154,7 @@ namespace IngameScript.BaseManager.BaseNew
         bool reactorPayloadLimitter = false;
         bool containerSorting = false;
 
-        bool needSaveNewOreData = false;
+        bool loadDataAfterInit = true;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -223,15 +229,21 @@ namespace IngameScript.BaseManager.BaseNew
 
         //Печки
         Dictionary<IMyRefinery, RefinereyData> refineryData;
+        Dictionary<string, float> refsUpgradeList;
+
         List<MyInventoryItem> oreItems;
         List<MyInventoryItem> ingotItems;
-        List<MyProductionItem> refinereysItems;
+        List<MyInventoryItem> refinereysItems;
         List<MyInventoryItem> productionItems;
+
+        List<string> refinereyDataList;
 
         IMyAssembler learnerAss;
 
         StringBuilder partsDisplayData;
         StringBuilder oreDisplayData;
+
+        TextAdapter refineryPrintData;
 
         //Поиск чертежей
         MyProductionItem lastDetectedBlueprintItem;
@@ -250,6 +262,9 @@ namespace IngameScript.BaseManager.BaseNew
 
         IEnumerator<bool> partsReadstateMachine;
         IEnumerator<bool> updateStateMachine;
+
+        IEnumerator<bool> displayUpdateMachine;
+        IEnumerator<bool> displayUpdateStateMachine;
 
 
         /// <summary>
@@ -285,9 +300,13 @@ namespace IngameScript.BaseManager.BaseNew
             equipmentDictionary = new Dictionary<string, ItemBalanser>();
             gasTanksDictoinary = new Dictionary<string, List<IMyGasTank>>();
 
+            refsUpgradeList = new Dictionary<string, float>();
+
+            refinereyDataList = new List<string>();
+
             blueprintData = new Dictionary<string, string>();
 
-            refinereysItems = new List<MyProductionItem>();
+            refinereysItems = new List<MyInventoryItem>();
             productionItems = new List<MyInventoryItem>();
             ingotItems = new List<MyInventoryItem>();
             refineryData = new Dictionary<IMyRefinery, RefinereyData>();
@@ -295,6 +314,8 @@ namespace IngameScript.BaseManager.BaseNew
 
             dataSystem = new MyIni();
             monitor = new PerformanceMonitor(this, Me.GetSurface(1));
+
+            refineryPrintData = new TextAdapter();
 
             Load();
             GetIniData();
@@ -307,6 +328,9 @@ namespace IngameScript.BaseManager.BaseNew
 
             partsReadstateMachine = ReadPartsData();
             updateStateMachine = Update();
+
+            displayUpdateMachine = DisplayUpdateStateMachine();
+            displayUpdateStateMachine = DisplaysUpdate();
         }
 
 
@@ -322,6 +346,20 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 globalTick = 0;
                 DrawEcho();
+
+                //  PrintRefs();
+
+                if (displayUpdateMachine != null)
+                {
+                    bool hasMoreSteps = displayUpdateMachine.MoveNext();
+
+                    if (!hasMoreSteps)
+                    {
+                        displayUpdateMachine.Dispose();
+                        displayUpdateMachine = DisplayUpdateStateMachine();
+                    }
+                }
+
 
                 if (updateStateMachine != null)
                 {
@@ -344,8 +382,11 @@ namespace IngameScript.BaseManager.BaseNew
 
         public void Save()
         {
+            if (hddDataBlock == null)
+                return;
+
             MyIni SaveData = new MyIni();
-            Storage = null;
+           // Storage = null;
 
             SaveData.AddSection("Ores");
             SaveData.AddSection("Ingots");
@@ -355,41 +396,54 @@ namespace IngameScript.BaseManager.BaseNew
 
             foreach (var dict in oreDictionary)
             {
-                SaveData.Set("Ores", dict.Key, dict.Value.Priority);
+                SaveData.Set("Ores", dict.Key, 0);//dict.Value.Priority
             }
 
             //Ingot
             foreach (var dict in ingotsDict)
             {
-                SaveData.Set("Ingots", dict.Key, dict.Value.Current);
+                SaveData.Set("Ingots", dict.Key, 0);// dict.Value.Current
             }
 
             //Parts
             foreach (var dict in partsDictionary)
             {
-                SaveData.Set("Parts", dict.Key, dict.Value.Current);
+                SaveData.Set("Parts", dict.Key, 0);// dict.Value.Current
             }
 
             //Ammo
             foreach (var dict in ammoDictionary)
             {
-                SaveData.Set("Ammo", dict.Key, dict.Value.Current);
+                SaveData.Set("Ammo", dict.Key, 0);// dict.Value.Current
             }
 
             //Builded ingots
             foreach (var dict in buildedIngotsDictionary)
             {
-                SaveData.Set("BuildIngots", dict.Key, dict.Value.Current);
+                SaveData.Set("BuildIngots", dict.Key, 0);// dict.Value.Current
             }
 
-            Storage = SaveData.ToString();
+            hddDataBlock.CustomData = SaveData.ToString();
+
+           // Storage = SaveData.ToString();
         }
 
         public void Load()
         {
+            allBlocks.Clear();
+
+            GridTerminalSystem.GetBlocksOfType(allBlocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
+
+            hddDataBlock = allBlocks.Where(b => b is IMyTerminalBlock)
+                                    .Where(r => r.IsFunctional)
+                                    .Where(n => n.CustomName.Contains(hddBlockTag)).FirstOrDefault();
+
+            if (hddDataBlock == null)
+                return;
+
             MyIni LoadData = new MyIni();
 
-            if (LoadData.TryParse(Storage))
+            if (LoadData.TryParse(hddDataBlock.CustomData))
             {
                 Echo("Load internal data started");
 
@@ -462,6 +516,7 @@ namespace IngameScript.BaseManager.BaseNew
 
         public IEnumerator<bool> Update()
         {
+           
             SaveAllBlueprints();
 
             switch (currentTick)
@@ -539,6 +594,24 @@ namespace IngameScript.BaseManager.BaseNew
             currentTick++;
             if (currentTick == 6)
                 currentTick = 0;
+
+        }
+
+        public IEnumerator<bool> DisplayUpdateStateMachine()
+        {
+            while (DisplayRenderMachine())
+            {
+                Runtime.UpdateFrequency = UpdateFrequency.Update1;
+                yield return true;
+            }
+            Runtime.UpdateFrequency = UpdateFrequency.Update10;
+
+        }
+
+        public IEnumerator<bool> DisplaysUpdate()
+        {
+            PrintRefs();
+            yield return true;
 
         }
 
@@ -779,6 +852,26 @@ namespace IngameScript.BaseManager.BaseNew
             }
         }
 
+
+        public bool DisplayRenderMachine()
+        {
+            if (displayUpdateStateMachine == null)
+                return false;
+
+            bool hasMoreSteps = displayUpdateStateMachine.MoveNext();
+
+            if (hasMoreSteps)
+            {
+                return true;
+            }
+            else
+            {
+                displayUpdateStateMachine.Dispose();
+                displayUpdateStateMachine = DisplaysUpdate();
+                return false;
+            }
+        }
+
         /// <summary>
         /// Поиск необходимых дисплеев, можно без них
         /// </summary>
@@ -910,6 +1003,9 @@ namespace IngameScript.BaseManager.BaseNew
             Echo($"Battery:{batteries.Count}");
             Echo($"Generators:{generators.Count}");
             Echo($"Gas tanks:{gasTanks.Count}");
+
+            string hddFinded = hddDataBlock != null ? "OK" : "NO module";
+            Echo($"HDD block:{hddFinded}:{hddDataBlock?.CustomName}");
 
             string nanoFinded = nanobotBuildModule != null ? "OK" : "NO module";
             Echo($"Nanobot:{nanoFinded}:{nanobotBuildModule?.CustomName}");
@@ -1145,16 +1241,18 @@ namespace IngameScript.BaseManager.BaseNew
         {
             Echo("Get refinereys data");
 
-            foreach(var refs in refinereys)
+            RefinereyData.TotalOresInProcessing.Clear();
+
+            foreach (var refs in refinereys)
             {
                 if (refs.Closed)
                     continue;
 
-                if(refineryData.ContainsKey(refs))
+                if (refineryData.ContainsKey(refs))
                 {
                     if (refs is IMyUpgradableBlock)
                     {
-                        Dictionary<string, float> refsUpgradeList = new Dictionary<string, float>();
+                        refsUpgradeList.Clear();
 
                         var upgradeBlock = refs as IMyUpgradableBlock;
                         upgradeBlock?.GetUpgrades(out refsUpgradeList);
@@ -1165,15 +1263,25 @@ namespace IngameScript.BaseManager.BaseNew
                     refineryData[refs].InputInventory = (float)Math.Round((double)refs.InputInventory.CurrentVolume.ToIntSafe() / (double)refs.InputInventory.MaxVolume.ToIntSafe() * 100, 2);
                     refineryData[refs].OutputInventory = (float)Math.Round((double)refs.OutputInventory.CurrentVolume.ToIntSafe() / (double)refs.OutputInventory.MaxVolume.ToIntSafe() * 100, 2);
 
-                    refs.GetQueue(refinereysItems);
-                    string str = "";
+                    refs.InputInventory.GetItems(refinereysItems);
 
-                    foreach (var bp in refinereysItems)
+                    refineryData[refs].OreLoad.Clear();
+
+                    foreach (var item in refinereysItems)
                     {
-                        str += bp.BlueprintId.SubtypeName + " X " + bp.Amount.ToIntSafe() + "\n";
+                        refineryData[refs].OreLoad.Add(item.Type.SubtypeId + " X " + item.Amount.ToIntSafe());
+
+                        if (RefinereyData.TotalOresInProcessing.ContainsKey(item.Type.SubtypeId))
+                        {
+                            RefinereyData.TotalOresInProcessing[item.Type.SubtypeId] += item.Amount.ToIntSafe();
+
+                        }
+                        else
+                        {
+                            RefinereyData.TotalOresInProcessing.Add(item.Type.SubtypeId, item.Amount.ToIntSafe());
+                        }
                     }
 
-                    refineryData[refs].OreLoadName = str;
                     refinereysItems.Clear();
                 }
                 else
@@ -1194,21 +1302,45 @@ namespace IngameScript.BaseManager.BaseNew
 
             Echo("Update refinereys LCD");
 
-            refinereysDisplay.WriteText("", false);
-            refinereysDisplay.WriteText("<<------------Refinereys------------>>" +
-                                        $"\nTotal/Working: {refineryData.Count} / {workingRefinereys} ", true);
+            refinereyDataList.Clear();
 
-            foreach(var refs in refineryData)
+            List<string> stat = new List<string>
+            {
+                "<<------------Refinereys------------>>",
+                $"Total/Working: {refineryData.Count} / {workingRefinereys} "
+            };
+
+            foreach(var key in RefinereyData.TotalOresInProcessing)
+            {
+                stat.Add($"{key.Key} X {NumberConverter(key.Value)}");
+            }
+
+            stat.Add("---------------------------");
+
+
+            foreach (var refs in refineryData)
             {
                 if (refs.Key.Closed)
                     continue;
-      
-                refinereysDisplay.WriteText("\n--------------" +
-                                      $"\n{refs.Key.CustomName}" +
-                                      $"\nEff: {refs.Value.Effectiveness}  Load: {refs.Value.InputInventory} / {refs.Value.OutputInventory} %" +
-                                      $"\n{refs.Value.OreLoadName}", true);
 
+                refinereyDataList.Add(refs.Key.CustomName);
+                refinereyDataList.Add($"Eff: {refs.Value.Effectiveness}  Load: {refs.Value.InputInventory} / {refs.Value.OutputInventory} %");
+
+                foreach(var load in refs.Value.OreLoad)
+                {
+                    refinereyDataList.Add($"{load}");
+                }
+                refinereyDataList.Add("----------------");
             }
+
+            refinereyDataList.Add("");
+            refineryPrintData.Init(refinereysDisplay, stat, refinereyDataList);
+        }
+
+        public void PrintRefs()
+        {
+          
+            refineryPrintData.PrintDynamicText();
         }
 
         /// <summary>
@@ -1216,70 +1348,7 @@ namespace IngameScript.BaseManager.BaseNew
         /// </summary>
         public void RefinereysSaveOreData()
         {
-            if (!useRefinereysOperations)
-                return;
-
-            Echo("Refinereys get ore data");
-
-            foreach (var refs in refineryData)
-            {
-                if (refs.Key.Closed)
-                    continue;
-
-                refinereysItems.Clear();
-
-                refs.Key.GetQueue(refinereysItems);
-
-                if (refinereysItems.Count > 0)
-                {
-                    var item = refinereysItems[0];
-
-                    var refsItem = refs.Key.InputInventory.GetItemAt(0);
-
-                    List<MyInventoryItem> ingots = new List<MyInventoryItem>();
-                    refs.Key.OutputInventory.GetItems(ingots);
-
-                    if (refsItem == null)
-                        continue;
-
-                    if (oreDictionary.ContainsKey(refsItem.Value.Type.SubtypeId))
-                    {
-                        if (oreDictionary[refsItem.Value.Type.SubtypeId].Ready == false)
-                        {
-                            oreDictionary[refsItem.Value.Type.SubtypeId].Blueprint = item.BlueprintId.SubtypeName;
-
-                            if (ingots.Count > 0)
-                            {
-                                oreDictionary[refsItem.Value.Type.SubtypeId].Ready = true;
-                                needSaveNewOreData = true;
-
-                                foreach (var ingot in ingots)
-                                {
-                                    oreDictionary[refsItem.Value.Type.SubtypeId].IngotNames.Add(ingot.Type.SubtypeId);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (needSaveNewOreData)
-            {
-                needSaveNewOreData = false;
-
-                foreach (var ore in oreDictionary)
-                {
-                    string data = ore.Value.Blueprint;
-
-                    foreach (var ing in ore.Value.IngotNames)
-                    {
-                        data += "|" + ing;
-                    }
-
-                    dataSystem.Set(oreBpcSection, ore.Key, data);
-                }
-                ReloadData();
-            }
+           
         }
 
         public bool TryUnloadRefinerey(IMyRefinery refinerey)
@@ -1824,6 +1893,8 @@ namespace IngameScript.BaseManager.BaseNew
             if (!usePowerManagmentSystem)
                 return;
 
+            Echo("Get power full");
+
             gasTanksDictoinary.Clear();
 
             foreach (var gen in gasTanks)
@@ -1848,7 +1919,7 @@ namespace IngameScript.BaseManager.BaseNew
             {
                 detailedPowerPanel?.WriteText($"\n----------------", true);
 
-                var name = System.Text.RegularExpressions.Regex.Replace(tank.Value.FirstOrDefault().CustomName, @"[\d-]", string.Empty);
+                var name = System.Text.RegularExpressions.Regex.Replace(tank.Value.First().CustomName, @"[\d-]", string.Empty);
 
                 var cap = tank.Value.Any() ? tank.Value.Sum(t => t.Capacity) : 1;
                 var totalStored = tank.Value.Any() ? tank.Value.Sum(t => t.Capacity * t.FilledRatio) : 0;
@@ -1856,16 +1927,18 @@ namespace IngameScript.BaseManager.BaseNew
                 var percentage = Math.Round(totalStored / cap * 100, 1);
 
                 detailedPowerPanel?.WriteText($"\n{name} {NumberToStringConverter(percentage)}" +
-                                              $"\n{NumberConverter(cap)} / {NumberConverter(totalStored)}", true);
+                                              $"\n{NumberConverter(totalStored)} / {NumberConverter(cap)}", true);
 
             }
 
-            debugPanel?.WriteText("", false);
 
-            foreach(var gas in generators)
-            {
-                debugPanel?.WriteText($"\n{gas.BlockDefinition}", true);
-            }
+            //debugPanel?.WriteText("", false);
+            //debugPanel?.WriteText($"{debugPanel.SurfaceSize}", true);
+
+            //foreach(var gas in generators)
+            //{
+            //    debugPanel?.WriteText($"\n{gas.BlockDefinition}", true);
+            //}
 
 
             //var reactorInventory = generators.Where(g => !g.Closed && g.HasInventory).Select(g => g.GetInventory(0)).ToList();
@@ -2576,6 +2649,100 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
 
+
+        public class TextAdapter
+        {
+            int upperTextPoz = 0;
+            int downTextPoz = 0;
+            int dir = 1;
+
+            int wStringsCount = 0;
+
+            float surfaceHeight = 0;
+            float surfaceWight = 0;
+            float fontSize = 0;
+            float padding = 0;
+
+            public List<string> ConstantsStrings;
+            public List<string> DynamicStrings;
+
+            public IMyTextPanel Panel;
+
+
+            public TextAdapter()
+            {
+                ConstantsStrings = new List<string>();
+                DynamicStrings = new List<string>();
+            }
+
+            public void Init(IMyTextPanel panel, List<string> constantText, List<string> dynamicText)
+            {
+                Panel = panel;
+                surfaceHeight = panel.SurfaceSize.X;
+                surfaceWight = panel.SurfaceSize.Y;
+                fontSize = panel.FontSize;
+                padding = panel.TextPadding;
+
+                ConstantsStrings = constantText;
+                DynamicStrings = dynamicText;
+            }
+
+            public void PrintDynamicText()
+            {
+                wStringsCount = (int)Math.Round((surfaceWight - surfaceWight * (padding / 100)) / 30 / fontSize);
+
+                Panel?.WriteText("", false);
+
+                int statStr = ConstantsStrings.Count;
+                int dynStr = DynamicStrings.Count;
+
+                if (statStr >= wStringsCount)
+                {
+                    Panel?.WriteText("Text is to complex! Cant print", true);
+                    return;
+                }
+
+                for (int i = 0; i < statStr; i++)
+                {
+                    Panel?.WriteText($"{ConstantsStrings[i]}\n", true);
+                  
+                }
+
+                 wStringsCount -= statStr;
+
+                if (dynStr > wStringsCount)
+                {
+                    downTextPoz = upperTextPoz + wStringsCount;
+
+                    if (downTextPoz >= dynStr)
+                    {
+                        dir *= -1;
+                        downTextPoz = dynStr;
+                    }
+
+                    if (upperTextPoz < 0)
+                    {
+                        dir *= -1;
+                        upperTextPoz = 0;
+                    }
+                }
+                else
+                {
+                    downTextPoz = dynStr;
+                    upperTextPoz = 0;
+                }
+
+
+                for (int i = upperTextPoz; i < downTextPoz; i++)
+                {
+                    Panel?.WriteText($"{DynamicStrings[i]}\n", true);
+                }
+
+                upperTextPoz += dir;
+            }
+
+        }
+
         public class ItemBalanser
         {
             public int Current { set; get; } = 0;
@@ -2599,7 +2766,9 @@ namespace IngameScript.BaseManager.BaseNew
             public float Effectiveness { set; get; } = 0;
             public float InputInventory { set; get; } = 0;
             public float OutputInventory { set; get; } = 0;
-            public string OreLoadName { set; get; } = "";
+            public List<string> OreLoad { set; get; } = new List<string>();
+
+            public static Dictionary<string, int> TotalOresInProcessing { set; get; } = new Dictionary<string, int>();
 
         }
 

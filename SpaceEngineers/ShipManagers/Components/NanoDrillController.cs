@@ -45,8 +45,6 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
 
             NanodrillController = new Nanodrill(this);
             NanodrillController.Init(blocks);
-            NanodrillController.GetDrillParams();
-
 
             Runtime.UpdateFrequency = UpdateFrequency.Update100;
 
@@ -568,6 +566,8 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
 
             public void InitDrills()
             {
+                GetDrillParams();
+
                 foreach (var drill in nanoDrill)
                 {
                     drill.SetValue<Single>("Drill.AreaOffsetLeftRight", ((shipController.Position.X - drill.Position.X) * distMod));
@@ -578,7 +578,7 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
                 }
             }
 
-            public void GetDrillParams()
+            private void GetDrillParams()
             {
                 drillPanel?.WriteText("", false);
 
@@ -586,13 +586,11 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
                 {
                     drillPanel?.WriteText($"\nPos: {drill.Position} X {drill.Orientation.Forward} X{shipController.Position} X {shipController.Orientation.Forward}", true);
 
-                    drillPanel?.WriteText($"\n {shipController.CubeGrid.Max} X {shipController.CubeGrid.Min}", true);
+                    //drill.SetValue<Single>("Drill.AreaOffsetLeftRight", ((shipController.Position.X - drill.Position.X) * distMod));
+                    //drill.SetValue<Single>("Drill.AreaOffsetUpDown", ((shipController.Position.Y - drill.Position.Y) * distMod));
+                    //drill.SetValue<Single>("Drill.AreaOffsetFrontBack", ((drill.Position.Z - shipController.Position.Z) * distMod));
 
-                    drill.SetValue<Single>("Drill.AreaOffsetLeftRight", ((shipController.Position.X - drill.Position.X) * distMod));
-                    drill.SetValue<Single>("Drill.AreaOffsetUpDown", ((shipController.Position.Y - drill.Position.Y) * distMod));
-                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", ((drill.Position.Z - shipController.Position.Z) * distMod));
-
-                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", drill.GetValue<Single>("Drill.AreaOffsetFrontBack") + (21));
+                    //drill.SetValue<Single>("Drill.AreaOffsetFrontBack", drill.GetValue<Single>("Drill.AreaOffsetFrontBack") + (21));
 
                 }
             }
@@ -694,25 +692,6 @@ namespace SpaceEngineers.ShipManagers.Components.NanodrillController
             }
 
 
-            public class NanoDrill
-            {
-                Vector3I localPosition;
-
-                IMyTerminalBlock drill;
-
-                public NanoDrill(IMyTerminalBlock block)
-                {
-                    drill = block;
-                    localPosition = drill.Position;
-                }
-
-                public void Reset()
-                {
-                    drill.SetValue<Single>("Drill.AreaOffsetLeftRight", 0);
-                    drill.SetValue<Single>("Drill.AreaOffsetUpDown", 0);
-                    drill.SetValue<Single>("Drill.AreaOffsetFrontBack", 0);
-                }
-            }
         }
 
 

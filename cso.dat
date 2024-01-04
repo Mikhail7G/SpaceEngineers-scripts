@@ -58,3 +58,12 @@ V1
 2:conts,Z
 2:CurrentWaypoint,ZJ
 2:excludes,MC
+2:PowerSystemDetailed,c
+2:gen,T
+2:tank,xZ
+2:cap,S8
+2:t,V
+2:PrintRefinerysData,w9
+2:stat,NY
+2:refs,m
+2:load,V1
