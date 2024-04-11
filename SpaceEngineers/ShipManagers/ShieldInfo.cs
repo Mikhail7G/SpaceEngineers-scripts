@@ -20,11 +20,17 @@ namespace SpaceEngineers.ShipManagers.ShieldInfo
     {
 
         /////////////////////////////////////////////////////////////
+
+        string groupName = "Observable Group";
+         
         List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+
 
         IMyTextPanel display;
 
         PbApiWrapper shieldWrapper;
+
+        IMyBlockGroup groupBlock;
 
 
         public Program()
@@ -34,12 +40,26 @@ namespace SpaceEngineers.ShipManagers.ShieldInfo
 
             shieldWrapper = new PbApiWrapper(Me);
 
-            GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
+           // GridTerminalSystem.GetBlocksOfType(blocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid);
+
+            groupBlock = GridTerminalSystem.GetBlockGroupWithName(groupName);
+
+            groupBlock.GetBlocks(blocks, (IMyTerminalBlock b) => b.CubeGrid == Me.CubeGrid)
 
             display = blocks.Where(b => b is IMyTextPanel)
                             .Where(r => r.IsFunctional)
                             .Where(d => d.CustomName.Contains("Display"))
                             .Select(t => t as IMyTextPanel).FirstOrDefault();
+
+
+            foreach (var block in blocks)
+            {
+                block.SetValueBool("OnOff", true);
+            }
+
+
+
+
         }
 
         public void Main(string args, UpdateType updateType)

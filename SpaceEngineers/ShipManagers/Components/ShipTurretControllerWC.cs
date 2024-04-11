@@ -99,7 +99,7 @@ namespace SpaceEngineers.ShipManagers.Components.ControllerWC
 
             }
 
-            monitor.AddInstructions("");
+            monitor.AddInstructions();
             monitor.EndOfFrameCalc();
             monitor.Draw();
 
@@ -116,7 +116,7 @@ namespace SpaceEngineers.ShipManagers.Components.ControllerWC
 
         }
 
-       
+
 
         public class PerformanceMonitor
         {
@@ -166,15 +166,18 @@ namespace SpaceEngineers.ShipManagers.Components.ControllerWC
 
             }
 
+            public void AddRuntime()
+            {
+                UpdateTime = mainProgram.Runtime.LastRunTimeMs;
+                avrTime += UpdateTime;
 
-            public void AddInstructions(string methodName)
+            }
+
+            public void AddInstructions()
             {
                 TotalInstructions = mainProgram.Runtime.CurrentInstructionCount;
                 MaxInstructions = mainProgram.Runtime.MaxInstructionCount;
                 avrInst += TotalInstructions;
-
-                UpdateTime = mainProgram.Runtime.LastRunTimeMs;
-                avrTime += UpdateTime;
 
                 CallPerTick++;
 
@@ -192,7 +195,7 @@ namespace SpaceEngineers.ShipManagers.Components.ControllerWC
 
                 avrInst = 0;
 
-                AverageTimePerTick = mainProgram.Runtime.LastRunTimeMs;
+                AverageTimePerTick = avrTime / CallPerTick;
                 avrTime = 0;
 
                 CallPerTick = 0;
@@ -201,10 +204,10 @@ namespace SpaceEngineers.ShipManagers.Components.ControllerWC
 
             public void Draw()
             {
-                mainDisplay?.WriteText("", false);
-                mainDisplay?.WriteText($"CUR ins: {TotalInstructions} / Max: {MaxInstructions}" +
+                mainDisplay.WriteText("", false);
+                mainDisplay.WriteText($"CUR ins: {TotalInstructions} / Max: {MaxInstructions}" +
                                       $"\nAV inst: {AverageInstructionsPerTick} / {MaxInstructionsPerTick}" +
-                                      $"\nAV time:{AverageTimePerTick}", true);
+                                      $"\nAV time:{UpdateTime}", true);
             }
 
         }

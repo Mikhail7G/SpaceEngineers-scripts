@@ -32,7 +32,7 @@ namespace SpaceEngineers.Autominer.Autominer
 
         #region mdk preserve
         //Комменты
-
+        float miningSpeed = 1;
         #endregion
 
         PerformanceMonitor monitor;
@@ -99,7 +99,7 @@ namespace SpaceEngineers.Autominer.Autominer
         {
             point = new Waypoint(mover.GetShipLocalDrift(Base6Directions.Direction.Forward, 100), mover.GetOrientation(), 10.0f);
             mover.FlyToWP(point);
-            mover.ForwardMove(1.0f);
+            mover.ForwardMove(miningSpeed);
             mover.AlignOnWP(MovementCommander.RotateType.Matrix);
         }
 

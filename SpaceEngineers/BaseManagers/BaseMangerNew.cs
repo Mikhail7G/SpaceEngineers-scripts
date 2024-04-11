@@ -1,4 +1,5 @@
 ﻿using Microsoft.VisualBasic;
+using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
@@ -100,6 +101,8 @@ namespace IngameScript.BaseManager.BaseNew
 
         string hddBlockTag = "[HDD]";
 
+        string nanobotModuleName = "nano";
+
         PerformanceMonitor monitor;
         MyIni dataSystem;
 
@@ -153,6 +156,7 @@ namespace IngameScript.BaseManager.BaseNew
        //bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
         bool containerSorting = false;
+        bool partDisplayEdited = false;
 
         bool loadDataAfterInit = true;
 
@@ -176,6 +180,8 @@ namespace IngameScript.BaseManager.BaseNew
         int globalTickLimit = 4;
 
         int workingRefinereys = 0;
+
+        int nanoBuildWeldedCounter = 0;
 
         //int maxReactorPayload = 50;
 
@@ -250,10 +256,14 @@ namespace IngameScript.BaseManager.BaseNew
         MyInventoryItem? lastDetectedConstructItem;
 
         Dictionary<MyDefinitionId, int> nanobotBuildQueue;
+        List<IMySlimBlock> nanobotBuilWeldeddQueue;
+
+        TimeSpan displayRefreshTimer;
+        TimeSpan mainUpdateTimer;
 
         // ^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$ общий имя + необходимое кол-во
         //System.Text.RegularExpressions.Regex NameRegex = new System.Text.RegularExpressions.Regex(@"(?<Name>\w*\-?\w*)\s:");//(?<Name>\w*)\s: || (?<Name>^\w*\-*\s*\w*)\s: - c пробелами и подчеркиваниями
-       // System.Text.RegularExpressions.Regex AmountRegex = new System.Text.RegularExpressions.Regex(@"(?<Amount>\d+)$");
+        // System.Text.RegularExpressions.Regex AmountRegex = new System.Text.RegularExpressions.Regex(@"(?<Amount>\d+)$");
 
         //Имя и приоритет руды, ищет по всем строкам
         //System.Text.RegularExpressions.Regex OrePriorRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\w*?\sP\s?(?<Prior>\d+)\s?$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -263,7 +273,7 @@ namespace IngameScript.BaseManager.BaseNew
         IEnumerator<bool> partsReadstateMachine;
         IEnumerator<bool> updateStateMachine;
 
-        IEnumerator<bool> displayUpdateMachine;
+        //IEnumerator<bool> displayUpdateMachine;
         IEnumerator<bool> displayUpdateStateMachine;
 
 
@@ -287,6 +297,7 @@ namespace IngameScript.BaseManager.BaseNew
             gasTanks = new List<IMyGasTank>();
             connectors = new List<IMyShipConnector>();
             specialAssemblers = new List<IMyAssembler>();
+            nanobotBuilWeldeddQueue = new List<IMySlimBlock>();
 
             partsDisplayData = new StringBuilder();
             oreDisplayData = new StringBuilder();
@@ -329,7 +340,7 @@ namespace IngameScript.BaseManager.BaseNew
             partsReadstateMachine = ReadPartsData();
             updateStateMachine = Update();
 
-            displayUpdateMachine = DisplayUpdateStateMachine();
+            //displayUpdateMachine = DisplayUpdateStateMachine();
             displayUpdateStateMachine = DisplaysUpdate();
         }
 
@@ -340,26 +351,34 @@ namespace IngameScript.BaseManager.BaseNew
             if ((updateType & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
                 Commands(args);
 
+            displayRefreshTimer += Runtime.TimeSinceLastRun;
+            mainUpdateTimer += Runtime.TimeSinceLastRun;
+
             monitor.AddRuntime();
 
-            if (globalTick == globalTickLimit)
+            //if (globalTick == globalTickLimit) 
+            //{
+            //    globalTick = 0;
+            //    DrawEcho();
+
+            //    if (updateStateMachine != null)
+            //    {
+            //        bool hasMoreSteps = updateStateMachine.MoveNext();
+
+            //        if (!hasMoreSteps)
+            //        {
+            //            updateStateMachine.Dispose();
+            //            updateStateMachine = Update();
+            //        }
+            //    }
+            //}
+            //globalTick++;
+
+            if (mainUpdateTimer.TotalMilliseconds >= 50)
             {
-                globalTick = 0;
+                mainUpdateTimer = TimeSpan.Zero;
+
                 DrawEcho();
-
-                //  PrintRefs();
-
-                if (displayUpdateMachine != null)
-                {
-                    bool hasMoreSteps = displayUpdateMachine.MoveNext();
-
-                    if (!hasMoreSteps)
-                    {
-                        displayUpdateMachine.Dispose();
-                        displayUpdateMachine = DisplayUpdateStateMachine();
-                    }
-                }
-
 
                 if (updateStateMachine != null)
                 {
@@ -373,7 +392,27 @@ namespace IngameScript.BaseManager.BaseNew
                 }
             }
 
-            globalTick++;
+
+            if (displayRefreshTimer.TotalMilliseconds >= 300)
+            {
+                displayRefreshTimer = TimeSpan.Zero;
+
+                while (DisplayRenderMachine())
+                {
+
+                }
+
+                //if (displayUpdateMachine != null)
+                //{
+                //    bool hasMoreSteps = displayUpdateMachine.MoveNext();
+
+                //    if (!hasMoreSteps)
+                //    {
+                //        displayUpdateMachine.Dispose();
+                //        displayUpdateMachine = DisplayUpdateStateMachine();
+                //    }
+                //}
+            }
 
             monitor.AddInstructions();
             monitor.EndOfFrameCalc();
@@ -516,13 +555,12 @@ namespace IngameScript.BaseManager.BaseNew
 
         public IEnumerator<bool> Update()
         {
-           
             SaveAllBlueprints();
 
             switch (currentTick)
             {
                 case 0:
-                    FindInventories();
+                    FindBlocks();
                     yield return true;
                     FindLcds();
                     yield return true;
@@ -555,12 +593,12 @@ namespace IngameScript.BaseManager.BaseNew
                     yield return true;
                     FindParts();
 
-                    while (PartReadingStateMachine())
-                    {
-                        Runtime.UpdateFrequency = UpdateFrequency.Update1;
-                        yield return true;
-                    }
-                    Runtime.UpdateFrequency = UpdateFrequency.Update10;
+                    //while (PartReadingStateMachine())
+                    //{
+                    //    Runtime.UpdateFrequency = UpdateFrequency.Update1;
+                    //    yield return true;
+                    //}
+                    //Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
                     PrintAutobuildComponents();
                     yield return true;
@@ -597,16 +635,13 @@ namespace IngameScript.BaseManager.BaseNew
 
         }
 
-        public IEnumerator<bool> DisplayUpdateStateMachine()
-        {
-            while (DisplayRenderMachine())
-            {
-                Runtime.UpdateFrequency = UpdateFrequency.Update1;
-                yield return true;
-            }
-            Runtime.UpdateFrequency = UpdateFrequency.Update10;
-
-        }
+        //public IEnumerator<bool> DisplayUpdateStateMachine()
+        //{
+        //    while (DisplayRenderMachine())
+        //    {
+        //        yield return true;
+        //    } 
+        //}
 
         public IEnumerator<bool> DisplaysUpdate()
         {
@@ -1030,7 +1065,7 @@ namespace IngameScript.BaseManager.BaseNew
         /// <summary>
         /// Поиск всех обьектов, печек, сборщиков, ящиков
         /// </summary>
-        public void FindInventories()
+        public void FindBlocks()
         {
             Echo("Find blocks");
 
@@ -1072,6 +1107,7 @@ namespace IngameScript.BaseManager.BaseNew
 
             nanobotBuildModule = allBlocks.Where(b => b.IsFunctional)
                                           .Where(g => g.BlockDefinition.SubtypeName.ToString() == "SELtdLargeNanobotBuildAndRepairSystem")
+                                          .Where(b=>b.CustomName.Contains(nanobotModuleName))
                                           .FirstOrDefault();
 
             specialAssemblers = assemblers.Where(a => a.CustomName.Contains(assemblersSpecialOperationsName)).ToList();
@@ -1246,7 +1282,9 @@ namespace IngameScript.BaseManager.BaseNew
             foreach (var refs in refinereys)
             {
                 if (refs.Closed)
-                    continue;
+                {
+                    refineryData.Remove(refs);
+                }
 
                 if (refineryData.ContainsKey(refs))
                 {
@@ -1307,7 +1345,7 @@ namespace IngameScript.BaseManager.BaseNew
             List<string> stat = new List<string>
             {
                 "<<------------Refinereys------------>>",
-                $"Total/Working: {refineryData.Count} / {workingRefinereys} "
+                $"Working: {workingRefinereys} "
             };
 
             foreach(var key in RefinereyData.TotalOresInProcessing)
@@ -1640,6 +1678,7 @@ namespace IngameScript.BaseManager.BaseNew
                         }
                     }
                 }
+                partDisplayEdited = false;
             }///
         }
 
@@ -1656,7 +1695,18 @@ namespace IngameScript.BaseManager.BaseNew
 
             //Блок вывода инфорации на дисплеи
             string sysState = useAutoBuildSystem == true ? "Auto mode ON" : "Auto mode OFF";
-            autoBuildPanel?.WriteText("", false);
+
+
+            if (!autoBuildPanel.WriteText("", false))
+            {
+                partDisplayEdited = true;
+                return;
+            }
+
+            if (partDisplayEdited)
+                return;
+
+
             autoBuildPanel?.WriteText($"<<-------------Production------------->>" +
                                      $"\n{sysState}", true);
 
@@ -2132,10 +2182,7 @@ namespace IngameScript.BaseManager.BaseNew
             var reqAmmoItem = ammoDictionary.Where(k => k.Value.Current < k.Value.Requested);
             var reqEqItem = equipmentDictionary.Where(k => k.Value.Current < k.Value.Requested);
 
-            //if (reqItems.Any() || reqIngnotsItem.Any())
-            //{
-            //    Echo($"Total to build:{reqItems.Count() + reqIngnotsItem.Count()}");
-            //}
+          
 
             foreach (var key in reqItems)
             {
@@ -2286,6 +2333,9 @@ namespace IngameScript.BaseManager.BaseNew
             nanobotBuildQueue.Clear();
 
             nanobotBuildQueue = nanobotBuildModule.GetValue<Dictionary<MyDefinitionId, int>>("BuildAndRepair.MissingComponents");
+            nanobotBuilWeldeddQueue = nanobotBuildModule.GetValue<List<IMySlimBlock>>("BuildAndRepair.PossibleTargets");
+
+            nanoBuildWeldedCounter = nanobotBuilWeldeddQueue.Count;
             Echo($"Nanobot total components:{nanobotBuildQueue.Count}");
 
             if (useNanobotAutoBuild && nanobotBuildQueue.Any())
@@ -2294,6 +2344,9 @@ namespace IngameScript.BaseManager.BaseNew
             }
         }
 
+        /// <summary>
+        /// Добавить компоненты в производство от запроса наномодуля
+        /// </summary>
         public void AddNanobotPartsToProduct()
         {
 
@@ -2318,7 +2371,8 @@ namespace IngameScript.BaseManager.BaseNew
 
             nanobotDisplay?.WriteText("", false);
             nanobotDisplay?.WriteText("<<-----------Nanobot module----------->>", true);
-            nanobotDisplay?.WriteText($"\nName:{nanobotBuildModule.CustomName}\nAuto request: {useNanobotAutoBuild}"
+            nanobotDisplay?.WriteText($"\nName:{nanobotBuildModule.CustomName}\nAuto request: {useNanobotAutoBuild}" +
+                                      $"\nWelded count: {nanoBuildWeldedCounter}"
                                       +"\n-------------------------", true);
 
             foreach (var comp in nanobotBuildQueue.OrderBy(c => c.Key.ToString()))

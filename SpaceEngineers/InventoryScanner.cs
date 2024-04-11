@@ -13,36 +13,30 @@ using VRage.Collections;
 using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using System.Threading;
 
 namespace SpaceEngineers.Stuff
 {
     public sealed class Program : MyGridProgram
     {
 
-
-        List<IMyAssembler> assemblers;
+        TimeSpan timer;
 
 
         public Program()
         {
-
-            assemblers = new List<IMyAssembler>();
-
-            GridTerminalSystem.GetBlocksOfType(assemblers);
-
-            Runtime.UpdateFrequency = UpdateFrequency.Once;
-
+            timer += Runtime.TimeSinceLastRun;
         }
 
         public void Main(string args)
         {
 
-           foreach(var ass in assemblers)
-            {
-                ass.ClearQueue();
-            }
+            Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
-        
+            timer += Runtime.TimeSinceLastRun;
+
+            Echo(timer.TotalMilliseconds.ToString());
+            Echo(Runtime.TimeSinceLastRun.ToString());
 
         }
 
@@ -51,9 +45,7 @@ namespace SpaceEngineers.Stuff
 
         }
 
-        /// <summary>
-        /// Перекладка слитков из печек 
-        /// </summary>
+    
 
       
         ///////////////
