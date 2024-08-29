@@ -3,6 +3,7 @@ using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
+using Sandbox.Game.WorldEnvironment.Modules;
 using Sandbox.ModAPI.Ingame;
 using Sandbox.ModAPI.Interfaces;
 using SpaceEngineers.Game.Entities.Blocks;
@@ -156,9 +157,8 @@ namespace IngameScript.BaseManager.BaseNew
        //bool useRefinereyPriorty = false;
         bool reactorPayloadLimitter = false;
         bool containerSorting = false;
-        bool partDisplayEdited = false;
 
-        bool loadDataAfterInit = true;
+       // bool loadDataAfterInit = true;
 
         int totalOreStorageVolume = 0;
         int freeOreStorageVolume = 0;
@@ -176,8 +176,6 @@ namespace IngameScript.BaseManager.BaseNew
         int freeItemStorageVolume = 0;
 
         int currentTick = 0;
-        int globalTick = 0;
-        int globalTickLimit = 4;
 
         int workingRefinereys = 0;
 
@@ -188,12 +186,8 @@ namespace IngameScript.BaseManager.BaseNew
         //int refinereyReloadPrecentage = 70;
         int maxVolumeContainerPercentage = 95;
 
-        int partsStateMachineCounter = 0;
-        int maxPartsPerScan = 5;
-
         int maxContRenderSymbols = 20;
 
-        float fontSize = 0.8f;
 
         float maxStoredPower = 0;
         float currentStoredPower = 0;
@@ -230,9 +224,6 @@ namespace IngameScript.BaseManager.BaseNew
 
         Dictionary<string, List<IMyGasTank>> gasTanksDictoinary;
 
-        // List<string> orePriority;
-        Dictionary<string, int> orePriority;
-
         //Печки
         Dictionary<IMyRefinery, RefinereyData> refineryData;
         Dictionary<string, float> refsUpgradeList;
@@ -245,9 +236,6 @@ namespace IngameScript.BaseManager.BaseNew
         List<string> refinereyDataList;
 
         IMyAssembler learnerAss;
-
-        StringBuilder partsDisplayData;
-        StringBuilder oreDisplayData;
 
         TextAdapter refineryPrintData;
 
@@ -268,12 +256,11 @@ namespace IngameScript.BaseManager.BaseNew
         //Имя и приоритет руды, ищет по всем строкам
         //System.Text.RegularExpressions.Regex OrePriorRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\w*?\sP\s?(?<Prior>\d+)\s?$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
         //Имя и количество компонентов для автостройки
-        System.Text.RegularExpressions.Regex ProdItemFullRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+        //System.Text.RegularExpressions.Regex ProdItemFullRegex = new System.Text.RegularExpressions.Regex(@"^(?<Name>\w*\W?\w*)\s:\s\d*?\W*?\s?(?<Amount>\d+)$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
-        IEnumerator<bool> partsReadstateMachine;
         IEnumerator<bool> updateStateMachine;
 
-        //IEnumerator<bool> displayUpdateMachine;
+        IEnumerator<bool> displayUpdateMachine;
         IEnumerator<bool> displayUpdateStateMachine;
 
 
@@ -299,9 +286,6 @@ namespace IngameScript.BaseManager.BaseNew
             specialAssemblers = new List<IMyAssembler>();
             nanobotBuilWeldeddQueue = new List<IMySlimBlock>();
 
-            partsDisplayData = new StringBuilder();
-            oreDisplayData = new StringBuilder();
-
             oreDictionary = new Dictionary<string, OreData>();
             ingotsDict = new Dictionary<string, ItemBalanser>();
             partsDictionary = new Dictionary<string, ItemBalanser>();
@@ -321,7 +305,6 @@ namespace IngameScript.BaseManager.BaseNew
             productionItems = new List<MyInventoryItem>();
             ingotItems = new List<MyInventoryItem>();
             refineryData = new Dictionary<IMyRefinery, RefinereyData>();
-            orePriority = new Dictionary<string, int>();
 
             dataSystem = new MyIni();
             monitor = new PerformanceMonitor(this, Me.GetSurface(1));
@@ -337,11 +320,10 @@ namespace IngameScript.BaseManager.BaseNew
                 Echo($"Script autostart in prog");
             }
 
-            partsReadstateMachine = ReadPartsData();
             updateStateMachine = Update();
 
-            //displayUpdateMachine = DisplayUpdateStateMachine();
-            displayUpdateStateMachine = DisplaysUpdate();
+            displayUpdateMachine = DisplaysUpdate();
+            displayUpdateStateMachine = DisplayUpdateStateMachine();
         }
 
 
@@ -356,28 +338,10 @@ namespace IngameScript.BaseManager.BaseNew
 
             monitor.AddRuntime();
 
-            //if (globalTick == globalTickLimit) 
-            //{
-            //    globalTick = 0;
-            //    DrawEcho();
-
-            //    if (updateStateMachine != null)
-            //    {
-            //        bool hasMoreSteps = updateStateMachine.MoveNext();
-
-            //        if (!hasMoreSteps)
-            //        {
-            //            updateStateMachine.Dispose();
-            //            updateStateMachine = Update();
-            //        }
-            //    }
-            //}
-            //globalTick++;
-
-            if (mainUpdateTimer.TotalMilliseconds >= 50)
+         
+            if (mainUpdateTimer.TotalMilliseconds >= 500)
             {
                 mainUpdateTimer = TimeSpan.Zero;
-
                 DrawEcho();
 
                 if (updateStateMachine != null)
@@ -392,26 +356,21 @@ namespace IngameScript.BaseManager.BaseNew
                 }
             }
 
-
-            if (displayRefreshTimer.TotalMilliseconds >= 300)
+            if(displayRefreshTimer.TotalMilliseconds >= 300)
             {
                 displayRefreshTimer = TimeSpan.Zero;
 
-                while (DisplayRenderMachine())
+                if (displayUpdateStateMachine != null)
                 {
+                    bool hasMoreSteps = displayUpdateStateMachine.MoveNext();
 
+                    if (!hasMoreSteps)
+                    {
+                        displayUpdateStateMachine.Dispose();
+                        displayUpdateStateMachine = DisplayUpdateStateMachine();
+                    }
                 }
 
-                //if (displayUpdateMachine != null)
-                //{
-                //    bool hasMoreSteps = displayUpdateMachine.MoveNext();
-
-                //    if (!hasMoreSteps)
-                //    {
-                //        displayUpdateMachine.Dispose();
-                //        displayUpdateMachine = DisplayUpdateStateMachine();
-                //    }
-                //}
             }
 
             monitor.AddInstructions();
@@ -575,8 +534,6 @@ namespace IngameScript.BaseManager.BaseNew
                     yield return true;
                     RefinereysGetData();
                     yield return true;
-                    RefinereysSaveOreData();
-                    yield return true;
                     PrintRefinerysData();
                     break;
                 case 2:
@@ -592,14 +549,8 @@ namespace IngameScript.BaseManager.BaseNew
                     ReplaceParts();
                     yield return true;
                     FindParts();
-
-                    //while (PartReadingStateMachine())
-                    //{
-                    //    Runtime.UpdateFrequency = UpdateFrequency.Update1;
-                    //    yield return true;
-                    //}
-                    //Runtime.UpdateFrequency = UpdateFrequency.Update10;
-
+                    yield return true;
+                    ReadPartData();
                     PrintAutobuildComponents();
                     yield return true;
                     ContainersSortingParts();
@@ -626,7 +577,6 @@ namespace IngameScript.BaseManager.BaseNew
                     break;
 
             }
-
             //AssemblersBalancing();
 
             currentTick++;
@@ -634,20 +584,19 @@ namespace IngameScript.BaseManager.BaseNew
                 currentTick = 0;
 
         }
-
-        //public IEnumerator<bool> DisplayUpdateStateMachine()
-        //{
-        //    while (DisplayRenderMachine())
-        //    {
-        //        yield return true;
-        //    } 
-        //}
+       
+        public IEnumerator<bool> DisplayUpdateStateMachine()
+        {
+            while (DisplayRenderMachine())
+            {
+                yield return true;
+            }
+        }
 
         public IEnumerator<bool> DisplaysUpdate()
         {
             PrintRefs();
             yield return true;
-
         }
 
         public void GetIniData()
@@ -711,35 +660,6 @@ namespace IngameScript.BaseManager.BaseNew
                         blueprintData.Add(key.Name, dataSystem.Get(key).ToString());
                     }
                 }
-
-                //Ore Blueprints
-                keys.Clear();
-                dataSystem.GetKeys(oreBpcSection, keys);
-
-                foreach (var key in keys)
-                {
-                    string[] splitedStrings = dataSystem.Get(key).ToString().Split('|');
-                    string blueprintName = emptyOreBlueprint;
-
-                    if (splitedStrings.Length > 0)
-                        blueprintName = splitedStrings[0];
-
-                    if (oreDictionary.ContainsKey(key.Name))
-                    {
-                        oreDictionary[key.Name].Ready = false;
-                        oreDictionary[key.Name].Type = "MyObjectBuilder_Ore/" + key.Name;
-                        oreDictionary[key.Name].Blueprint = blueprintName;
-
-                        if (splitedStrings.Length > 1)
-                        {
-                            oreDictionary[key.Name].Ready = true;
-                            for (int i = 1; i < splitedStrings.Length; i++)
-                            {
-                                oreDictionary[key.Name].IngotNames.Add(splitedStrings[i]);
-                            }
-                        }
-                    }
-                }
             }
 
             Echo("Script ready to run");
@@ -787,10 +707,7 @@ namespace IngameScript.BaseManager.BaseNew
                 dataSystem.Set(tagSection, specAssTagName, assemblersSpecialOperationsName);
                 dataSystem.Set(tagSection, bpcLearnTagName, assemblersBlueprintLeanerName);
 
-                //  dataSystem.AddSection("OrePriority");
-
                 dataSystem.AddSection(bpcSection);
-                dataSystem.AddSection(oreBpcSection);
 
                 Me.CustomData = dataSystem.ToString();
             }
@@ -865,35 +782,12 @@ namespace IngameScript.BaseManager.BaseNew
             switchProdModulesAsScript = !switchProdModulesAsScript;
         }
 
-        /// <summary>
-        /// Управление корутиной по считыванию данных с диплея компонентов
-        /// </summary>
-        public bool PartReadingStateMachine()
-        {
-            if (partsReadstateMachine == null)
-                return false;
-
-            bool hasMoreSteps = partsReadstateMachine.MoveNext();
-
-            if (hasMoreSteps)
-            {
-                return true;
-            }
-            else
-            {
-                partsReadstateMachine.Dispose();
-                partsReadstateMachine = ReadPartsData();
-                return false;
-            }
-        }
-
-
         public bool DisplayRenderMachine()
         {
-            if (displayUpdateStateMachine == null)
+            if (displayUpdateMachine == null)
                 return false;
 
-            bool hasMoreSteps = displayUpdateStateMachine.MoveNext();
+            bool hasMoreSteps = displayUpdateMachine.MoveNext();
 
             if (hasMoreSteps)
             {
@@ -901,8 +795,8 @@ namespace IngameScript.BaseManager.BaseNew
             }
             else
             {
-                displayUpdateStateMachine.Dispose();
-                displayUpdateStateMachine = DisplaysUpdate();
+                displayUpdateMachine.Dispose();
+                displayUpdateMachine = DisplaysUpdate();
                 return false;
             }
         }
@@ -928,7 +822,6 @@ namespace IngameScript.BaseManager.BaseNew
                 if (ingotPanel != null)
                 {
                     ingotPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    ingotPanel.FontSize = fontSize;
                 }
             }
 
@@ -943,7 +836,6 @@ namespace IngameScript.BaseManager.BaseNew
                 if (powerPanel != null)
                 {
                     powerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    powerPanel.FontSize = fontSize;
                 }
             }
 
@@ -958,7 +850,6 @@ namespace IngameScript.BaseManager.BaseNew
                 if (detailedPowerPanel != null)
                 {
                     detailedPowerPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    detailedPowerPanel.FontSize = fontSize;
                 }
             }
 
@@ -973,7 +864,6 @@ namespace IngameScript.BaseManager.BaseNew
                 if (autoBuildPanel != null)
                 {
                     autoBuildPanel.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    autoBuildPanel.FontSize = fontSize;
                 }
             }
 
@@ -988,7 +878,6 @@ namespace IngameScript.BaseManager.BaseNew
                 if (nanobotDisplay != null)
                 {
                     nanobotDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    nanobotDisplay.FontSize = fontSize;
                 }
             }
 
@@ -1003,7 +892,6 @@ namespace IngameScript.BaseManager.BaseNew
                 if (refinereysDisplay != null)
                 {
                     refinereysDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    refinereysDisplay.FontSize = fontSize;
                 }
             }
 
@@ -1018,7 +906,6 @@ namespace IngameScript.BaseManager.BaseNew
                 if (oreDisplay != null)
                 {
                     oreDisplay.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                    oreDisplay.FontSize = fontSize;
                 }
             }
 
@@ -1229,31 +1116,6 @@ namespace IngameScript.BaseManager.BaseNew
 
             Echo("Update ores LCD");
 
-            //Блок считывания приоритета с дисплея
-            //if (useRefinereysOperations)
-            //{
-            //    oreDisplayData.Clear();
-            //    oreDisplay?.ReadText(oreDisplayData);
-
-            //    System.Text.RegularExpressions.MatchCollection matches = OrePriorRegex.Matches(oreDisplayData.ToString());
-
-            //    if (matches.Count > 0)
-            //    {
-            //        foreach (System.Text.RegularExpressions.Match match in matches)
-            //        {
-            //            if (oreDictionary.ContainsKey(match.Groups["Name"].Value))
-            //            {
-            //                int prior = 0;
-
-            //                if (int.TryParse(match.Groups["Prior"].Value, out prior))
-            //                {
-            //                    oreDictionary[match.Groups["Name"].Value].Priority = prior;
-            //                }
-            //            }
-            //        }
-            //    }
-            //}
-
             //Отрисовка на дисплей
             oreDisplay?.WriteText("", false);
             oreDisplay?.WriteText($"<<-----------Ores----------->>" +
@@ -1379,14 +1241,6 @@ namespace IngameScript.BaseManager.BaseNew
         {
           
             refineryPrintData.PrintDynamicText();
-        }
-
-        /// <summary>
-        /// Привязка руды к готовой продукции и рецептам
-        /// </summary>
-        public void RefinereysSaveOreData()
-        {
-           
         }
 
         public bool TryUnloadRefinerey(IMyRefinery refinerey)
@@ -1628,64 +1482,50 @@ namespace IngameScript.BaseManager.BaseNew
         }
 
         /// <summary>
-        /// Считывает данные с дисплея, с корутиной для potato серверов
+        /// Считывание колчества компонентов с дисплея дла автокрафта
         /// </summary>
-        public IEnumerator<bool> ReadPartsData()
+        public void ReadPartData()
         {
-            if (autoBuildPanel == null)
-                yield return false;
+            if ((autoBuildPanel == null) || (useAutoBuildSystem == false))
+                return;
 
-            Echo("Read parts LCD");
+            StringBuilder displayData = new StringBuilder();
+            autoBuildPanel.ReadText(displayData);
 
-            //Автосборка компонентов
-            if (useAutoBuildSystem)
+            var splittedStrings = displayData.ToString().Split('\n');
+
+            foreach (var strings in splittedStrings)
             {
-                partsDisplayData.Clear();
-                autoBuildPanel?.ReadText(partsDisplayData);
+                var data = strings.Split(' ');
 
-                var strings = partsDisplayData.ToString().Split('\n');
-
-                foreach (var str in strings)
+                if (data.Length == 5)
                 {
-                    if (partsStateMachineCounter > maxPartsPerScan)
+                    int amount = 0;
+                    string name = data[0];
+
+                    if (int.TryParse(data[4], out amount))
                     {
-                        partsStateMachineCounter = 0;
-                        yield return true;
-                    }
-                    partsStateMachineCounter++;
-
-                    System.Text.RegularExpressions.Match ResultReg = ProdItemFullRegex.Match(str);
-
-                    if (ResultReg.Success)
-                    {
-                        int amount = 0;
-                        string name = ResultReg.Groups["Name"].Value;
-
-                        if (int.TryParse(ResultReg.Groups["Amount"].Value, out amount))
+                        if (partsDictionary.ContainsKey(name))
                         {
-                            if (partsDictionary.ContainsKey(name))
-                            {
-                                partsDictionary[name].Requested = amount;
-                            }
-                            else if (buildedIngotsDictionary.ContainsKey(name))
-                            {
-                                buildedIngotsDictionary[name].Requested = amount;
-                            }
-                            else if (ammoDictionary.ContainsKey(name))
-                            {
-                                ammoDictionary[name].Requested = amount;
-                            }
+                            partsDictionary[name].Requested = amount;
+                        }
+                        else if (buildedIngotsDictionary.ContainsKey(name))
+                        {
+                            buildedIngotsDictionary[name].Requested = amount;
+                        }
+                        else if (ammoDictionary.ContainsKey(name))
+                        {
+                            ammoDictionary[name].Requested = amount;
                         }
                     }
-                }
-                partDisplayEdited = false;
-            }///
+                } 
+            }
         }
 
         /// <summary>
         /// Отображение компонентов на дисплее
         /// </summary>
-        public void PrintAutobuildComponents()
+        private void PrintAutobuildComponents()
         {
 
             if (autoBuildPanel == null)
@@ -1693,22 +1533,13 @@ namespace IngameScript.BaseManager.BaseNew
 
             Echo("Update parts LCD");
 
+            autoBuildPanel?.WriteText("", false);
+
             //Блок вывода инфорации на дисплеи
             string sysState = useAutoBuildSystem == true ? "Auto mode ON" : "Auto mode OFF";
 
-
-            if (!autoBuildPanel.WriteText("", false))
-            {
-                partDisplayEdited = true;
-                return;
-            }
-
-            if (partDisplayEdited)
-                return;
-
-
             autoBuildPanel?.WriteText($"<<-------------Production------------->>" +
-                                     $"\n{sysState}", true);
+                                     $"\n{sysState} INOP", true);
 
             autoBuildPanel?.WriteText("\n<<-----------Parts----------->>", true);
 
