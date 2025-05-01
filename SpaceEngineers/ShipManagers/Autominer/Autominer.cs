@@ -31,13 +31,22 @@ namespace SpaceEngineers.Autominer.Autominer
     {
 
         #region mdk preserve
-        //Комменты
-        float miningSpeed = 1;
+        //Параметры
+
+        float MiningSpeed = 1.0f;
+        float MiningDiveDistance = 20.0f;
+        float MiningDrillSize = 10.0f;
+
+
+
+        ///////////////////////////////
         #endregion
 
         PerformanceMonitor monitor;
         MovementCommander mover;
         Navigation navigation;
+
+        MiningContext MiningOperator;
 
         Waypoint point;
 
@@ -49,6 +58,10 @@ namespace SpaceEngineers.Autominer.Autominer
             monitor = new PerformanceMonitor(this, Me.GetSurface(1));
             mover = new MovementCommander(this);
             navigation = new Navigation(this);
+
+            MiningOperator = new MiningContext(new InitMiningPositionNorm(), mover);
+            MiningOperator.MiningDistance = MiningDiveDistance;
+            MiningOperator.DrillSize = MiningDrillSize;
 
             mover.MovingFinishedNotify += Mover_MovingFinishedNotify;
         }
@@ -66,10 +79,17 @@ namespace SpaceEngineers.Autominer.Autominer
 
             mover.Update();
 
-     
             monitor.AddInstructions("");
             monitor.EndOfFrameCalc();
             monitor.Draw();
+
+            var miningPresentage = 100 - (mover.PathLen / MiningDiveDistance * 100);
+            var statusIndex = MiningOperator.MiningPositions.Count + 1;
+
+            Echo($"State: {MiningOperator.OperationStatus}" +
+                $" {statusIndex}" +
+                $"\nDist: {Math.Round(mover.PathLen, 1)} m" +
+                $" {Math.Round(miningPresentage)} %");
         }
 
 
@@ -81,6 +101,8 @@ namespace SpaceEngineers.Autominer.Autominer
             switch (comm)
             {
                 case "START":
+                    MiningOperator.Reset();
+                    MiningOperator.Request();
                     break;
 
                 case "STOP":
@@ -99,12 +121,12 @@ namespace SpaceEngineers.Autominer.Autominer
         {
             point = new Waypoint(mover.GetShipLocalDrift(Base6Directions.Direction.Forward, 100), mover.GetOrientation(), 10.0f);
             mover.FlyToWP(point);
-            mover.ForwardMove(miningSpeed);
+            mover.ForwardMove(MiningSpeed);
             mover.AlignOnWP(MovementCommander.RotateType.Matrix);
         }
 
 
-      
+
 
         public class MovementCommander
         {
@@ -265,9 +287,9 @@ namespace SpaceEngineers.Autominer.Autominer
                     ThrusterTick();
                 }
 
-                if(Rotate)
+                if (Rotate)
                 {
-                    switch(RotateMode)
+                    switch (RotateMode)
                     {
                         case RotateType.Matrix:
                             RotateByMatrix(targetRotation);
@@ -339,6 +361,11 @@ namespace SpaceEngineers.Autominer.Autominer
             public double GetSpeed()
             {
                 return speed;
+            }
+
+            public double GetPathLenght()
+            {
+                return PathLen;
             }
 
             /// <summary>
@@ -497,8 +524,8 @@ namespace SpaceEngineers.Autominer.Autominer
 
                 if (PathLen < StoppingAccuracyDistance)
                 {
-                    MovingFinishedNotify?.Invoke();
                     FullStop();
+                    MovingFinishedNotify?.Invoke();
                     return;
                 }
 
@@ -529,7 +556,7 @@ namespace SpaceEngineers.Autominer.Autominer
                 upChange = (float)Vector3D.Dot(force, gridUpVect);
                 leftChange = (float)Vector3D.Dot(force, gridLeftVect);
 
-                program.Echo($"L:{leftChange}\nU:{upChange}");
+                // program.Echo($"L:{leftChange}\nU:{upChange}");
 
                 if (FlyMode == FlyType.ForwardConst)
                 {
@@ -634,6 +661,209 @@ namespace SpaceEngineers.Autominer.Autominer
 
         }
 
+        public interface IState
+        {
+            void Handle(MiningContext context);
+        }
+
+        public class MiningContext
+        {
+            /// <summary>
+            /// Текущий статус бурового контроллера
+            /// </summary>
+            public string OperationStatus { get; set; }
+            /// <summary>
+            /// Дистанция забуривания
+            /// </summary>
+            public float MiningDistance { get; set; }
+            /// <summary>
+            /// Размер бура,ширина ямы
+            /// </summary>
+            public float DrillSize { get; set; }
+            /// <summary>
+            /// Скорость маневрирования при копке
+            /// </summary>
+            public float ManeurSpeedLimit { get; set; }
+            /// <summary>
+            /// Контроллер движения
+            /// </summary>
+            public MovementCommander MoverCtr { get; set; }
+            /// <summary>
+            /// Текущий режим
+            /// </summary>
+            public IState State { get; set; }
+            /// <summary>
+            /// Начальная точка отсчета бурения
+            /// </summary>
+            public Waypoint InitMiningPosition { get; set; }
+            /// <summary>
+            /// Точка начала бурения шахты
+            /// </summary>
+            public Waypoint InitDivePosition { get; set; }
+            /// <summary>
+            /// Все точки для начала бурения
+            /// </summary>
+            public Queue<Waypoint> MiningPositions { get; set; }
+
+            public MiningContext(IState state, MovementCommander mover)
+            {
+                MiningDistance = 50.0f;
+                DrillSize = 5.0f;
+                ManeurSpeedLimit = 5.0f;
+
+                State = state;
+                MoverCtr = mover;
+                MoverCtr.MovingFinishedNotify += MoverCtr_MovingFinishedNotify;
+
+                MiningPositions = new Queue<Waypoint>();
+            }
+
+            /// <summary>
+            /// Монитор сотояния завершения движения дрона к точке
+            /// </summary>
+            private void MoverCtr_MovingFinishedNotify()
+            {
+                Request();
+            }
+
+            public void Request()
+            {
+                State.Handle(this);
+            }
+
+            public void Reset()
+            {
+                Request(new InitMiningPositionNorm());
+            }
+
+            public void Request(IState state)
+            {
+                State = state;
+            }
+        }
+
+        /// <summary>
+        /// Инициализирует начальные настройки бура для бурения погружным методом вокнуг начальной точки
+        /// </summary>
+        public class InitMiningPositionNorm : IState
+        {
+            public void Handle(MiningContext context)
+            {
+                context.OperationStatus = "INIT";
+
+                var speedLimint = context.ManeurSpeedLimit;
+
+                var drillSize = context.DrillSize;
+
+                context.InitMiningPosition = new Waypoint(context.MoverCtr.GetPosition(), context.MoverCtr.GetOrientation(), 5.0f);
+
+                context.MiningPositions.Clear();
+                context.MiningPositions.Enqueue(new Waypoint(context.MoverCtr.GetShipGlobalDrift(context.MoverCtr.GetPosition(), 1, 0, 0), context.MoverCtr.GetOrientation(), speedLimint));
+                context.MiningPositions.Enqueue(new Waypoint(context.MoverCtr.GetShipGlobalDrift(context.MoverCtr.GetPosition(), 0, 0, drillSize), context.MoverCtr.GetOrientation(), speedLimint));
+                context.MiningPositions.Enqueue(new Waypoint(context.MoverCtr.GetShipGlobalDrift(context.MoverCtr.GetPosition(), 0, 0, -drillSize), context.MoverCtr.GetOrientation(), speedLimint));
+                context.MiningPositions.Enqueue(new Waypoint(context.MoverCtr.GetShipGlobalDrift(context.MoverCtr.GetPosition(), 0, drillSize, 0), context.MoverCtr.GetOrientation(), speedLimint));
+                context.MiningPositions.Enqueue(new Waypoint(context.MoverCtr.GetShipGlobalDrift(context.MoverCtr.GetPosition(), 0, -drillSize, 0), context.MoverCtr.GetOrientation(), speedLimint));
+                context.MiningPositions.Enqueue(new Waypoint(context.MoverCtr.GetShipGlobalDrift(context.MoverCtr.GetPosition(), 0, -drillSize, drillSize), context.MoverCtr.GetOrientation(), speedLimint));
+                context.MiningPositions.Enqueue(new Waypoint(context.MoverCtr.GetShipGlobalDrift(context.MoverCtr.GetPosition(), 0, -drillSize, -drillSize), context.MoverCtr.GetOrientation(), speedLimint));
+                context.MiningPositions.Enqueue(new Waypoint(context.MoverCtr.GetShipGlobalDrift(context.MoverCtr.GetPosition(), 0, drillSize, -drillSize), context.MoverCtr.GetOrientation(), speedLimint));
+                context.MiningPositions.Enqueue(new Waypoint(context.MoverCtr.GetShipGlobalDrift(context.MoverCtr.GetPosition(), 0, drillSize, drillSize), context.MoverCtr.GetOrientation(), speedLimint));
+
+                context.State = new MovingToStartDivePosition();
+                context.Request();
+            }
+        }
+
+        /// <summary>
+        /// Направляет дрон к начальной точки бурения
+        /// </summary>
+        public class MovingToStartDivePosition : IState
+        {
+            public void Handle(MiningContext context)
+            {
+                context.OperationStatus = "FLY TO";
+
+                if (context.MiningPositions.Count == 0)
+                {
+                    context.State = new ResetMiningPosition();
+                    context.Request();
+                    return;
+                }
+
+                var pos = context.MiningPositions.Dequeue();
+                context.MoverCtr.FlyToWP(pos);
+                context.MoverCtr.AlignOnWP(MovementCommander.RotateType.Matrix);
+
+                context.State = new StartNormalMining();
+            }
+        }
+
+        /// <summary>
+        /// Начинает бурение по прямой с удержанием шахты
+        /// </summary>
+        public class StartNormalMining : IState
+        {
+            public void Handle(MiningContext context)
+            {
+                context.OperationStatus = "MINE";
+
+                context.InitDivePosition = new Waypoint(context.MoverCtr.GetPosition(), context.MoverCtr.GetOrientation(), 5.0f);
+                var pos = new Waypoint(context.MoverCtr.GetShipLocalDrift(Base6Directions.Direction.Forward, context.MiningDistance), context.MoverCtr.GetOrientation(), 10.0f);
+
+                context.MoverCtr.FlyToWP(pos);
+                context.MoverCtr.ForwardMove(1.0f);
+                context.MoverCtr.AlignOnWP(MovementCommander.RotateType.Matrix);
+
+                context.State = new BackToDivePosition();
+            }
+        }
+
+        /// <summary>
+        /// По достижении дна шахты, возвращяет дрон на начальную позицию
+        /// </summary>
+        public class BackToDivePosition : IState
+        {
+            public void Handle(MiningContext context)
+            {
+                context.OperationStatus = "RETURNING";
+
+                var pos = context.InitDivePosition;
+                context.MoverCtr.FlyToWP(pos);
+                context.MoverCtr.AlignOnWP(MovementCommander.RotateType.Matrix);
+
+                context.State = new MovingToStartDivePosition();
+            }
+        }
+
+        /// <summary>
+        /// При прохождении всех точек бурения корабль возвращается на стартовую точку
+        /// </summary>
+        public class ResetMiningPosition : IState
+        {
+            public void Handle(MiningContext context)
+            {
+                context.OperationStatus = "RESETTING POS";
+
+                var pos = context.InitMiningPosition;
+                context.MoverCtr.FlyToWP(pos);
+                context.MoverCtr.AlignOnWP(MovementCommander.RotateType.Matrix);
+
+                context.State = new StopALl();
+                context.Request();
+            }
+        }
+
+        /// <summary>
+        /// Сброс системы
+        /// </summary>
+        public class StopALl : IState
+        {
+            public void Handle(MiningContext context)
+            {
+                context.OperationStatus = "STOPPED";
+            }
+        }
+
+
         public class Navigation
         {
             public bool Finish { get; private set; }
@@ -676,7 +906,7 @@ namespace SpaceEngineers.Autominer.Autominer
             public Matrix Orientation { get; set; }
             public WaypointType Type { get; set; }
 
-            public Waypoint(Vector3D pos,Matrix orient, float speed, WaypointType type = WaypointType.Navigating)
+            public Waypoint(Vector3D pos, Matrix orient, float speed, WaypointType type = WaypointType.Navigating)
             {
                 Position = pos;
                 Orientation = orient;
@@ -689,8 +919,8 @@ namespace SpaceEngineers.Autominer.Autominer
 
         public enum WaypointType
         {
-            Navigating=0,
-            Docking=1,
+            Navigating = 0,
+            Docking = 1,
         }
 
         public class PIDRegulator
@@ -875,7 +1105,6 @@ namespace SpaceEngineers.Autominer.Autominer
             }
 
         }
-
 
         ///END OF SCRIPT///////////////
     }
